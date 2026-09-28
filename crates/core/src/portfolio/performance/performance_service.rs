@@ -353,14 +353,13 @@ impl PerformanceService {
         Self::validate_window(start, end)?;
         let base_currency = self.base_currency();
         let as_of = self.today();
-        let measured = rows::MeasureFacts::load(
+        let measured = rows::measure_engine(
             &self.sources,
             account_ids,
             &base_currency,
             &self.timezone(),
             as_of,
         )?;
-        let resolved = measured.resolved();
 
         let mut valuation_rows: Vec<DailyAccountValuation> = Vec::new();
         let mut lot_rows = Vec::new();
@@ -376,12 +375,7 @@ impl PerformanceService {
         let series = rows::stored_series(&valuation_rows);
         let lots = rows::stored_lots(&lot_rows);
         let disposals = rows::stored_disposals(&disposal_rows);
-        let inputs = engine::MeasureInputs {
-            resolved,
-            series: &series,
-            lots: &lots,
-            disposals: &disposals,
-        };
+        let inputs = measured.measure_inputs(&series, &lots, &disposals);
         let window = engine::Window { start, end };
         let kernel_profile = match profile {
             PerformanceSummaryProfile::Full => engine::MeasureProfile::Full,
@@ -507,6 +501,11 @@ fn quality(status: engine::model::QualityStatus) -> DataQualityStatus {
     }
 }
 
+/// The kernel's typed notes as the text the frontend shows.
+fn notes(notes: Vec<engine::model::QualityNote>) -> Vec<String> {
+    notes.iter().map(ToString::to_string).collect()
+}
+
 fn basis(status: engine::model::BasisStatus) -> BasisStatus {
     match status {
         engine::model::BasisStatus::Complete => BasisStatus::Complete,
@@ -573,8 +572,8 @@ pub fn from_kernel(result: engine::model::PerformanceResult) -> PerformanceResul
         },
         data_quality: PerformanceDataQuality {
             status: quality(result.data_quality.status),
-            warnings: result.data_quality.warnings,
-            not_applicable_reasons: result.data_quality.not_applicable_reasons,
+            warnings: notes(result.data_quality.warnings),
+            not_applicable_reasons: notes(result.data_quality.not_applicable_reasons),
         },
         basis_status: basis(result.basis_status),
         summary: PerformanceSummary {
@@ -586,7 +585,7 @@ pub fn from_kernel(result: engine::model::PerformanceResult) -> PerformanceResul
             amount_status: summary_status(result.summary.amount_status),
             percent_status: summary_status(result.summary.percent_status),
             basis_status: basis(result.summary.basis_status),
-            reasons: result.summary.reasons,
+            reasons: notes(result.summary.reasons),
         },
         series: result
             .series
@@ -598,7 +597,6 @@ pub fn from_kernel(result: engine::model::PerformanceResult) -> PerformanceResul
             .collect(),
         is_holdings_mode: result.is_holdings_mode,
         is_mixed_tracking_mode: result.is_mixed_tracking_mode,
-        holdings_flows_unavailable: result.holdings_flows_unavailable,
     }
 }
 

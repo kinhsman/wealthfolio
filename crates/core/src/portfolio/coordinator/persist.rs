@@ -94,10 +94,10 @@ pub fn resolve(loaded: &LoadedFacts) -> Result<Resolved> {
     // range: the projection starts no later than `as_of` and the kernel
     // leaves future events for a later run.
     let genesis = facts
-        .activities
+        .activities()
         .iter()
         .map(|a| a.date)
-        .chain(facts.observed_snapshots.iter().map(|s| s.date))
+        .chain(facts.observed_snapshots().iter().map(|s| s.date))
         .min()
         .unwrap_or(loaded.as_of)
         .min(loaded.as_of);
@@ -132,7 +132,7 @@ pub fn compute(
     } = resolve(loaded)?;
     let fx = engine::FxResolver {
         surface: &surfaces.fx,
-        policy: &facts.policy,
+        policy: facts.policy(),
     };
     let since = resume
         .as_ref()
@@ -296,7 +296,7 @@ pub fn revalue(
     let kernel_id = AccountId::new(account_id);
     let account = resolved
         .facts
-        .accounts
+        .accounts()
         .get(&kernel_id)
         .ok_or_else(|| Error::Unexpected(format!("account {account_id} missing from facts")))?;
     let mut keyframes: Vec<Keyframe> = snapshots
@@ -400,7 +400,7 @@ pub fn account_projection(
     let kernel_id = AccountId::new(account_id);
     let account = computed
         .facts
-        .accounts
+        .accounts()
         .get(&kernel_id)
         .ok_or_else(|| Error::Unexpected(format!("account {account_id} missing from facts")))?;
     let holdings = account.tracking == engine::model::TrackingMode::Holdings;
@@ -539,12 +539,12 @@ pub fn snapshot_rows(
 pub fn lot_rows(computed: &Computed, account_id: &str) -> Vec<LotRecord> {
     let fx = engine::FxResolver {
         surface: &computed.surfaces.fx,
-        policy: &computed.facts.policy,
+        policy: computed.facts.policy(),
     };
-    let base = computed.facts.policy.base_currency.as_str().to_string();
+    let base = computed.facts.policy().base_currency.as_str().to_string();
     let account_currency = computed
         .facts
-        .accounts
+        .accounts()
         .get(&AccountId::new(account_id))
         .map(|a| a.currency.as_str().to_string());
     let now = stamp();
@@ -588,7 +588,7 @@ pub fn lot_rows(computed: &Computed, account_id: &str) -> Vec<LotRecord> {
 }
 
 pub fn disposal_rows(computed: &Computed, account_id: &str) -> Vec<LotDisposal> {
-    let base = computed.facts.policy.base_currency.as_str().to_string();
+    let base = computed.facts.policy().base_currency.as_str().to_string();
     let now = stamp();
     let mut rows: Vec<&engine::model::LotDisposal> = computed
         .bundle
@@ -631,7 +631,10 @@ pub fn disposal_rows(computed: &Computed, account_id: &str) -> Vec<LotDisposal> 
 /// The stored activity an event derives from (composite legs map to their
 /// parent activity).
 fn activity_of(computed: &Computed, event: &engine::model::EventId) -> Option<String> {
-    engine::project::source_activity(&computed.ledger, event).map(|a| a.as_str().to_string())
+    computed
+        .ledger
+        .source_of(event)
+        .map(|a| a.as_str().to_string())
 }
 
 fn flow_source(source: FlowSource) -> ExternalFlowSource {

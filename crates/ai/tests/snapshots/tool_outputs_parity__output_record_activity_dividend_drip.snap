@@ -1,6 +1,5 @@
 ---
 source: crates/ai/tests/tool_outputs_parity.rs
-assertion_line: 681
 expression: result
 ---
 {
@@ -33,14 +32,20 @@ expression: result
       "assetKind": null,
       "assetName": "VTI",
       "currency": "USD",
+      "exchangeMic": null,
       "fee": null,
+      "instrumentType": null,
       "isCustomAsset": true,
       "notes": null,
       "priceSource": "none",
       "pricingMode": "MARKET",
+      "providerId": null,
+      "providerSymbol": null,
       "quantity": 2.0,
+      "quoteCcy": null,
       "subtype": "DRIP",
       "symbol": "VTI",
+      "tax": null,
       "unitPrice": null
     },
     "resolvedAsset": null,

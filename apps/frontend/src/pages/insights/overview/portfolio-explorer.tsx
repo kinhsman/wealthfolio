@@ -7,7 +7,7 @@ import type {
   TaxonomyAllocation,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Card, Icons, PrivacyAmount, Skeleton } from "@wealthfolio/ui";
+import { Card, CardTitle, Icons, PrivacyAmount, Skeleton } from "@wealthfolio/ui";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -100,12 +100,13 @@ function taxonomyLens(
   label: string,
   unit: string,
   allocation: TaxonomyAllocation | undefined,
+  residualName: (categoryName: string) => string,
 ): Lens {
   return {
     key,
     label,
     unit,
-    nodes: buildBreakdownTree(allocation?.categories, sumOfCategories(allocation)),
+    nodes: buildBreakdownTree(allocation?.categories, sumOfCategories(allocation), residualName),
     allocation,
   };
 }
@@ -146,12 +147,15 @@ export function PortfolioExplorer({
   const accountValues = accountValuations ?? performance;
 
   const lenses = useMemo<Lens[]>(() => {
+    const residualName = (categoryName: string) =>
+      t("common:allocation_other_in_category", { category: categoryName });
     const list: Lens[] = [
       taxonomyLens(
         "allocation",
         t("insights:insights.explorer.lens_allocation"),
         t("insights:insights.explorer.unit_categories"),
         allocations?.assetClasses,
+        residualName,
       ),
       accountsLens(
         t("insights:insights.explorer.lens_accounts"),
@@ -163,24 +167,28 @@ export function PortfolioExplorer({
         t("insights:insights.explorer.lens_sectors"),
         t("insights:insights.explorer.unit_sectors"),
         allocations?.sectors,
+        residualName,
       ),
       taxonomyLens(
         "regions",
         t("insights:insights.explorer.lens_regions"),
         t("insights:insights.explorer.unit_regions"),
         allocations?.regions,
+        residualName,
       ),
       taxonomyLens(
         "risk",
         t("insights:insights.explorer.lens_risk"),
         t("insights:insights.explorer.unit_levels"),
         allocations?.riskCategory,
+        residualName,
       ),
       taxonomyLens(
         "security",
         t("insights:insights.explorer.lens_security"),
         t("insights:insights.explorer.unit_types"),
         allocations?.securityTypes,
+        residualName,
       ),
       {
         key: "currency",
@@ -198,6 +206,7 @@ export function PortfolioExplorer({
             taxonomy.taxonomyName,
             t("insights:insights.explorer.unit_groups"),
             taxonomy,
+            residualName,
           ),
         );
       }
@@ -315,15 +324,13 @@ export function PortfolioExplorer({
 
   return (
     <div>
-      <div className="mb-2">
-        <span className="text-muted-foreground text-sm font-medium uppercase tracking-wider">
-          {t("insights:insights.explorer.breakdown")}
-        </span>
-      </div>
-
       <Card className="overflow-hidden p-0">
-        {/* Lens tabs */}
-        <div className="bg-muted/30 flex flex-wrap items-center gap-1 border-b px-3.5 py-2.5">
+        {/* Title and lens tabs */}
+        <div className="bg-muted/30 flex flex-wrap items-center gap-1 border-b px-6 py-2.5">
+          <CardTitle className="text-muted-foreground mr-5 flex shrink-0 items-center gap-4 py-2 text-sm font-medium uppercase tracking-wider">
+            {t("insights:insights.explorer.breakdown")}
+            <Icons.ChevronRight className="h-4 w-4 opacity-40" aria-hidden="true" />
+          </CardTitle>
           {lenses.map((lens) => (
             <button
               key={lens.key}

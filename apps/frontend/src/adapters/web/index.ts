@@ -26,12 +26,13 @@ export type {
   AgentAuditQuery,
   AppInfo,
   BackendEnableSyncResult,
+  BackendRestoreErrorCode,
+  BackendRestoreOperation,
+  BackendRestorePhase,
+  BackendRestoreRetry,
   BackendSyncBackgroundEngineResult,
-  BackendSyncBootstrapOverwriteCheckResult,
-  BackendSyncBootstrapResult,
   BackendSyncCycleResult,
   BackendSyncEngineStatusResult,
-  BackendSyncReconcileReadyResult,
   BackendSyncSnapshotUploadResult,
   BackendSyncStateResult,
   CreateAgentAccessTokenInput,
@@ -222,6 +223,8 @@ export {
   searchTicker,
   syncHistoryQuotes,
   syncMarketData,
+  resetProviderHistory,
+  resetAllProviderHistory,
   updateAssetProfile,
   updateMarketDataProviderSettings,
   updateQuote,
@@ -255,6 +258,20 @@ export {
   updateExchangeRate,
 } from "../shared/exchange-rates";
 
+// Spending Categorization Commands
+export {
+  createCategorizationRule,
+  deleteCategorizationRule,
+  getSpendCategories,
+  isSpendingEnabled,
+  listCategorizationRules,
+  rerunCategorizationRules,
+  SPEND_CATEGORY_KIND_TO_TAXONOMY_ID,
+  TAXONOMY_ID_TO_SPEND_CATEGORY_KIND,
+  updateCategorizationRule,
+  upsertCategorizationRule,
+} from "../shared/spending";
+
 // Alternative Assets Commands
 export {
   createAlternativeAsset,
@@ -268,32 +285,38 @@ export {
   updateAlternativeAssetValuation,
 } from "../shared/alternative-assets";
 
+// Asset Logo Commands
+export {
+  deleteAssetLogo,
+  getAssetLogo,
+  listAssetLogos,
+  upsertAssetLogo,
+} from "../shared/asset-logos";
+
 // Connect Commands (Broker + Device Sync + Auth)
 export {
+  approveDeviceSyncRestore,
   approvePairing,
-  approvePairingOverwrite,
-  beginPairingConfirm,
+  beginPairingRestore,
+  cancelDeviceSyncRestore,
   cancelPairing,
-  cancelPairingFlow,
   claimPairing,
   clearDeviceSyncData,
   clearSyncSession,
+  getSyncSessionStatus,
   completePairing,
   completePairingWithTransfer,
   confirmPairing,
-  confirmPairingWithBootstrap,
   createPairing,
-  getPairingFlowState,
   deleteDevice,
-  deviceSyncBootstrapOverwriteCheck,
   deviceSyncCancelSnapshotUpload,
   deviceSyncGenerateSnapshotNow,
-  deviceSyncReconcileReadyState,
   deviceSyncStartBackgroundEngine,
   deviceSyncStopBackgroundEngine,
   enableDeviceSync,
   getBrokerSyncStates,
   getDevice,
+  getDeviceSyncRestore,
   getDeviceSyncState,
   getImportRuns,
   getPairingSourceStatus,
@@ -312,9 +335,10 @@ export {
   reinitializeDeviceSync,
   resetTeamSync,
   restoreSyncSession,
+  retryDeviceSyncRestore,
   revokeDevice,
+  startDeviceSyncRestore,
   storeSyncSession,
-  syncBootstrapSnapshotIfNeeded,
   syncBrokerData,
   syncTriggerCycle,
   updateDevice,
@@ -405,6 +429,7 @@ export {
   listenBrokerSyncStart,
   listenDatabaseRestored,
   listenDeepLink,
+  listenDeviceSyncRestore,
   getCurrentDeepLinks,
   listenFileDrop,
   listenFileDropCancelled,
@@ -425,16 +450,20 @@ export {
   openFileSaveDialog,
   openFolderDialog,
   saveAppDataFileViaPicker,
+  stagePickedDatabaseFileForRestore,
   openUrlInBrowser,
 } from "./files";
 
 // Settings Commands (web-specific API for backups and updates)
 export {
   backupDatabase,
-  backupDatabaseToPendingExport,
-  backupDatabaseToPath,
   checkForUpdates,
   deleteDatabaseBackup,
+  discardDatabaseBackupImport,
+  inspectDatabaseBackup,
+  inspectSavedDatabaseBackup,
+  restoreDatabaseBackupImport,
+  exportDatabaseBackup,
   getAppInfo,
   getDatabaseBackupDownloadUrl,
   getPlatform,
@@ -442,10 +471,12 @@ export {
   installUpdate,
   isAutoUpdateCheckEnabled,
   listDatabaseBackups,
-  restoreDatabase,
+  openDatabaseBackupFolder,
+  getDatabaseEncryptionStatus,
+  setDatabaseEncryptionEnabled,
   updateSettings,
 } from "./settings";
-export type { DatabaseBackup } from "./settings";
+export type { BackupImportPreview, DatabaseBackup, DatabaseEncryptionStatus } from "./settings";
 
 // Addon Commands (web-specific implementations)
 export {

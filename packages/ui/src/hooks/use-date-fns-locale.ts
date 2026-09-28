@@ -11,6 +11,7 @@ import {
   pt,
   ptBR,
   zhCN,
+  zhTW,
   type Locale,
 } from "date-fns/locale";
 import { useLocalizationSettings } from "../components/formatting-provider";
@@ -97,7 +98,16 @@ export function dateFnsLocaleFor(locale: string | undefined): Locale {
   if (exact) return exact;
 
   const resolved = new Intl.Locale(locale);
-  const languageLocale = LANGUAGE_LOCALES[resolved.language];
+
+  // Traditional script needs zhTW's calendar text (大約 3 小時, not 大约 3 小时), but
+  // date-fns ships Taiwan with a Monday week start while CLDR says Sunday. Take the
+  // text from zhTW and let the week-info path below own the conventions, exactly as
+  // every other non-exact locale does. Hong Kong and Macau write Traditional too.
+  const traditionalChinese =
+    resolved.language === "zh" &&
+    (resolved.script === "Hant" || ["TW", "HK", "MO"].includes(resolved.region ?? ""));
+
+  const languageLocale = traditionalChinese ? zhTW : LANGUAGE_LOCALES[resolved.language];
   const regionLocale = resolved.region ? REGION_LOCALES[resolved.region] : undefined;
   const localeWithWeekInfo = resolved as Intl.Locale & {
     getWeekInfo?: () => { firstDay: number; minimalDays: number };

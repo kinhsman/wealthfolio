@@ -26,8 +26,8 @@ fx_rates:
   - { from: CAD, to: USD, day: 2025-01-02, rate: 0 }
 expected_notes: >
   Kernel golden: normalize reports InvalidFxRate for CAD/USD@2025-01-02 and
-  keeps no CAD->USD observation. Every day from 01-02 carries the CAD bucket
-  of 1000 unconverted: cash_balance 0 in USD terms is never reported as
-  Complete; instead value_status is unavailable with an FxUnavailable
-  diagnostic for the cash bucket, and net_contribution stays 1000 CAD in
-  the account view with its base leg unavailable.
+  keeps no CAD->USD observation. The CAD bucket of 1000 is excluded from the
+  USD totals and from net contribution (both 0) with FxUnavailable
+  diagnostics instead of being counted as 1000 USD; every valuation row is
+  Unavailable at 0 with the bucket excluded, so a zero is never reported as
+  Complete.

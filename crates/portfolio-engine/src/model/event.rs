@@ -10,6 +10,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use super::canonical::ActivityKind;
 use super::scalar::{AccountId, ActivityId, AssetId, Currency, EventId};
 use crate::diagnostics::Diagnostic;
 
@@ -18,6 +19,8 @@ pub struct EconomicEvent {
     /// Synthetic legs keep traceable ids (`{activity}:dividend`, `{activity}:buy`).
     pub id: EventId,
     pub source: ActivityId,
+    /// Effective kind of the leg (a composite's legs have their own kinds).
+    pub kind: ActivityKind,
     pub account: AccountId,
     pub date: NaiveDate,
     pub timestamp: DateTime<Utc>,
@@ -25,12 +28,31 @@ pub struct EconomicEvent {
     pub sequence: u32,
     /// Activity currency: charges and activity-currency bookings use it.
     pub currency: Currency,
+    /// Activity -> account rate supplied with the row, when positive.
+    #[serde(default, with = "crate::model::decimal_serde::option")]
+    pub fx_rate: Option<Decimal>,
     pub cash: Option<CashEffect>,
     pub charges: Charges,
     pub action: Action,
     pub contribution: Contribution,
     pub flow: Flow,
+    /// What performance attribution counts for this event.
+    #[serde(default)]
+    pub attribution: Attributed,
     pub diagnostics: Vec<Diagnostic>,
+}
+
+/// Income, fees and taxes an event contributes to performance attribution,
+/// as magnitudes in the activity currency (Appendix A, cross-cutting rules).
+/// Decided once here so no later stage re-reads the raw activity.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+pub struct Attributed {
+    #[serde(with = "crate::model::decimal_serde")]
+    pub income: Decimal,
+    #[serde(with = "crate::model::decimal_serde")]
+    pub fee: Decimal,
+    #[serde(with = "crate::model::decimal_serde")]
+    pub tax: Decimal,
 }
 
 /// Signed cash movement resolved from the stored final amount.
@@ -52,6 +74,7 @@ pub enum Booking {
     /// Trades carrying a broker FX rate settle in account currency at
     /// `amount × rate`.
     AccountCurrency {
+        #[serde(with = "crate::model::decimal_serde")]
         rate: Decimal,
     },
 }
@@ -70,28 +93,35 @@ pub enum Action {
     Trade {
         asset: AssetId,
         side: Side,
+        #[serde(with = "crate::model::decimal_serde")]
         quantity: Decimal,
         /// Reported unit price (activity currency); the effective book price
         /// derives from the gross cash when available.
+        #[serde(with = "crate::model::decimal_serde")]
         unit_price: Decimal,
         intent: Option<Intent>,
     },
     SecurityTransfer {
         asset: AssetId,
         direction: Direction,
+        #[serde(with = "crate::model::decimal_serde")]
         quantity: Decimal,
+        #[serde(with = "crate::model::decimal_serde")]
         unit_price: Decimal,
         /// Legacy transfers carried the book basis in `amount`.
+        #[serde(default, with = "crate::model::decimal_serde::option")]
         legacy_amount: Option<Decimal>,
         /// Pairing key (present even when unpaired; the pair table decides).
         group: Option<String>,
     },
     Split {
         asset: AssetId,
+        #[serde(with = "crate::model::decimal_serde")]
         ratio: Decimal,
     },
     OptionExpiry {
         asset: AssetId,
+        #[serde(with = "crate::model::decimal_serde")]
         quantity: Decimal,
     },
 }
@@ -154,12 +184,15 @@ pub enum Boundary {
 pub enum FlowValue {
     None,
     /// Gross cash magnitude in the activity currency.
-    Cash(Decimal),
+    Cash(#[serde(with = "crate::model::decimal_serde")] Decimal),
     /// Priced in `value`: transfer-day quote × quantity, else book basis,
     /// else (transfer-out) removed-lot basis, else legacy amount.
     SecurityAtMarket {
+        #[serde(with = "crate::model::decimal_serde")]
         quantity: Decimal,
+        #[serde(default, with = "crate::model::decimal_serde::option")]
         book_basis: Option<Decimal>,
+        #[serde(default, with = "crate::model::decimal_serde::option")]
         legacy_amount: Option<Decimal>,
     },
 }

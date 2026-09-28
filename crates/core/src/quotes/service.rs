@@ -30,14 +30,15 @@ use crate::assets::{
     parse_crypto_pair_symbol, parse_symbol_with_exchange_suffix, symbol_resolution_candidates,
     Asset, AssetKind, AssetRepositoryTrait, AssetSpec, InstrumentType, ProviderProfile, QuoteMode,
 };
-use crate::errors::Result;
+use crate::errors::{Error, Result};
 use crate::fx::currency::{get_normalization_rule, normalize_currency_code};
 use crate::portfolio::snapshot::is_quantity_significant;
 use crate::secrets::SecretStore;
 
 use wealthfolio_market_data::{
     exchanges_for_currency, mic_to_currency, mic_to_exchange_name,
-    yahoo_equity_provider_symbol_to_canonical, DividendEvent, ExchangeMap,
+    yahoo_equity_provider_symbol_to_canonical, DividendEvent, ExchangeMap, ProviderInstrument,
+    ProviderOverrides,
 };
 
 /// Provider information combining static info with settings.
@@ -239,6 +240,9 @@ fn has_open_position_quantity(quantity: &rust_decimal::Decimal) -> bool {
 
 fn provider_config_for_symbol_resolution(
     preferred_provider: Option<&str>,
+    provider_symbol: Option<&str>,
+    instrument_type: Option<&InstrumentType>,
+    quote_ccy: Option<&str>,
 ) -> Option<serde_json::Value> {
     let provider = preferred_provider
         .map(str::trim)
@@ -255,7 +259,36 @@ fn provider_config_for_symbol_resolution(
         }));
     }
 
-    Some(serde_json::json!({ "preferred_provider": provider }))
+    let mut config = serde_json::json!({ "preferred_provider": provider });
+    let Some(provider_symbol) = provider_symbol
+        .map(str::trim)
+        .filter(|symbol| !symbol.is_empty())
+    else {
+        return Some(config);
+    };
+    let symbol = Arc::from(provider_symbol);
+    let provider_instrument = match instrument_type {
+        Some(InstrumentType::Crypto) => ProviderInstrument::CryptoSymbol { symbol },
+        Some(InstrumentType::Fx) => ProviderInstrument::FxSymbol { symbol },
+        Some(InstrumentType::Metal) => ProviderInstrument::MetalSymbol {
+            symbol,
+            quote: std::borrow::Cow::Owned(quote_ccy.unwrap_or("USD").to_string()),
+        },
+        Some(InstrumentType::Bond) => ProviderInstrument::BondIsin { isin: symbol },
+        Some(InstrumentType::Equity | InstrumentType::Option) | None => {
+            ProviderInstrument::EquitySymbol { symbol }
+        }
+    };
+    let mut overrides = ProviderOverrides::new();
+    overrides.insert(provider.to_string(), provider_instrument);
+    config
+        .as_object_mut()
+        .expect("provider config is an object")
+        .insert(
+            "overrides".to_string(),
+            serde_json::to_value(overrides).expect("provider overrides serialize"),
+        );
+    Some(config)
 }
 
 fn resolved_provider_matches_requested(
@@ -302,6 +335,21 @@ pub struct SparseAssetMarketFacts {
 /// Unified trait for all quote operations.
 #[async_trait]
 pub trait QuoteServiceTrait: Send + Sync {
+    async fn reset_provider_history(
+        &self,
+        _asset_id: &str,
+    ) -> Result<super::ResetProviderHistoryResult> {
+        Err(Error::Repository(
+            "Provider history reset is not supported".into(),
+        ))
+    }
+
+    async fn reset_all_provider_history(&self) -> Result<super::ResetAllProviderHistoryResult> {
+        Err(Error::Repository(
+            "Provider history reset is not supported".into(),
+        ))
+    }
+
     // =========================================================================
     // Quote CRUD Operations
     // =========================================================================
@@ -458,6 +506,7 @@ pub trait QuoteServiceTrait: Send + Sync {
         instrument_type: Option<&InstrumentType>,
         quote_ccy: Option<&str>,
         preferred_provider: Option<&str>,
+        provider_symbol: Option<&str>,
     ) -> Result<ResolvedQuote> {
         let _ = (
             symbol,
@@ -465,6 +514,7 @@ pub trait QuoteServiceTrait: Send + Sync {
             instrument_type,
             quote_ccy,
             preferred_provider,
+            provider_symbol,
         );
         Ok(ResolvedQuote::default())
     }
@@ -1086,6 +1136,9 @@ where
                 let effective_today = time_utils::market_effective_date(
                     now,
                     asset.and_then(|a| a.instrument_exchange_mic.as_deref()),
+                    asset
+                        .map(|a| matches!(a.instrument_type, Some(InstrumentType::Crypto)))
+                        .unwrap_or(false),
                 );
                 let snapshot = if let Some(quote) = quotes.get(asset_id).cloned() {
                     let quote_day = quote.timestamp.date_naive();
@@ -1532,6 +1585,7 @@ where
         instrument_type: Option<&InstrumentType>,
         quote_ccy: Option<&str>,
         preferred_provider: Option<&str>,
+        provider_symbol: Option<&str>,
     ) -> Result<ResolvedQuote> {
         let trimmed_symbol = symbol.trim();
         if trimmed_symbol.is_empty() {
@@ -1556,7 +1610,12 @@ where
         };
 
         let requested_quote_ccy = normalize_quote_ccy_code(quote_ccy);
-        let provider_config = provider_config_for_symbol_resolution(preferred_provider);
+        let provider_config = provider_config_for_symbol_resolution(
+            preferred_provider,
+            provider_symbol,
+            instrument_type,
+            quote_ccy,
+        );
 
         for attempt_symbol in symbol_resolution_candidates(clean_symbol) {
             // For bonds, populate metadata with TreasuryDirect details so
@@ -1570,7 +1629,7 @@ where
                     upper
                 };
                 if isin.starts_with("US912") {
-                    let http = reqwest::Client::new();
+                    let http = wealthfolio_http::client();
                     wealthfolio_market_data::provider::us_treasury_calc::UsTreasuryCalcProvider::fetch_bond_details(&http, &isin).await
                         .map(|details| {
                             let spec = crate::assets::BondSpec {
@@ -1722,6 +1781,22 @@ where
     ) -> Result<Vec<Quote>> {
         // First try to find an existing asset by ID
         if let Ok(asset) = self.asset_repo.get_by_id(asset_id) {
+            // Manual-mode assets have no provider symbol: asking a provider for them
+            // composes an instrument key that no provider knows and fails. Their prices
+            // only ever live in the quote store.
+            if asset.quote_mode == QuoteMode::Manual {
+                let mut quotes = self.quote_store.range(
+                    &AssetId::new(asset_id),
+                    Day::new(start),
+                    Day::new(end),
+                    None,
+                )?;
+                for quote in &mut quotes {
+                    reconcile_quote_currency(quote, &asset);
+                }
+                return Ok(quotes);
+            }
+
             let start_dt = Utc.from_utc_datetime(&start.and_hms_opt(0, 0, 0).unwrap());
             let end_dt = Utc.from_utc_datetime(&end.and_hms_opt(23, 59, 59).unwrap());
             return self
@@ -1803,6 +1878,23 @@ where
     // =========================================================================
     // Sync Operations
     // =========================================================================
+
+    async fn reset_provider_history(
+        &self,
+        asset_id: &str,
+    ) -> Result<super::ResetProviderHistoryResult> {
+        self.get_sync_service()
+            .await?
+            .reset_provider_history(asset_id)
+            .await
+    }
+
+    async fn reset_all_provider_history(&self) -> Result<super::ResetAllProviderHistoryResult> {
+        self.get_sync_service()
+            .await?
+            .reset_all_provider_history()
+            .await
+    }
 
     async fn sync(&self, mode: SyncMode, asset_ids: Option<Vec<String>>) -> Result<SyncResult> {
         let sync_service = self.get_sync_service().await?;
@@ -2653,6 +2745,29 @@ mod tests {
     }
 
     #[test]
+    fn symbol_quote_provider_config_preserves_exact_provider_symbol() {
+        let config = provider_config_for_symbol_resolution(
+            Some("YAHOO"),
+            Some("ABC.ZZ"),
+            Some(&InstrumentType::Equity),
+            Some("USD"),
+        )
+        .expect("provider config");
+        let overrides = ProviderOverrides::from_json(
+            config.get("overrides").expect("exact override is present"),
+        )
+        .expect("valid overrides");
+
+        assert_eq!(
+            overrides
+                .get("YAHOO")
+                .map(ProviderInstrument::to_symbol_string)
+                .as_deref(),
+            Some("ABC.ZZ")
+        );
+    }
+
+    #[test]
     fn test_local_search_identity_matches_canonical_asset_exchange() {
         let shop_tsx = Asset {
             instrument_symbol: Some("SHOP".to_string()),
@@ -2991,6 +3106,132 @@ mod tests {
                         .map(|quote| (symbol.clone(), quote))
                 })
                 .collect())
+        }
+
+        fn get_latest_quotes_as_of(
+            &self,
+            _symbols: &[String],
+            _as_of: chrono::NaiveDate,
+        ) -> Result<HashMap<String, Quote>> {
+            Ok(HashMap::new())
+        }
+
+        fn get_latest_quotes_pair(
+            &self,
+            _symbols: &[String],
+        ) -> Result<HashMap<String, LatestQuotePair>> {
+            unimplemented!("unused in this test")
+        }
+
+        fn get_historical_quotes(&self, _symbol: &str) -> Result<Vec<Quote>> {
+            unimplemented!("unused in this test")
+        }
+
+        fn get_all_historical_quotes(&self) -> Result<Vec<Quote>> {
+            unimplemented!("unused in this test")
+        }
+
+        fn get_quotes_in_range(
+            &self,
+            _symbol: &str,
+            _start: NaiveDate,
+            _end: NaiveDate,
+        ) -> Result<Vec<Quote>> {
+            unimplemented!("unused in this test")
+        }
+
+        fn find_duplicate_quotes(&self, _symbol: &str, _date: NaiveDate) -> Result<Vec<Quote>> {
+            unimplemented!("unused in this test")
+        }
+    }
+
+    /// Quote store that serves stored rows for a date range and counts the range
+    /// queries, so a test can assert whether the stored-quote path was taken.
+    #[derive(Default)]
+    struct RangeQuoteStore {
+        quotes: Vec<Quote>,
+        range_calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl QuoteStore for RangeQuoteStore {
+        async fn save_quote(&self, _quote: &Quote) -> Result<Quote> {
+            unimplemented!("unused in this test")
+        }
+
+        async fn delete_quote(&self, _quote_id: &str) -> Result<()> {
+            unimplemented!("unused in this test")
+        }
+
+        async fn upsert_quotes(&self, _quotes: &[Quote]) -> Result<usize> {
+            unimplemented!("unused in this test")
+        }
+
+        async fn delete_quotes_for_asset(&self, _asset_id: &AssetId) -> Result<usize> {
+            unimplemented!("unused in this test")
+        }
+
+        async fn delete_provider_quotes_for_asset(&self, _asset_id: &AssetId) -> Result<usize> {
+            unimplemented!("unused in this test")
+        }
+
+        fn latest(
+            &self,
+            _asset_id: &AssetId,
+            _source: Option<&QuoteSource>,
+        ) -> Result<Option<Quote>> {
+            unimplemented!("unused in this test")
+        }
+
+        fn range(
+            &self,
+            asset_id: &AssetId,
+            start: Day,
+            end: Day,
+            _source: Option<&QuoteSource>,
+        ) -> Result<Vec<Quote>> {
+            self.range_calls.fetch_add(1, Ordering::Relaxed);
+            Ok(self
+                .quotes
+                .iter()
+                .filter(|quote| {
+                    quote.asset_id == asset_id.as_str()
+                        && quote.timestamp.date_naive() >= start.date()
+                        && quote.timestamp.date_naive() <= end.date()
+                })
+                .cloned()
+                .collect())
+        }
+
+        fn latest_batch(
+            &self,
+            _asset_ids: &[AssetId],
+            _source: Option<&QuoteSource>,
+        ) -> Result<HashMap<AssetId, Quote>> {
+            unimplemented!("unused in this test")
+        }
+
+        fn latest_with_previous(
+            &self,
+            _asset_ids: &[AssetId],
+        ) -> Result<HashMap<AssetId, LatestQuotePair>> {
+            unimplemented!("unused in this test")
+        }
+
+        fn get_quote_bounds_for_assets(
+            &self,
+            _asset_ids: &[String],
+            _source: &str,
+        ) -> Result<HashMap<String, (NaiveDate, NaiveDate)>> {
+            unimplemented!("unused in this test")
+        }
+
+        fn get_latest_quote(&self, _symbol: &str) -> Result<Quote> {
+            unimplemented!("unused in this test")
+        }
+
+        fn get_latest_quotes(&self, _symbols: &[String]) -> Result<HashMap<String, Quote>> {
+            unimplemented!("unused in this test")
         }
 
         fn get_latest_quotes_as_of(
@@ -4030,6 +4271,151 @@ mod tests {
             Some("quote_1")
         );
         assert!(snapshot.no_quote_reason.is_none());
+        Ok(())
+    }
+
+    fn stored_quote(asset_id: &str, day: NaiveDate, close: rust_decimal::Decimal) -> Quote {
+        Quote {
+            id: format!("{}_{}", asset_id, day),
+            asset_id: asset_id.to_string(),
+            timestamp: Utc.from_utc_datetime(&day.and_hms_opt(16, 0, 0).unwrap()),
+            open: close,
+            high: close,
+            low: close,
+            close,
+            adjclose: close,
+            volume: dec!(0),
+            currency: "EUR".to_string(),
+            data_source: DATA_SOURCE_MANUAL.to_string(),
+            created_at: Utc::now(),
+            notes: None,
+        }
+    }
+
+    #[allow(clippy::type_complexity)]
+    async fn quote_service_for_asset(
+        asset: Asset,
+        quote_store: Arc<RangeQuoteStore>,
+    ) -> Result<
+        QuoteService<
+            RangeQuoteStore,
+            MockSyncStateStore,
+            MockProviderSettingsStore,
+            PositionStatusAssetRepository,
+            NoopActivityRepository,
+        >,
+    > {
+        let asset_repo = PositionStatusAssetRepository {
+            assets: HashMap::from([(asset.id.clone(), asset)]),
+            reactivated: Arc::new(Mutex::new(Vec::new())),
+            deactivated: Arc::new(Mutex::new(Vec::new())),
+            list_by_asset_ids_calls: Arc::new(AtomicUsize::new(0)),
+        };
+
+        QuoteService::new(
+            quote_store,
+            Arc::new(MockSyncStateStore {
+                provider_sync_stats: vec![],
+                with_errors: vec![],
+                states: Arc::new(Mutex::new(HashMap::new())),
+            }),
+            Arc::new(MockProviderSettingsStore { providers: vec![] }),
+            Arc::new(asset_repo),
+            Arc::new(NoopActivityRepository),
+            Arc::new(MockSecretStore),
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn fetch_quotes_for_symbol_serves_manual_asset_from_stored_quotes() -> Result<()> {
+        let asset_id = "SEC:NBIM:XETR";
+        let asset = Asset {
+            id: asset_id.to_string(),
+            kind: AssetKind::Investment,
+            instrument_type: Some(InstrumentType::Equity),
+            quote_mode: QuoteMode::Manual,
+            quote_ccy: "EUR".to_string(),
+            ..Default::default()
+        };
+        let range_calls = Arc::new(AtomicUsize::new(0));
+        let quote_store = Arc::new(RangeQuoteStore {
+            quotes: vec![
+                stored_quote(
+                    asset_id,
+                    NaiveDate::from_ymd_opt(2026, 1, 15).unwrap(),
+                    dec!(101.5),
+                ),
+                stored_quote(
+                    asset_id,
+                    NaiveDate::from_ymd_opt(2025, 12, 15).unwrap(),
+                    dec!(90),
+                ),
+            ],
+            range_calls: Arc::clone(&range_calls),
+        });
+        let service = quote_service_for_asset(asset, quote_store).await?;
+
+        let quotes = QuoteServiceTrait::fetch_quotes_for_symbol(
+            &service,
+            asset_id,
+            "USD",
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 1, 31).unwrap(),
+        )
+        .await?;
+
+        assert_eq!(
+            range_calls.load(Ordering::Relaxed),
+            1,
+            "manual assets have no provider symbol and must be served from stored quotes"
+        );
+        assert_eq!(quotes.len(), 1);
+        assert_eq!(quotes[0].close, dec!(101.5));
+        assert_eq!(quotes[0].currency, "EUR");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn fetch_quotes_for_symbol_keeps_provider_path_for_market_asset() -> Result<()> {
+        let asset_id = "SEC:AAPL:XNAS";
+        let asset = Asset {
+            id: asset_id.to_string(),
+            kind: AssetKind::Investment,
+            instrument_type: Some(InstrumentType::Equity),
+            quote_mode: QuoteMode::Market,
+            quote_ccy: "USD".to_string(),
+            ..Default::default()
+        };
+        let range_calls = Arc::new(AtomicUsize::new(0));
+        let quote_store = Arc::new(RangeQuoteStore {
+            quotes: vec![stored_quote(
+                asset_id,
+                NaiveDate::from_ymd_opt(2026, 1, 15).unwrap(),
+                dec!(101.5),
+            )],
+            range_calls: Arc::clone(&range_calls),
+        });
+        let service = quote_service_for_asset(asset, quote_store).await?;
+
+        let result = QuoteServiceTrait::fetch_quotes_for_symbol(
+            &service,
+            asset_id,
+            "USD",
+            NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            NaiveDate::from_ymd_opt(2026, 1, 31).unwrap(),
+        )
+        .await;
+
+        assert_eq!(
+            range_calls.load(Ordering::Relaxed),
+            0,
+            "market assets must keep using the provider, not stored quotes"
+        );
+        assert!(
+            result.is_err(),
+            "no provider is enabled, so the provider path must surface its own error"
+        );
         Ok(())
     }
 

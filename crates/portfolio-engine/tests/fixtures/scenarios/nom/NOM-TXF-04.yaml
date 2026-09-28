@@ -79,8 +79,8 @@ expected_notes: >
   lots' basis), cost basis -400, realized -2; lot short-1 closed by in-1;
   residual lot in-1 of 6 units, basis 603 (fee 3), open_date 01-03;
   keyframe position +6, total_cost_basis 603, average 100.5. Flow 01-08
-  inflow 1050 QUOTE_DERIVED_MARKET_VALUE; portfolio row nets to zero
-  (MIXED). LEGACY BEHAVIOR: net_contribution 2000 -> 3003 = 2000 + 400
+  inflow 1050 QUOTE_DERIVED_MARKET_VALUE; portfolio row nets to zero and
+  keeps that provenance. LEGACY BEHAVIOR: net_contribution 2000 -> 3003 = 2000 + 400
   (covered short basis relieved) + 603 (residual lots), while acc-a gave up
   1005: the pair is asymmetric by the -2 cover P&L, which leaks into the
   contribution instead of staying in performance. Candidate for the

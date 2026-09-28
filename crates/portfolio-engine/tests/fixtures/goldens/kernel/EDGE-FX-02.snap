@@ -307,7 +307,9 @@ baseline:
           total_value: "1011.91489362"
           total_value_base: "1046.32"
           value_status: complete
-  diagnostics: []
+  diagnostics:
+    - "value/acc-1:EUR->USD: Info CarriedFxRate: EUR->USD rate taken from an observation up to 8 days away (valued 2025-01-10)"
+    - "value/acc-1:GBP->EUR: Info CarriedFxRate: GBP->EUR rate taken from an observation up to 8 days away (valued 2025-01-10)"
   portfolio:
     all_time:
       attribution:

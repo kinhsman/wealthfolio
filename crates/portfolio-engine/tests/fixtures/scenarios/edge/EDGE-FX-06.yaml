@@ -30,12 +30,10 @@ activities:
     amount: 250
     currency: XYZ
 expected_notes: >
-  LEGACY BEHAVIOR: keyframe 01-03 cash {USD 1000, XYZ 250};
-  cash_total_account_currency 1250 and cash_total_base_currency 1250 (250
-  XYZ silently counted as 250 USD); net_contribution 1250 (raw add),
-  net_contribution_base 1000 (skipped). Valuation of acc-1 fails
-  (VALUATION_CALCULATION_FAILED: "Failed to convert external flow 250
-  XYZ->USD on 2025-01-03 for activity dep-xyz ... Exchange rate not found
-  for XYZ/USD") so no valuation rows, flows or performance exist, and the
-  scoped portfolio read fails too. Economically the USD total is 1000 plus
-  an unknown-value XYZ bucket.
+  Keyframe 01-03: cash {USD 1000, XYZ 250}; the XYZ bucket has no rate, so
+  it is excluded from cash_total_account_currency and _base_currency (both
+  1000) and from net_contribution (1000, "net contribution not updated")
+  with diagnostics, never counted as 250 USD. Valuations from 01-03 are
+  Unavailable at 1000 with the bucket excluded, and the 01-03 deposit's flow
+  is UNKNOWN (0/0) so returns are gated. Previously the XYZ amount was added
+  as if it were USD and the valuation failed outright.

@@ -14,7 +14,7 @@ use super::date_policy::{validate_snapshot_read_date, validate_snapshot_write_da
 use super::holdings_timeline::HoldingsTimeline;
 use super::snapshot_model::{AccountStateSnapshot, SnapshotMetadata, SnapshotSource};
 use super::snapshot_traits::SnapshotRepositoryTrait;
-use crate::accounts::{Account, AccountRepositoryTrait};
+use crate::accounts::{Account, AccountRepositoryTrait, TrackingMode};
 use crate::errors::{Error, Result};
 use crate::events::{DomainEvent, DomainEventSink, NoOpDomainEventSink};
 use crate::utils::time_utils::{parse_user_timezone_or_default, user_today};
@@ -240,7 +240,20 @@ impl SnapshotServiceTrait for SnapshotService {
             .min();
 
         let start_date = match start_date_opt {
-            Some(date) => date,
+            Some(date) => {
+                // Before the first holdings snapshot the value is unknown, not zero.
+                // Keep partial valuation rebuilds consistent with full rebuilds.
+                match earliest_snapshot_date {
+                    Some(first)
+                        if date < first
+                            && self.account_repository.get_by_id(account_id)?.tracking_mode
+                                == TrackingMode::Holdings =>
+                    {
+                        first
+                    }
+                    _ => date,
+                }
+            }
             None => match earliest_snapshot_date {
                 Some(date) => date,
                 None => {

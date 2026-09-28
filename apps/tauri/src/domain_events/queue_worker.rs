@@ -9,9 +9,10 @@ use std::time::{Duration, Instant};
 
 use log::{debug, info, warn};
 use rust_decimal::prelude::ToPrimitive;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 use tokio::sync::mpsc;
 use wealthfolio_core::events::DomainEvent;
+use wealthfolio_core::health::HealthServiceTrait;
 use wealthfolio_core::portfolio::valuation::CurrentAccountValuationService;
 use wealthfolio_core::utils::time_utils::{parse_user_timezone_or_default, user_today};
 
@@ -26,7 +27,7 @@ use crate::commands::brokers_sync::perform_broker_sync;
 use crate::context::ServiceContext;
 use crate::events::{
     PortfolioRequestPayload, ASSET_CLASSIFICATIONS_CHANGED, ASSET_ENRICHMENT_COMPLETE,
-    ASSET_ENRICHMENT_PROGRESS, ASSET_ENRICHMENT_START,
+    ASSET_ENRICHMENT_PROGRESS, ASSET_ENRICHMENT_START, PORTFOLIO_UPDATE_ERROR,
 };
 
 /// Debounce window duration in milliseconds.
@@ -123,7 +124,9 @@ async fn process_event_batch(
     info!("Processing batch of {} domain events", events.len());
 
     if let Some(plan) = plan_asset_classification_change(events) {
-        let _ = app_handle.emit(
+        let _ = crate::events::emit_for_profile(
+            app_handle,
+            context,
             ASSET_CLASSIFICATIONS_CHANGED,
             serde_json::json!({
                 "assetIds": plan.asset_ids,
@@ -143,7 +146,9 @@ async fn process_event_batch(
         );
 
         let total = enrichment_asset_ids.len();
-        let _ = app_handle.emit(
+        let _ = crate::events::emit_for_profile(
+            app_handle,
+            context,
             ASSET_ENRICHMENT_START,
             serde_json::json!({ "total": total }),
         );
@@ -181,7 +186,9 @@ async fn process_event_batch(
             }
 
             let completed = total_enriched + total_skipped + total_failed;
-            let _ = app_handle.emit(
+            let _ = crate::events::emit_for_profile(
+                app_handle,
+                context,
                 ASSET_ENRICHMENT_PROGRESS,
                 serde_json::json!({
                     "completed": completed,
@@ -190,7 +197,9 @@ async fn process_event_batch(
             );
         }
 
-        let _ = app_handle.emit(
+        let _ = crate::events::emit_for_profile(
+            app_handle,
+            context,
             ASSET_ENRICHMENT_COMPLETE,
             serde_json::json!({
                 "enriched": total_enriched,
@@ -203,6 +212,23 @@ async fn process_event_batch(
     // 2. Plan and run portfolio job directly (not via event emission)
     // This ensures the is_processing guard properly tracks completion
     if let Some(payload) = plan_portfolio_job(events) {
+        let prices_changed = events
+            .iter()
+            .any(|event| matches!(event, DomainEvent::PriceHistoryChanged));
+        if prices_changed {
+            context.health_service().clear_cache().await;
+            // Saved prices changed: reload the in-memory FX converter so every
+            // later read sees the new rates, as the job's facts will.
+            if let Err(error) = context.fx_service().initialize() {
+                let _ = crate::events::emit_for_profile(
+                    app_handle,
+                    context,
+                    PORTFOLIO_UPDATE_ERROR,
+                    error.to_string(),
+                );
+                return;
+            }
+        }
         run_portfolio_job(app_handle, context, payload).await;
 
         // 2b. Refresh all active goal summaries after portfolio valuations update.
@@ -289,9 +315,10 @@ async fn spawn_auto_categorize_for_batch(events: &[DomainEvent], context: &Arc<S
         "Triggering auto-categorization for {} account(s)",
         account_ids.len()
     );
-    let rules_service = context.categorization_rules_service();
+    let context = Arc::clone(context);
     tokio::spawn(async move {
-        match rules_service
+        match context
+            .categorization_rules_service()
             .rerun_all(&account_ids, /* only_uncategorized */ true)
             .await
         {

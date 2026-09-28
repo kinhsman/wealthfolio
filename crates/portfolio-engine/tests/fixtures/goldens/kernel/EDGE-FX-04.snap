@@ -13,7 +13,7 @@ baseline:
         - cash:
             EUR: "1000"
           cash_total_account_currency: "1000"
-          cash_total_base_currency: "1000"
+          cash_total_base_currency: "0"
           cost_basis: "0"
           date: 2025-01-02
           net_contribution: "1000"
@@ -23,7 +23,7 @@ baseline:
         - cash:
             EUR: "500"
           cash_total_account_currency: "500"
-          cash_total_base_currency: "500"
+          cash_total_base_currency: "0"
           cost_basis: "500"
           date: 2025-01-03
           net_contribution: "1000"
@@ -263,8 +263,8 @@ baseline:
           total_value_base: "0"
           value_status: unavailable
   diagnostics:
-    - "project/acc-1@2025-01-02: Warning FxUnavailable: cash 1000 EUR added to the USD total unconverted"
-    - "project/acc-1@2025-01-03: Warning FxUnavailable: cash 500 EUR added to the USD total unconverted"
+    - "project/acc-1@2025-01-02: Warning FxUnavailable: no EUR->USD rate on 2025-01-02; cash 1000 EUR excluded from the USD total"
+    - "project/acc-1@2025-01-03: Warning FxUnavailable: no EUR->USD rate on 2025-01-03; cash 500 EUR excluded from the USD total"
     - "project/buy-1: Warning FxUnavailable: no EUR->USD rate on 2025-01-03 for lot basis"
     - "project/dep-1: Warning FxUnavailable: no EUR->USD rate on 2025-01-02; base contribution not updated"
     - "value/acc-1:EUR->USD: Warning FxUnavailable: no EUR->USD rate on 2025-01-02; base values unavailable"

@@ -282,11 +282,19 @@ const ActivityPage = () => {
 
   // handle filter changes in mobile form
   const setMobileFilters = useCallback(
-    (types: ActivityType[], range: DateRange | undefined, scope: AccountScope) => {
+    (next: {
+      activityTypes: ActivityType[];
+      dateRange: DateRange | undefined;
+      accountScope: AccountScope;
+      statusFilter: ActivityStatusFilter;
+      instrumentTypes: string[];
+    }) => {
       materializeInvestmentFilters({
-        accountScope: scope,
-        activityTypes: types,
-        dateRange: fromDateRange(range),
+        accountScope: next.accountScope,
+        activityTypes: next.activityTypes,
+        dateRange: fromDateRange(next.dateRange),
+        statusFilter: next.statusFilter,
+        instrumentTypes: next.instrumentTypes,
       });
     },
     [materializeInvestmentFilters],
@@ -722,7 +730,10 @@ const ActivityPage = () => {
           onSearchQueryChange={handleSearchChange}
           accountScope={accountScope}
           selectedActivityTypes={effectiveActivityTypes}
+          statusFilter={statusFilter}
+          selectedInstrumentTypes={effectiveInstrumentTypes}
           dateRange={effectiveDateRange}
+          onResetFilters={clearInvestmentsFilters}
           isCompactView={isCompactView}
           onCompactViewChange={setIsCompactView}
           onFilterChange={setMobileFilters}

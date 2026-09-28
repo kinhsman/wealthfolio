@@ -926,9 +926,9 @@ baseline:
         - cash:
             GBP: "1000"
             gbp: "-25"
-          cash_total_account_currency: "975"
-          cash_total_base_currency: "1225"
-          cost_basis: "25"
+          cash_total_account_currency: "1000"
+          cash_total_base_currency: "1250"
+          cost_basis: "0"
           date: 2025-01-03
           net_contribution: "1000"
           net_contribution_base: "1250"
@@ -1813,14 +1813,19 @@ baseline:
           total_value_base: "50.5"
           value_status: complete
   diagnostics:
-    - "project/acc-lower@2025-01-03: Warning FxUnavailable: cash -25 gbp added to the GBP total unconverted"
-    - "project/acc-lower@2025-01-03: Warning FxUnavailable: cash -25 gbp added to the USD total unconverted"
+    - "project/acc-lower@2025-01-03: Warning FxUnavailable: no gbp->GBP rate on 2025-01-03; cash -25 gbp excluded from the GBP total"
+    - "project/acc-lower@2025-01-03: Warning FxUnavailable: no gbp->USD rate on 2025-01-03; cash -25 gbp excluded from the USD total"
     - "project/buy-lower: Warning FxUnavailable: no gbp->GBP rate on 2025-01-03 for lot basis"
     - "project/buy-lower: Warning FxUnavailable: no gbp->USD rate on 2025-01-03 for lot basis"
-    - "project/lower-asset: Warning FxUnavailable: no gbp->GBP rate on 2025-01-03; book cost carried unconverted"
-    - "value/acc-lower:basis:lower-asset:buy-lower: Warning FxUnavailable: no gbp->GBP rate on 2025-01-03; lot basis omitted from the converted basis"
+    - "project/lower-asset: Warning FxUnavailable: no gbp->GBP rate on 2025-01-03; book cost excluded"
+    - "value/acc-gbp:GBP->USD: Info CarriedFxRate: GBP->USD rate taken from an observation up to 8 days away (valued 2025-01-10)"
+    - "value/acc-ils:ILS->USD: Info CarriedFxRate: ILS->USD rate taken from an observation up to 8 days away (valued 2025-01-10)"
+    - "value/acc-kwd:KWD->USD: Info CarriedFxRate: KWD->USD rate taken from an observation up to 8 days away (valued 2025-01-10)"
+    - "value/acc-lower:GBP->USD: Info CarriedFxRate: GBP->USD rate taken from an observation up to 8 days away (valued 2025-01-10)"
+    - "value/acc-lower:basis:lower-asset: Warning FxUnavailable: no gbp->GBP rate on 2025-01-03; book cost of lower-asset omitted from the converted basis"
     - "value/acc-lower:cash:gbp->GBP: Warning FxUnavailable: no gbp->GBP rate on 2025-01-03; cash bucket excluded"
     - "value/acc-lower:gbp->GBP: Warning FxUnavailable: no gbp->GBP rate on 2025-01-03; lower-asset unpriced"
+    - "value/acc-zar:ZAR->USD: Info CarriedFxRate: ZAR->USD rate taken from an observation up to 8 days away (valued 2025-01-10)"
   portfolio:
     all_time:
       attribution:

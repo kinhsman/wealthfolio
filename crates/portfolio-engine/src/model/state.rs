@@ -57,6 +57,35 @@ pub struct AccountState {
 }
 
 impl AccountState {
+    /// The state as a keyframe keeps it: every total, no lots. Lots live in
+    /// the final state (the checkpoint) and the lot read models; valuation
+    /// needs only the totals, so a keyframe per event day stays small.
+    pub fn without_lots(&self) -> Self {
+        Self {
+            account: self.account.clone(),
+            currency: self.currency.clone(),
+            positions: self
+                .positions
+                .iter()
+                .map(|(asset, position)| {
+                    (
+                        asset.clone(),
+                        Position {
+                            lots: Vec::new(),
+                            ..position.clone_totals()
+                        },
+                    )
+                })
+                .collect(),
+            cash: self.cash.clone(),
+            cost_basis: self.cost_basis,
+            net_contribution: self.net_contribution,
+            net_contribution_base: self.net_contribution_base,
+            cash_total_account: self.cash_total_account,
+            cash_total_base: self.cash_total_base,
+        }
+    }
+
     pub fn empty(account: AccountId, currency: Currency) -> Self {
         Self {
             account,
@@ -96,6 +125,25 @@ pub struct Position {
     pub cost_basis_account: Option<Decimal>,
     #[serde(default, with = "crate::model::decimal_serde::option")]
     pub cost_basis_base: Option<Decimal>,
+}
+
+impl Position {
+    /// Every field but the lots, without copying them.
+    fn clone_totals(&self) -> Self {
+        Self {
+            asset: self.asset.clone(),
+            currency: self.currency.clone(),
+            quantity: self.quantity,
+            average_cost: self.average_cost,
+            total_cost_basis: self.total_cost_basis,
+            lots: Vec::new(),
+            alternative: self.alternative,
+            contract_multiplier: self.contract_multiplier,
+            inception: self.inception,
+            cost_basis_account: self.cost_basis_account,
+            cost_basis_base: self.cost_basis_base,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -144,12 +192,10 @@ impl Lot {
     }
 
     /// Stored acquisition rate to `target`, when the lot recorded one.
+    /// Codes compare exactly: `GBp` (pence) is not `GBP`.
     pub fn stored_fx_rate_to(&self, target: &str) -> Option<Decimal> {
-        let matches = |currency: &Option<Currency>| {
-            currency
-                .as_ref()
-                .is_some_and(|c| c.as_str().eq_ignore_ascii_case(target))
-        };
+        let matches =
+            |currency: &Option<Currency>| currency.as_ref().is_some_and(|c| c.as_str() == target);
         if matches(&self.account_currency) {
             if let Some(rate) = self.fx_rate_to_account.filter(|r| !r.is_zero()) {
                 return Some(rate);
@@ -277,7 +323,8 @@ impl LotRecord {
     }
 }
 
-/// Sparse keyframe: an account's state on a day it changed (or its first day).
+/// Sparse keyframe: an account's state on a day it changed (or its first
+/// day), with position totals and no lots (`AccountState::without_lots`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Keyframe {
     pub date: NaiveDate,

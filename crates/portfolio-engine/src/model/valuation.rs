@@ -82,7 +82,12 @@ pub enum FlowSource {
     /// Stored amounts whose provenance was not explicit (measure relabel).
     StoredGross,
     NetContributionFallback,
+    /// Two or more distinct sources on one day, at least one degraded.
     Mixed,
+    /// Two or more distinct sources on one day, every one exact (e.g. a cash
+    /// movement and a quote-priced in-kind transfer): complete, only
+    /// heterogeneous, so not degraded.
+    MixedExact,
 }
 
 impl FlowSource {
@@ -96,13 +101,14 @@ impl FlowSource {
                 | Self::LegacyActivityAmountFallback
                 | Self::StoredGross
                 | Self::Mixed
+                | Self::MixedExact
         )
     }
 
     pub fn is_degraded(self) -> bool {
         !matches!(
             self,
-            Self::NoFlow | Self::CashAmount | Self::QuoteDerivedMarketValue
+            Self::NoFlow | Self::CashAmount | Self::QuoteDerivedMarketValue | Self::MixedExact
         )
     }
 
@@ -113,8 +119,10 @@ impl FlowSource {
         )
     }
 
-    /// Legacy merge law: identity, idempotence, then the degraded markers
-    /// absorb in a fixed order; anything else is `Mixed`.
+    /// Merge law: identity, idempotence, then the degraded markers absorb in
+    /// a fixed order; distinct exact sources merge into `MixedExact`, and
+    /// anything with a degraded constituent is `Mixed`. Exact sources are
+    /// closed under `combine`, and degradation is never dropped or added.
     pub fn combine(self, next: Self) -> Self {
         match (self, next) {
             (Self::NoFlow, source) | (source, Self::NoFlow) => source,
@@ -129,6 +137,7 @@ impl FlowSource {
             (Self::RemovedLotBasisFallback, _) | (_, Self::RemovedLotBasisFallback) => {
                 Self::RemovedLotBasisFallback
             }
+            (left, right) if !left.is_degraded() && !right.is_degraded() => Self::MixedExact,
             _ => Self::Mixed,
         }
     }
@@ -218,4 +227,32 @@ pub struct ValuationSeries {
     pub currency: Currency,
     pub days: Vec<DailyValuation>,
     pub diagnostics: Vec<Diagnostic>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exact_sources_merge_into_the_exact_mixture() {
+        use FlowSource::*;
+        assert_eq!(CashAmount.combine(QuoteDerivedMarketValue), MixedExact);
+        assert_eq!(QuoteDerivedMarketValue.combine(CashAmount), MixedExact);
+        assert_eq!(MixedExact.combine(CashAmount), MixedExact);
+        assert!(MixedExact.is_explicit_gross());
+        assert!(!MixedExact.is_degraded());
+        assert!(!MixedExact.is_unavailable_for_returns());
+    }
+
+    #[test]
+    fn a_degraded_constituent_keeps_the_mixture_degraded() {
+        use FlowSource::*;
+        assert_eq!(CashAmount.combine(StoredGross), Mixed);
+        assert_eq!(MixedExact.combine(CostBasisFallback), Mixed);
+        assert_eq!(
+            MixedExact.combine(UnknownBoundaryTransfer),
+            UnknownBoundaryTransfer
+        );
+        assert!(Mixed.is_degraded());
+    }
 }

@@ -51,9 +51,6 @@ expected_notes: >
   point; no not-applicable reasons. value_return rebased at 01-04:
   (1045 - 995 - 0)/995 = 0.05025126. IRR: -1000 @01-04, +1045 @01-10 (period
   0.06044558). Attribution (inception): contributions 1000, unrealized 50,
-  fees 0. LEGACY BEHAVIOR (ledger candidate): the FEE sits on the inception
-  day and activities dated on the period start are excluded from attribution,
-  so fees stay 0, the components sum to 1050 against a delta of 1045 and the
-  warning "Performance attribution is incomplete ... Difference: -5;
-  tolerance: 2.090" fires (quality partial) although the headline returns
-  are exactly right. Risk: max_drawdown 0, peak_date 01-02 (opening date).
+  fees 5 (the inception-day FEE counts against an inception baseline): the
+  components sum to 1045 = the delta, quality ok, summary amount 45. Risk:
+  max_drawdown 0, peak_date 01-02 (opening date).

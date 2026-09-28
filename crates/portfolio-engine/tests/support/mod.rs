@@ -13,13 +13,11 @@ use rust_decimal::Decimal;
 use serde::de::{self, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use wealthfolio_portfolio_engine::lot_records;
-use wealthfolio_portfolio_engine::measure::{
-    measure_account, measure_scope, MeasureInputs, MeasureProfile,
-};
 use wealthfolio_portfolio_engine::model::*;
-use wealthfolio_portfolio_engine::resolve::FxResolver;
-use wealthfolio_portfolio_engine::value::{aggregate_scope, Resolved, ValueInputs, Window};
+use wealthfolio_portfolio_engine::{
+    aggregate_scope, effects, lot_records, measure_account, measure_scope, Engine, EngineError,
+    FxResolver, MeasureInputs, MeasureProfile, ValueInputs, Window,
+};
 
 pub fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
@@ -208,6 +206,8 @@ pub struct FxRateSpec {
     pub to: String,
     pub day: NaiveDate,
     pub rate: Dec,
+    #[serde(default = "manual")]
+    pub source: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -310,6 +310,26 @@ impl Scenario {
                             .and_then(|m| m.get("flow"))
                             .and_then(|f| f.get("is_external"))
                             .and_then(Value::as_bool),
+                        fx_conversion: a.metadata.as_ref().and_then(|m| m.get("fx")).map(|fx| {
+                            let text = |key: &str| {
+                                fx.get(key)
+                                    .and_then(Value::as_str)
+                                    .unwrap_or_default()
+                                    .to_string()
+                            };
+                            let amount = |key: &str| {
+                                fx.get(key)
+                                    .and_then(Value::as_str)
+                                    .and_then(|v| Decimal::from_str(v).ok())
+                            };
+                            RawFxConversion {
+                                rate_source: text("rateSource"),
+                                source_currency: text("sourceCurrency"),
+                                destination_currency: text("destinationCurrency"),
+                                source_amount: amount("sourceAmount"),
+                                destination_amount: amount("destinationAmount"),
+                            }
+                        }),
                         source_system: a.source_system.clone(),
                         is_user_modified: a.is_user_modified,
                         updated_at: timestamp,
@@ -340,6 +360,7 @@ impl Scenario {
                     to: r.to.clone(),
                     day: r.day,
                     rate: r.rate.0,
+                    source: r.source.clone(),
                 })
                 .collect(),
             observed_snapshots: self
@@ -468,7 +489,7 @@ pub fn capture_valuation(
     inputs: &ValueInputs<'_>,
     series: &BTreeMap<AccountId, ValuationSeries>,
     account: &AccountId,
-) -> Result<ValuationCapture, String> {
+) -> Result<ValuationCapture, EngineError> {
     let valuations = series
         .get(account)
         .map(|s| s.days.iter().map(valuation_value).collect())
@@ -476,8 +497,7 @@ pub fn capture_valuation(
     let flows = if series.contains_key(account) {
         flow_values(
             &aggregate_scope(
-                &inputs.resolved,
-                &inputs.bundle.disposals,
+                &effects(&inputs.resolved, &inputs.bundle.disposals),
                 series,
                 std::slice::from_ref(account),
                 Window::default(),
@@ -513,11 +533,11 @@ pub fn flow_values(days: &[DailyValuation]) -> Vec<Value> {
 pub fn capture_portfolio_flows(
     inputs: &ValueInputs<'_>,
     series: &BTreeMap<AccountId, ValuationSeries>,
-) -> Result<Vec<Value>, String> {
+) -> Result<Vec<Value>, EngineError> {
     let scope: Vec<AccountId> = inputs
         .resolved
         .facts
-        .accounts
+        .accounts()
         .values()
         .filter(|a| !a.archived)
         .map(|a| a.id.clone())
@@ -526,8 +546,7 @@ pub fn capture_portfolio_flows(
         return Ok(Vec::new());
     }
     aggregate_scope(
-        &inputs.resolved,
-        &inputs.bundle.disposals,
+        &effects(&inputs.resolved, &inputs.bundle.disposals),
         series,
         &scope,
         Window::default(),
@@ -591,7 +610,7 @@ pub fn capture_projection(
     facts: &CanonicalFacts,
     fx: &FxResolver<'_>,
 ) -> ProjectionCapture {
-    let base = facts.policy.base_currency.as_str();
+    let base = facts.policy().base_currency.as_str();
     let keyframes = bundle
         .keyframes
         .get(account)
@@ -676,7 +695,7 @@ fn activity_ref(event: Option<&EventId>, facts: &CanonicalFacts) -> Value {
     match event {
         Some(id)
             if facts
-                .activities
+                .activities()
                 .iter()
                 .any(|a| a.id.as_str() == id.as_str()) =>
         {
@@ -757,9 +776,11 @@ pub fn capture_account_performance(
             end: window.end,
         },
         MeasureProfile::Full,
-    )
-    .expect("account performance");
-    performance_value(&result)
+    );
+    match result {
+        Ok(result) => performance_value(&result),
+        Err(error) => serde_json::json!({ "error": error.to_string() }),
+    }
 }
 
 pub fn capture_scope_performance(
@@ -776,9 +797,11 @@ pub fn capture_scope_performance(
             end: window.end,
         },
         MeasureProfile::Full,
-    )
-    .expect("scope performance");
-    performance_value(&result)
+    );
+    match result {
+        Ok(result) => performance_value(&result),
+        Err(error) => serde_json::json!({ "error": error.to_string() }),
+    }
 }
 
 /// The legacy `PerformanceCapture` shape.
@@ -882,65 +905,29 @@ pub fn diff_values(path: &str, left: &Value, right: &Value, out: &mut Vec<String
 
 // ------------------------------------------------------------ pipeline
 
-use wealthfolio_portfolio_engine::compile::CompiledLedger;
-use wealthfolio_portfolio_engine::diagnostics::Diagnostic;
-use wealthfolio_portfolio_engine::error::EngineError;
-use wealthfolio_portfolio_engine::resolve::ResolvedSurfaces;
-use wealthfolio_portfolio_engine::{compile, normalize, project, resolve_surfaces, value};
-
-/// All five stages over one set of facts, from genesis to `as_of`.
+/// All six stages over one set of facts, from genesis to `as_of`: an
+/// [`Engine`] plus its full projection and valuation.
 pub struct Pipeline {
-    pub facts: CanonicalFacts,
-    pub normalize_diagnostics: Vec<Diagnostic>,
-    pub ledger: CompiledLedger,
-    pub range: DateRange,
-    pub surfaces: ResolvedSurfaces,
+    pub engine: Engine,
     pub bundle: ProjectionBundle,
     pub series: BTreeMap<AccountId, ValuationSeries>,
 }
 
-pub fn projection_range(facts: &CanonicalFacts) -> DateRange {
-    let start = facts
-        .activities
-        .iter()
-        .map(|a| a.date)
-        .min()
-        .unwrap_or(facts.policy.as_of);
-    DateRange {
-        start,
-        end: facts.policy.as_of,
+impl std::ops::Deref for Pipeline {
+    type Target = Engine;
+
+    fn deref(&self) -> &Engine {
+        &self.engine
     }
 }
 
 impl Pipeline {
     pub fn run(raw: RawFacts) -> Result<Pipeline, EngineError> {
-        let normalized = normalize(raw)?;
-        let facts = normalized.facts;
-        let ledger = compile(&facts);
-        let range = projection_range(&facts);
-        let surfaces = resolve_surfaces(&facts, range);
-        let bundle = {
-            let fx = FxResolver {
-                surface: &surfaces.fx,
-                policy: &facts.policy,
-            };
-            project(&ledger, &facts, &fx, None, range)?
-        };
-        let series = value(&ValueInputs {
-            resolved: Resolved {
-                facts: &facts,
-                ledger: &ledger,
-                surfaces: &surfaces,
-                range,
-            },
-            bundle: &bundle,
-        });
+        let engine = Engine::new(raw)?;
+        let bundle = engine.project()?;
+        let series = engine.value(&bundle);
         Ok(Pipeline {
-            facts,
-            normalize_diagnostics: normalized.diagnostics,
-            ledger,
-            range,
-            surfaces,
+            engine,
             bundle,
             series,
         })
@@ -948,22 +935,6 @@ impl Pipeline {
 
     pub fn from_scenario(scenario: &Scenario) -> Pipeline {
         Pipeline::run(scenario.raw_facts()).unwrap_or_else(|e| panic!("{}: {e}", scenario.id))
-    }
-
-    pub fn fx(&self) -> FxResolver<'_> {
-        FxResolver {
-            surface: &self.surfaces.fx,
-            policy: &self.facts.policy,
-        }
-    }
-
-    pub fn resolved(&self) -> Resolved<'_> {
-        Resolved {
-            facts: &self.facts,
-            ledger: &self.ledger,
-            surfaces: &self.surfaces,
-            range: self.range,
-        }
     }
 
     pub fn value_inputs(&self) -> ValueInputs<'_> {
@@ -975,23 +946,19 @@ impl Pipeline {
 
     /// Storage-shaped lots of the projection (the read path's input).
     pub fn lots(&self) -> Vec<LotRecord> {
-        lot_records(&self.bundle, &self.facts, &self.fx())
+        self.engine.lots(&self.bundle)
     }
 
     /// The read-path inputs over this pipeline's own outputs.
     pub fn measure_inputs<'a>(&'a self, lots: &'a [LotRecord]) -> MeasureInputs<'a> {
-        MeasureInputs {
-            resolved: self.resolved(),
-            series: &self.series,
-            lots,
-            disposals: &self.bundle.disposals,
-        }
+        self.engine
+            .measure_inputs(&self.series, lots, &self.bundle.disposals)
     }
 
     /// Every non-archived account, the legacy portfolio scope.
     pub fn portfolio_scope(&self) -> Vec<AccountId> {
-        self.facts
-            .accounts
+        self.facts()
+            .accounts()
             .values()
             .filter(|a| !a.archived)
             .map(|a| a.id.clone())
@@ -1001,10 +968,10 @@ impl Pipeline {
     /// All diagnostics of the run, sorted, as `severity code source: message`.
     pub fn diagnostics(&self) -> Vec<String> {
         let mut lines: Vec<String> = self
-            .normalize_diagnostics
+            .normalize_diagnostics()
             .iter()
             .map(|d| ("normalize", d))
-            .chain(self.ledger.diagnostics.iter().map(|d| ("compile", d)))
+            .chain(self.ledger().diagnostics.iter().map(|d| ("compile", d)))
             .chain(self.bundle.diagnostics.iter().map(|d| ("project", d)))
             .chain(
                 self.series
@@ -1033,7 +1000,7 @@ pub fn capture_body(pipeline: &Pipeline, windows: &[PerformanceWindowSpec]) -> V
     let fx = pipeline.fx();
     let scope = pipeline.portfolio_scope();
     let mut accounts = serde_json::Map::new();
-    for (id, account) in &pipeline.facts.accounts {
+    for (id, account) in pipeline.facts().accounts() {
         if account.archived {
             continue;
         }
@@ -1045,7 +1012,7 @@ pub fn capture_body(pipeline: &Pipeline, windows: &[PerformanceWindowSpec]) -> V
                 disposals: Vec::new(),
             }
         } else {
-            capture_projection(&pipeline.bundle, id, &pipeline.facts, &fx)
+            capture_projection(&pipeline.bundle, id, pipeline.facts(), &fx)
         };
         let valuation =
             capture_valuation(&inputs, &pipeline.series, id).unwrap_or(ValuationCapture {
@@ -1105,8 +1072,8 @@ pub fn capture_body(pipeline: &Pipeline, windows: &[PerformanceWindowSpec]) -> V
 
 fn observed_keyframes(pipeline: &Pipeline, account: &AccountId) -> Vec<Value> {
     pipeline
-        .facts
-        .observed_snapshots
+        .facts()
+        .observed_snapshots()
         .iter()
         .filter(|s| s.account == *account)
         .map(|s| {

@@ -262,13 +262,14 @@ pub fn enqueue_consistency_pass(state: Arc<AppState>) {
     });
 }
 
-/// Periodic market sync plus consistency pass (6h, after a 2min delay).
-pub fn spawn_periodic_consistency(state: Arc<AppState>) {
+/// Periodic market sync plus consistency pass (6h, after a 2min delay). The
+/// handle joins the profile's workers so the loop stops with its profile.
+pub fn spawn_periodic_consistency(state: Arc<AppState>) -> tokio::task::JoinHandle<()> {
     let observer: Arc<dyn JobObserver> = Arc::new(ServerJobObserver::new(&state));
     tokio::spawn(run_periodic_consistency(
         state.portfolio_coordinator.clone(),
         observer,
         std::time::Duration::from_secs(120),
         std::time::Duration::from_secs(6 * 3600),
-    ));
+    ))
 }

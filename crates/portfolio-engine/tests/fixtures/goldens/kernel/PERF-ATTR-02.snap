@@ -23,8 +23,8 @@ baseline:
         - cash:
             JPY: "5000"
             USD: "1000"
-          cash_total_account_currency: "6000"
-          cash_total_base_currency: "6000"
+          cash_total_account_currency: "1000"
+          cash_total_base_currency: "1000"
           cost_basis: "0"
           date: 2025-01-04
           net_contribution: "1000"
@@ -445,7 +445,7 @@ baseline:
           total_value_base: "2084.95"
           value_status: complete
   diagnostics:
-    - "project/acc-div@2025-01-04: Warning FxUnavailable: cash 5000 JPY added to the USD total unconverted"
+    - "project/acc-div@2025-01-04: Warning FxUnavailable: no JPY->USD rate on 2025-01-04; cash 5000 JPY excluded from the USD total"
     - "value/acc-div:cash:JPY->USD: Warning FxUnavailable: no JPY->USD rate on 2025-01-04; cash bucket excluded"
   portfolio:
     all_time:

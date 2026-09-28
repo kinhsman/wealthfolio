@@ -77,6 +77,15 @@ pub fn plan_portfolio_job(events: &[DomainEvent]) -> Option<PortfolioJobConfig> 
     // undated change means the coordinator decides from its fingerprints.
     let mut earliest_change_at: Option<chrono::DateTime<chrono::Utc>> = None;
     let mut undated_change = false;
+    // Price-only batches use saved quotes. Other events retain their normal sync.
+    let needs_market_sync = events.iter().any(|event| {
+        !matches!(
+            event,
+            DomainEvent::PriceHistoryChanged
+                | DomainEvent::AssetClassificationsChanged { .. }
+                | DomainEvent::AssetsMerged { .. }
+        )
+    });
 
     for event in events {
         match event {
@@ -139,6 +148,13 @@ pub fn plan_portfolio_job(events: &[DomainEvent]) -> Option<PortfolioJobConfig> 
             DomainEvent::AssetsCreated { asset_ids: ids } => {
                 asset_ids.extend(ids.iter().filter(|id| !id.is_empty()).cloned());
             }
+            // Saved prices changed: every account revalues. The coordinator
+            // sees the new quotes in its market-data fingerprint, so no
+            // forced rebuild and no dated change are needed.
+            DomainEvent::PriceHistoryChanged => {
+                has_recalc_event = true;
+                recalculate_all_accounts = true;
+            }
             DomainEvent::AssetClassificationsChanged { .. } => {}
             DomainEvent::TrackingModeChanged {
                 account_id,
@@ -168,12 +184,16 @@ pub fn plan_portfolio_job(events: &[DomainEvent]) -> Option<PortfolioJobConfig> 
         } else {
             Some(account_ids.into_iter().collect())
         },
-        market_sync_mode: MarketSyncMode::Incremental {
-            asset_ids: if asset_ids.is_empty() {
-                None
-            } else {
-                Some(asset_ids.into_iter().collect())
-            },
+        market_sync_mode: if !needs_market_sync {
+            MarketSyncMode::None
+        } else {
+            MarketSyncMode::Incremental {
+                asset_ids: if asset_ids.is_empty() {
+                    None
+                } else {
+                    Some(asset_ids.into_iter().collect())
+                },
+            }
         },
         force_full: false,
         earliest_change_at: if undated_change {
@@ -566,5 +586,34 @@ mod tests {
             payload.earliest_change_at, None,
             "an undated change is not dated by its neighbours"
         );
+    }
+
+    #[test]
+    fn price_history_notifications_do_not_schedule_market_fetches() {
+        let events = vec![
+            DomainEvent::PriceHistoryChanged,
+            DomainEvent::PriceHistoryChanged,
+        ];
+        let job = plan_portfolio_job(&events).unwrap();
+        assert!(!job.market_sync_mode.requires_sync());
+        assert!(job.account_ids.is_none());
+        assert!(job.earliest_change_at.is_none());
+    }
+
+    #[test]
+    fn price_history_notifications_preserve_other_portfolio_work() {
+        let events = vec![
+            DomainEvent::PriceHistoryChanged,
+            DomainEvent::ActivitiesChanged {
+                account_ids: vec!["acc1".to_string()],
+                asset_ids: vec![],
+                currencies: vec![],
+                earliest_activity_at_utc: None,
+            },
+        ];
+        let job = plan_portfolio_job(&events).unwrap();
+        assert!(job.account_ids.is_none());
+        assert!(job.market_sync_mode.requires_sync());
+        assert!(job.earliest_change_at.is_none());
     }
 }

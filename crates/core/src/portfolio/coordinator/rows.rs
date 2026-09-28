@@ -148,52 +148,15 @@ pub fn stored_disposals(rows: &[LotDisposal]) -> Vec<KernelDisposal> {
         .collect()
 }
 
-/// Facts resolved for a read (`measure`, scoped valuation aggregation): the
+/// The engine for a read (`measure`, scoped valuation aggregation): the
 /// scope's transfer closure normalised, compiled and surfaced once.
-pub struct MeasureFacts {
-    pub facts: wealthfolio_portfolio_engine::model::CanonicalFacts,
-    pub ledger: wealthfolio_portfolio_engine::CompiledLedger,
-    pub surfaces: wealthfolio_portfolio_engine::ResolvedSurfaces,
-    pub range: wealthfolio_portfolio_engine::model::DateRange,
-}
-
-impl MeasureFacts {
-    pub fn load(
-        sources: &super::FactSources,
-        account_ids: &[String],
-        base_currency: &str,
-        timezone: &str,
-        as_of: chrono::NaiveDate,
-    ) -> crate::errors::Result<Self> {
-        let raw = sources.load_for_measure(account_ids, base_currency, timezone, as_of)?;
-        let normalized = wealthfolio_portfolio_engine::normalize(raw)?;
-        let facts = normalized.facts;
-        let ledger = wealthfolio_portfolio_engine::compile(&facts);
-        let range = wealthfolio_portfolio_engine::model::DateRange {
-            start: facts
-                .activities
-                .iter()
-                .map(|a| a.date)
-                .min()
-                .unwrap_or(as_of)
-                .min(as_of),
-            end: as_of,
-        };
-        let surfaces = wealthfolio_portfolio_engine::resolve_surfaces(&facts, range);
-        Ok(Self {
-            facts,
-            ledger,
-            surfaces,
-            range,
-        })
-    }
-
-    pub fn resolved(&self) -> wealthfolio_portfolio_engine::Resolved<'_> {
-        wealthfolio_portfolio_engine::Resolved {
-            facts: &self.facts,
-            ledger: &self.ledger,
-            surfaces: &self.surfaces,
-            range: self.range,
-        }
-    }
+pub fn measure_engine(
+    sources: &super::FactSources,
+    account_ids: &[String],
+    base_currency: &str,
+    timezone: &str,
+    as_of: chrono::NaiveDate,
+) -> crate::errors::Result<wealthfolio_portfolio_engine::Engine> {
+    let raw = sources.load_for_measure(account_ids, base_currency, timezone, as_of)?;
+    Ok(wealthfolio_portfolio_engine::Engine::new(raw)?)
 }

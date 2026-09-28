@@ -339,7 +339,6 @@ mod tests {
     use std::sync::Arc;
 
     use chrono::{NaiveDate, Utc};
-    use diesel::prelude::*;
     use rust_decimal::Decimal;
     use tempfile::tempdir;
     use wealthfolio_core::lots::{LotDisposal, LotRecord, LotRepositoryTrait};

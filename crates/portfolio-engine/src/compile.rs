@@ -5,6 +5,7 @@
 
 use rust_decimal::Decimal;
 
+use crate::arith;
 use crate::diagnostics::{Diagnostic, DiagnosticCode};
 use crate::model::*;
 
@@ -14,12 +15,33 @@ pub struct CompiledLedger {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+impl CompiledLedger {
+    /// The activity an event derives from (`None` for an unknown event id):
+    /// a composite leg (`{activity}:buy`) maps back to its stored row.
+    pub fn source_of(&self, event: &EventId) -> Option<&ActivityId> {
+        self.events
+            .iter()
+            .find(|e| &e.id == event)
+            .map(|e| &e.source)
+    }
+}
+
 pub fn compile(facts: &CanonicalFacts) -> CompiledLedger {
     let mut events = Vec::with_capacity(facts.activities.len());
     let mut diagnostics = Vec::new();
     for activity in &facts.activities {
+        // `normalize` only admits activities of known accounts; facts built
+        // any other way still compile without a panic.
+        let Some(account) = facts.accounts.get(&activity.account) else {
+            diagnostics.push(Diagnostic::error(
+                DiagnosticCode::UnknownAccount,
+                activity.id.as_str(),
+                format!("activity references unknown account {}", activity.account),
+            ));
+            continue;
+        };
         for leg in expand(activity) {
-            let mut event = compile_leg(&leg, facts);
+            let mut event = compile_leg(&leg, account, facts);
             event.sequence = events.len() as u32;
             diagnostics.extend(event.diagnostics.iter().cloned());
             events.push(event);
@@ -63,10 +85,9 @@ fn expand(activity: &Activity) -> Vec<Leg> {
     let acquisition_price = Some(activity.unit_price)
         .filter(|price| *price > Decimal::ZERO)
         .or_else(|| {
-            income_amount.and_then(|amount| {
-                (!activity.quantity.is_zero() && amount > Decimal::ZERO)
-                    .then(|| amount / activity.quantity)
-            })
+            income_amount
+                .filter(|amount| *amount > Decimal::ZERO)
+                .and_then(|amount| arith::div(amount, activity.quantity))
         })
         .unwrap_or(activity.unit_price);
 
@@ -96,9 +117,8 @@ fn expand(activity: &Activity) -> Vec<Leg> {
     ]
 }
 
-fn compile_leg(leg: &Leg, facts: &CanonicalFacts) -> EconomicEvent {
+fn compile_leg(leg: &Leg, account: &AccountFacts, facts: &CanonicalFacts) -> EconomicEvent {
     let activity = &leg.activity;
-    let account = &facts.accounts[&activity.account];
     let multiplier = activity
         .asset
         .as_ref()
@@ -113,22 +133,26 @@ fn compile_leg(leg: &Leg, facts: &CanonicalFacts) -> EconomicEvent {
         tax: activity.tax,
     };
     let action = action_for(activity, &mut diagnostics);
-    let contribution = contribution_for(activity);
+    let contribution = contribution_for(activity, facts);
     let flow = flow_for(activity, facts, cash.as_ref(), &mut diagnostics);
+    let attribution = attribution_for(activity, account);
 
     EconomicEvent {
         id: leg.event_id.clone(),
         source: activity.id.clone(),
+        kind: activity.kind,
         account: activity.account.clone(),
         date: activity.date,
         timestamp: activity.timestamp,
         sequence: 0,
         currency: activity.currency.clone(),
+        fx_rate: activity.fx_rate,
         cash,
         charges,
         action,
         contribution,
         flow,
+        attribution,
         diagnostics,
     }
 }
@@ -215,7 +239,11 @@ fn sell_is_proven_negative(
     multiplier: Decimal,
     final_amount: Decimal,
 ) -> bool {
-    let gross = activity.quantity * activity.unit_price * multiplier;
+    // Economics that cannot be computed cannot prove anything: the stored
+    // amount keeps its type-directed sign.
+    let Some(gross) = arith::product(&[activity.quantity, activity.unit_price, multiplier]) else {
+        return false;
+    };
     if gross <= Decimal::ZERO {
         return false;
     }
@@ -329,8 +357,63 @@ fn action_for(activity: &Activity, diagnostics: &mut Vec<Diagnostic>) -> Action 
     }
 }
 
-fn contribution_for(activity: &Activity) -> Contribution {
+/// Appendix A, cross-cutting rules: income is attributed gross; fees and
+/// taxes are attributed for trades, income and standalone charge rows; fees
+/// on deposits, withdrawals and transfers are booked but knowingly not
+/// attributed. Credit-card interest is a charge on a liability (its cash is
+/// negative), so its amount is attributed as a fee, never as income.
+fn attribution_for(activity: &Activity, account: &AccountFacts) -> Attributed {
     use ActivityKind::*;
+    let amount = activity.amount.unwrap_or(Decimal::ZERO);
+    let (fee, tax) = (activity.fee, activity.tax);
+    match activity.kind {
+        Interest if account.kind == AccountKind::CreditCard => Attributed {
+            fee: amount,
+            ..Attributed::default()
+        },
+        Dividend | Interest => Attributed {
+            income: activity
+                .amount
+                .map(|amount| amount + fee + tax)
+                .unwrap_or(Decimal::ZERO),
+            fee,
+            tax,
+        },
+        Fee => Attributed {
+            fee: amount,
+            ..Attributed::default()
+        },
+        Tax => Attributed {
+            tax: amount,
+            ..Attributed::default()
+        },
+        Buy | Sell => Attributed {
+            fee,
+            tax,
+            ..Attributed::default()
+        },
+        // Cash transfers book tax to cash; asset transfers book only the fee.
+        Credit | Deposit | Withdrawal => Attributed {
+            tax,
+            ..Attributed::default()
+        },
+        TransferIn | TransferOut if !activity.is_security_transfer => Attributed {
+            tax,
+            ..Attributed::default()
+        },
+        _ => Attributed::default(),
+    }
+}
+
+fn contribution_for(activity: &Activity, facts: &CanonicalFacts) -> Contribution {
+    use ActivityKind::*;
+    if facts
+        .transfer_pairs
+        .pair_for(&activity.id)
+        .is_some_and(|pair| pair.contribution_neutral)
+    {
+        return Contribution::None;
+    }
     match activity.kind {
         Deposit | Withdrawal => Contribution::CashGross,
         Credit if activity.subtype == Some(Subtype::Bonus) => Contribution::CashGross,
@@ -362,12 +445,13 @@ fn flow_for(
             value: FlowValue::Cash(gross_abs),
         },
         TransferIn | TransferOut => {
-            let boundary = match facts.transfer_pairs.pair_for(&activity.id) {
-                Some(pair) => Boundary::Internal {
-                    counterparty: pair
-                        .counterparty(&activity.id)
-                        .cloned()
-                        .expect("pair contains the activity"),
+            let counterparty = facts
+                .transfer_pairs
+                .pair_for(&activity.id)
+                .and_then(|pair| pair.counterparty(&activity.id));
+            let boundary = match counterparty {
+                Some(counterparty) => Boundary::Internal {
+                    counterparty: counterparty.clone(),
                 },
                 None if activity.external_transfer == Some(true) => Boundary::External,
                 None => {
@@ -380,7 +464,7 @@ fn flow_for(
                 }
             };
             let value = if activity.is_security_transfer {
-                let book_basis = Some(activity.quantity * activity.unit_price)
+                let book_basis = arith::mul(activity.quantity, activity.unit_price)
                     .filter(|basis| !basis.is_zero())
                     .or_else(|| {
                         (activity.kind == TransferIn && !activity.quantity.is_zero())
@@ -429,6 +513,7 @@ mod tests {
             fx_rate: None,
             source_group_id: None,
             external_transfer: None,
+            fx_conversion: None,
             source_system: None,
             is_user_modified: false,
             created_at: Utc.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),

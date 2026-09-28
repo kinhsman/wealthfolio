@@ -60,20 +60,35 @@ community-contributed translations are preserved.
 
 ## Adding a language
 
-1. Add a `locales/<code>/` folder with the namespace JSON files.
-2. Add an entry to `SUPPORTED_LOCALES` in `locales.ts` and `locales` in
-   `i18next.config.ts`.
-3. Add the code to `SUPPORTED_UI_LANGUAGES` in
-   `crates/core/src/settings/settings_service.rs` so the backend persists it.
-4. Add the locale's `ui.json` to `src/addons/iframe/addon-sandbox-i18n.ts`.
-5. Check `new Intl.PluralRules("<code>").resolvedOptions().pluralCategories`. A
-   locale with a `many` category (fr, es, pt, it) needs a `_many` form for every
-   plural stem — i18next echoes the raw key back when the form is missing.
-6. If the language has its own number/date conventions, add a formatting region:
-   `FORMATTING_REGIONS` + `FORMATTING_REGION_LOCALES` in
-   `packages/ui/src/lib/formatting.ts`, `SUPPORTED_FORMATTING_REGIONS` in
-   `settings_service.rs`, the two region pickers, and a
-   `settings:formattingRegion.options.*` label in every locale.
+A locale code is public API — addons read it, and it is persisted per device —
+so pick it deliberately before shipping. Five places have to agree:
+
+1. `locales/<code>/` — one JSON file per namespace, complete parity with `en`.
+2. `SUPPORTED_LOCALES` in `locales.ts`.
+3. `locales` in `i18next.config.ts`.
+4. `SUPPORTED_UI_LANGUAGES` in `crates/core/src/settings/settings_service.rs`,
+   plus any alias normalization (`fr-CA` -> `fr`).
+5. `addon-sandbox-i18n.ts`, if the locale should reach addon iframes.
+
+### Naming
+
+Bare language codes (`fr`, `ja`) unless the language is written in more than one
+script. Chinese is the case that matters: `zh` means Simplified (CLDR expands it
+to `zh-Hans-CN`) and `zh-Hant` means Traditional. Name Chinese variants by
+**script**, not region — one `zh-Hant` catalog serves Taiwan, Hong Kong and
+Macau, and regional differences belong in `formattingRegion`, which is a
+separate setting. A `zh-Hant-HK` catalog can be added later and will fall back
+to `zh-Hant`; that path does not exist from a region-named `zh-TW`.
+
+Fallback never crosses a script boundary: a missing `zh-Hant` string resolves to
+`en`, not `zh`. Mixed glyphs read as broken, untranslated text reads as missing.
+
+### Terminology
+
+Each locale should carry a glossary test (see `traditional-chinese.test.ts`)
+asserting the term the catalog standardises on and rejecting its alternates. Key
+parity and a green suite do not catch a catalog that says "Return" three
+different ways — only a glossary does.
 
 ## Provenance of current translations
 
@@ -97,3 +112,9 @@ community-contributed translations are preserved.
   punctuation (`"..."`, never `«...»`). `_many` plural forms are required
   because Portuguese has a CLDR `many` category. Intended for continued
   community review.
+- **Traditional Chinese (`zh-Hant`)**: contributed in PR #1566, machine-seeded
+  from the English source and reviewed for Taiwan financial terminology by a
+  native speaker; intended for continued community review.
+
+Non-English catalogs are machine-drafted and community-corrected. Terminology
+reports are expected and welcome — file them as issues against the locale.

@@ -8,7 +8,11 @@ baseline:
     acc-1:
       currency: CAD
       disposals: []
-      flows: []
+      flows:
+        - date: 2025-01-03
+          inflow_base: "0"
+          outflow_base: "0"
+          source: UNKNOWN
       keyframes:
         - cash:
             CAD: "1000"
@@ -23,8 +27,8 @@ baseline:
         - cash:
             CAD: "1000"
             CHF: "500"
-          cash_total_account_currency: "1500"
-          cash_total_base_currency: "1200"
+          cash_total_account_currency: "1000"
+          cash_total_base_currency: "700"
           cost_basis: "0"
           date: 2025-01-03
           net_contribution: "1800"
@@ -119,7 +123,7 @@ baseline:
           cost_basis: "0"
           cost_basis_base: "0"
           date: 2025-01-03
-          external_flow_source: NO_FLOW
+          external_flow_source: UNKNOWN
           external_inflow_base: "0"
           external_outflow_base: "0"
           fx_rate_to_base: "0.7"
@@ -232,8 +236,8 @@ baseline:
           total_value_base: "700"
           value_status: unavailable
   diagnostics:
-    - "project/acc-1@2025-01-03: Warning FxUnavailable: cash 500 CHF added to the CAD total unconverted"
-    - "project/acc-1@2025-01-03: Warning FxUnavailable: cash 500 CHF added to the USD total unconverted"
+    - "project/acc-1@2025-01-03: Warning FxUnavailable: no CHF->CAD rate on 2025-01-03; cash 500 CHF excluded from the CAD total"
+    - "project/acc-1@2025-01-03: Warning FxUnavailable: no CHF->USD rate on 2025-01-03; cash 500 CHF excluded from the USD total"
     - "project/dep-chf: Warning FxUnavailable: no CHF->USD rate on 2025-01-03; base contribution not updated"
     - "value/acc-1:cash:CHF->CAD: Warning FxUnavailable: no CHF->CAD rate on 2025-01-03; cash bucket excluded"
     - "value/flow:dep-chf: Warning FxUnavailable: no CHF->USD rate on 2025-01-03 for the external flow of dep-chf; flow unpriced"
@@ -294,5 +298,9 @@ baseline:
         percent: ~
         percent_status: unavailable
         quality: partial
-  portfolio_flows: []
+  portfolio_flows:
+    - date: 2025-01-03
+      inflow_base: "0"
+      outflow_base: "0"
+      source: UNKNOWN
 scenario: EDGE-FX-05

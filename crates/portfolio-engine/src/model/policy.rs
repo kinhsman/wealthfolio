@@ -6,7 +6,7 @@ use chrono_tz::Tz;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use super::scalar::Currency;
+use super::scalar::{Currency, MAX_MAGNITUDE, MIN_RATE};
 use crate::error::EngineError;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -26,6 +26,7 @@ pub struct Policy {
 pub struct MinorUnitRule {
     pub minor: String,
     pub major: String,
+    #[serde(with = "crate::model::decimal_serde")]
     pub factor: Decimal,
     /// `GBp` is case-sensitive (`gbp` is not pence); `GBX`/`KWF`/`ILA`/`USX`
     /// match any case; `ZAc` matches exactly or as `ZAC`.
@@ -54,9 +55,9 @@ impl Policy {
 
     pub fn validate(&self) -> Result<(), EngineError> {
         for rule in &self.minor_units {
-            if rule.factor <= Decimal::ZERO {
+            if rule.factor < MIN_RATE || rule.factor > MAX_MAGNITUDE {
                 return Err(EngineError::InvalidPolicy(format!(
-                    "minor-unit rule {} has non-positive factor",
+                    "minor-unit rule {} has a factor outside the kernel range",
                     rule.minor
                 )));
             }

@@ -1,11 +1,26 @@
 //! Parse-don't-validate scalars. Constructed once in `normalize`; interior
 //! stages never see raw strings.
 
-/// Decimal places every stored amount keeps (legacy `DECIMAL_PRECISION`).
+/// Decimal places every stored amount keeps (legacy `DECIMAL_PRECISION`):
+/// the one rounding scale of the kernel. Amounts round to it where they
+/// become rows (disposals, valuation rows as read back, flow deltas between
+/// stored rows) and in performance outputs; nothing rounds in between.
 pub const STORED_PRECISION: u32 = 8;
+
+/// Largest magnitude the kernel computes with (architecture §4.3). `normalize`
+/// rejects inputs above it and a product or quotient above it is declined, so
+/// kernel values stay far enough below `Decimal::MAX` (about 7.9e28) that
+/// summing them cannot overflow. Rates must also lie within
+/// [`MIN_RATE`, `MAX_MAGNITUDE`] so their inverse is in range too.
+pub const MAX_MAGNITUDE: Decimal = dec!(100000000000000000000);
+
+/// Smallest usable rate: the inverse of [`MAX_MAGNITUDE`].
+pub const MIN_RATE: Decimal = dec!(0.00000000000000000001);
 
 use std::fmt;
 
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use serde::{Deserialize, Serialize};
 
 /// Opaque validated currency code: non-empty, trimmed, case-preserved (the

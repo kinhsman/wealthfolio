@@ -1,4 +1,4 @@
-//! Stage 3: fold economic events into daily account state — a pure port of
+//! Stage 4: fold economic events into daily account state — a pure port of
 //! the legacy holdings calculator (positions, FIFO lots, shorts, transfers
 //! with lot carry-over, splits, net contribution, cash totals).
 //!
@@ -13,6 +13,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 
+use crate::arith;
 use crate::compile::CompiledLedger;
 use crate::diagnostics::{Diagnostic, DiagnosticCode};
 use crate::error::EngineError;
@@ -21,8 +22,12 @@ use crate::resolve::FxResolver;
 
 /// Positions below this effective quantity are treated as closed.
 const QUANTITY_THRESHOLD: Decimal = Decimal::from_parts(1, 0, 0, false, 8);
-/// Storage scale for disposal money fields (legacy `DECIMAL_PRECISION`).
-const STORAGE_SCALE: u32 = 8;
+
+/// A value outside the kernel range rejects the event (architecture §4.3):
+/// the fold keeps the scratch state from before it and reports why.
+fn checked(value: Option<Decimal>, what: &str) -> Result<Decimal, String> {
+    value.ok_or_else(|| format!("{what} is outside the kernel range"))
+}
 
 pub fn project(
     ledger: &CompiledLedger,
@@ -50,10 +55,10 @@ pub fn project(
     let projector = Projector {
         facts,
         fx,
-        explicit_rates: facts
-            .activities
+        event_dates: ledger
+            .events
             .iter()
-            .filter_map(|a| a.fx_rate.map(|rate| (a.id.as_str(), rate)))
+            .map(|e| (e.source.as_str(), e.date))
             .collect(),
     };
     let mut state = start.unwrap_or_else(|| ProjectionState {
@@ -138,7 +143,7 @@ pub fn project(
                 .or_default()
                 .push(Keyframe {
                     date: day,
-                    state: next.clone(),
+                    state: next.without_lots(),
                 });
             state.accounts.insert(account_id.clone(), next);
         }
@@ -242,8 +247,8 @@ struct RunLog {
 struct Projector<'a> {
     facts: &'a CanonicalFacts,
     fx: &'a FxResolver<'a>,
-    /// Activity → account rate supplied with the row, by activity id.
-    explicit_rates: HashMap<&'a str, Decimal>,
+    /// Business date of every event's source activity (transfer staging).
+    event_dates: HashMap<&'a str, NaiveDate>,
 }
 
 struct Reduction {
@@ -361,7 +366,7 @@ impl Projector<'_> {
                 quantity,
                 unit_price,
                 legacy_amount,
-                group,
+                ..
             } => match direction {
                 Direction::In => self.transfer_in(
                     event,
@@ -370,28 +375,15 @@ impl Projector<'_> {
                     *quantity,
                     *unit_price,
                     *legacy_amount,
-                    group.as_deref(),
                     cache,
                     effects,
                     run,
                 ),
-                Direction::Out => self.transfer_out(
-                    event,
-                    state,
-                    asset,
-                    *quantity,
-                    group.as_deref(),
-                    effects,
-                    run,
-                ),
+                Direction::Out => self.transfer_out(event, state, asset, *quantity, effects, run),
             },
-            Action::Split { asset, ratio } => {
-                self.split(event, state, asset, *ratio, run);
-                Ok(())
-            }
+            Action::Split { asset, ratio } => self.split(event, state, asset, *ratio),
             Action::OptionExpiry { asset, quantity } => {
-                self.option_expiry(event, state, asset, *quantity, effects, run);
-                Ok(())
+                self.option_expiry(event, state, asset, *quantity, effects, run)
             }
         }
     }
@@ -412,12 +404,12 @@ impl Projector<'_> {
             // Charges of zero: no cash change (legacy warns and returns).
             return Ok(());
         }
-        self.book_cash(state, event, cash);
+        self.book_cash(state, event, cash)?;
         if event.contribution == Contribution::CashGross {
             let gross = cash.gross.unwrap_or(Decimal::ZERO);
             let account_currency = state.currency.clone();
             let amount_account =
-                self.to_account_currency(gross, event, account_currency.as_str(), run);
+                self.to_account_currency(gross, event, account_currency.as_str(), run)?;
             let amount_base = self.gross_to_base(gross, event, run);
             state.net_contribution += amount_account;
             state.net_contribution_base += amount_base;
@@ -425,44 +417,56 @@ impl Projector<'_> {
         Ok(())
     }
 
-    fn book_cash(&self, state: &mut AccountState, event: &EconomicEvent, cash: &CashEffect) {
+    fn book_cash(
+        &self,
+        state: &mut AccountState,
+        event: &EconomicEvent,
+        cash: &CashEffect,
+    ) -> Result<(), String> {
         let (currency, amount) = match cash.booking {
             Booking::ActivityCurrency => (event.currency.clone(), cash.amount),
-            Booking::AccountCurrency { rate } => (state.currency.clone(), cash.amount * rate),
+            Booking::AccountCurrency { rate } => (
+                state.currency.clone(),
+                checked(arith::mul(cash.amount, rate), "cash at the supplied rate")?,
+            ),
         };
         *state.cash.entry(currency).or_insert(Decimal::ZERO) += amount;
+        Ok(())
     }
 
     /// Legacy `convert_to_account_currency`: explicit rate, else FX on the
-    /// activity date, else the unconverted amount (diagnosed).
+    /// activity date, else nothing: an amount in another currency is never
+    /// added as if it were the account's (architecture §4.3), only diagnosed.
     fn to_account_currency(
         &self,
         amount: Decimal,
         event: &EconomicEvent,
         account_currency: &str,
         run: &mut RunLog,
-    ) -> Decimal {
+    ) -> Result<Decimal, String> {
         let from = event.currency.as_str();
         if from == account_currency {
-            return amount;
+            return Ok(amount);
         }
         if let Some(rate) = self.explicit_rate(event) {
-            return amount * rate;
+            return checked(arith::mul(amount, rate), "amount at the supplied rate");
         }
-        match self.fx.convert(amount, from, account_currency, event.date) {
-            Some(converted) => converted,
-            None => {
-                run.diagnostics.push(Diagnostic::warning(
-                    DiagnosticCode::FxUnavailable,
-                    event.source.as_str(),
-                    format!(
-                        "no {from}->{account_currency} rate on {}; amount carried unconverted",
-                        event.date
-                    ),
-                ));
-                amount
-            }
-        }
+        Ok(
+            match self.fx.convert(amount, from, account_currency, event.date) {
+                Some(converted) => converted,
+                None => {
+                    run.diagnostics.push(Diagnostic::warning(
+                        DiagnosticCode::FxUnavailable,
+                        event.source.as_str(),
+                        format!(
+                            "no {from}->{account_currency} rate on {}; net contribution not updated",
+                            event.date
+                        ),
+                    ));
+                    Decimal::ZERO
+                }
+            },
+        )
     }
 
     /// Net-contribution base leg: FX on the activity date, else zero (legacy).
@@ -489,7 +493,28 @@ impl Projector<'_> {
     }
 
     fn explicit_rate(&self, event: &EconomicEvent) -> Option<Decimal> {
-        self.explicit_rates.get(event.source.as_str()).copied()
+        event.fx_rate
+    }
+
+    /// The resolved pair of a transfer leg: only a valid pair moves lots.
+    fn pair(&self, event: &EconomicEvent) -> Option<&TransferPair> {
+        self.facts.transfer_pairs.pair_for(&event.source)
+    }
+
+    /// Whether the fold will still apply the pair's incoming leg, so lots
+    /// staged for it are consumed rather than left in every later checkpoint:
+    /// its account is projected and it is not dated before the outgoing leg.
+    fn incoming_leg_pending(&self, pair: &TransferPair, out_date: NaiveDate) -> bool {
+        let projected = self
+            .facts
+            .accounts
+            .get(&pair.in_account)
+            .is_some_and(|a| !a.archived && a.tracking != TrackingMode::Holdings);
+        projected
+            && self
+                .event_dates
+                .get(pair.transfer_in.as_str())
+                .is_some_and(|date| *date >= out_date)
     }
 
     // --------------------------------------------------------------- trades
@@ -551,7 +576,7 @@ impl Projector<'_> {
             .map(|g| g.abs())
             .unwrap_or(Decimal::ZERO);
         let lot_unit_price =
-            effective_unit_price(quantity, gross_abs, unit_price, info.contract_multiplier);
+            effective_unit_price(quantity, gross_abs, unit_price, info.contract_multiplier)?;
         let (price, fee, tax, fx_used) = self.to_position_currency(
             lot_unit_price,
             event.charges.fee,
@@ -576,9 +601,11 @@ impl Projector<'_> {
                 cash_quantity = close_quantity;
             }
             if close_quantity > Decimal::ZERO {
-                let close_fee = proportional(fee, close_quantity, quantity);
-                let close_tax = proportional(tax, close_quantity, quantity);
-                let close_cost = close_quantity * price + close_fee + close_tax;
+                let close_fee = proportional(fee, close_quantity, quantity)?;
+                let close_tax = proportional(tax, close_quantity, quantity)?;
+                let close_cost = checked(arith::mul(close_quantity, price), "cover cost")?
+                    + close_fee
+                    + close_tax;
                 let reduction = reduce_negative_lots_fifo(position, close_quantity)?;
                 self.record_reduction(
                     &account_id,
@@ -589,11 +616,11 @@ impl Projector<'_> {
                     &position_currency,
                     effects,
                     run,
-                );
+                )?;
             }
             if open_quantity > Decimal::ZERO && !close_only {
-                let open_fee = proportional(fee, open_quantity, quantity);
-                let open_tax = proportional(tax, open_quantity, quantity);
+                let open_fee = proportional(fee, open_quantity, quantity)?;
+                let open_tax = proportional(tax, open_quantity, quantity)?;
                 let lot_id = if close_quantity > Decimal::ZERO {
                     format!("{}:open", event.id)
                 } else {
@@ -623,17 +650,17 @@ impl Projector<'_> {
                 event,
                 fx_used,
                 &book,
-            );
+            )?;
         }
 
         if let Some(cash) = &event.cash {
-            let amount = proportional(cash.amount, cash_quantity, quantity);
+            let amount = proportional(cash.amount, cash_quantity, quantity)?;
             let effect = CashEffect {
                 amount,
                 gross: cash.gross,
                 booking: cash.booking,
             };
-            self.book_cash(state, event, &effect);
+            self.book_cash(state, event, &effect)?;
         }
         Ok(())
     }
@@ -692,7 +719,7 @@ impl Projector<'_> {
         let account_currency = state.currency.clone();
         let account_id = state.account.clone();
         if let Some(cash) = &event.cash {
-            self.book_cash(state, event, cash);
+            self.book_cash(state, event, cash)?;
         }
         let total_proceeds = event
             .cash
@@ -710,7 +737,7 @@ impl Projector<'_> {
                 .map(|g| g.abs())
                 .unwrap_or(Decimal::ZERO);
             let lot_unit_price =
-                effective_unit_price(quantity, gross_abs, unit_price, info.contract_multiplier);
+                effective_unit_price(quantity, gross_abs, unit_price, info.contract_multiplier)?;
             let (price, fee, tax, fx_used) = self.to_position_currency(
                 lot_unit_price,
                 event.charges.fee,
@@ -723,9 +750,11 @@ impl Projector<'_> {
             let close_quantity = quantity.min(long_quantity);
             let open_quantity = quantity - close_quantity;
             if close_quantity > Decimal::ZERO {
-                let close_fee = proportional(fee, close_quantity, quantity);
-                let close_tax = proportional(tax, close_quantity, quantity);
-                let close_proceeds = close_quantity * price - close_fee - close_tax;
+                let close_fee = proportional(fee, close_quantity, quantity)?;
+                let close_tax = proportional(tax, close_quantity, quantity)?;
+                let close_proceeds = checked(arith::mul(close_quantity, price), "sale proceeds")?
+                    - close_fee
+                    - close_tax;
                 let reduction = reduce_positive_lots_fifo(position, close_quantity)?;
                 self.record_reduction(
                     &account_id,
@@ -736,11 +765,11 @@ impl Projector<'_> {
                     &position_currency,
                     effects,
                     run,
-                );
+                )?;
             }
             if open_quantity > Decimal::ZERO && !close_only {
-                let open_fee = proportional(fee, open_quantity, quantity);
-                let open_tax = proportional(tax, open_quantity, quantity);
+                let open_fee = proportional(fee, open_quantity, quantity)?;
+                let open_tax = proportional(tax, open_quantity, quantity)?;
                 let lot_id = if close_quantity > Decimal::ZERO {
                     format!("{}:open", event.id)
                 } else {
@@ -777,6 +806,10 @@ impl Projector<'_> {
                 account_currency.as_str(),
             )?;
             let reduction = reduce_positive_lots_fifo(position, quantity)?;
+            // The proceeds belong to every unit sold: units beyond the
+            // position have no lot, so only their share of the proceeds is
+            // realised against the lots that were held.
+            let proceeds = proportional(proceeds, reduction.quantity_reduced, quantity)?;
             self.record_reduction(
                 &account_id,
                 asset,
@@ -785,6 +818,14 @@ impl Projector<'_> {
                 proceeds,
                 &position_currency,
                 effects,
+                run,
+            )?;
+            report_shortfall(
+                event,
+                "SELL",
+                asset,
+                quantity,
+                reduction.quantity_reduced,
                 run,
             );
         } else {
@@ -808,7 +849,6 @@ impl Projector<'_> {
         quantity: Decimal,
         unit_price: Decimal,
         legacy_amount: Option<Decimal>,
-        group: Option<&str>,
         cache: &BTreeMap<String, Vec<Lot>>,
         effects: &mut SideEffects,
         run: &mut RunLog,
@@ -827,7 +867,9 @@ impl Projector<'_> {
         let base = self.base().to_string();
         let position = self.position_mut(state, asset, &info, event);
         let position_currency = position.currency.clone();
-        let cached = group.and_then(|g| cache.get(g).cloned());
+        let paired_group = self.pair(event).map(|pair| pair.group_id.clone());
+        let cached = paired_group.as_deref().and_then(|g| cache.get(g).cloned());
+        let paired = cached.is_some();
 
         let (cost_basis_asset, added_lots, cover) = if let Some(lots) = cached {
             let incoming_negative = lots
@@ -847,7 +889,7 @@ impl Projector<'_> {
                 Decimal::ZERO
             };
             let (to_add, cover) = if cover_abs > Decimal::ZERO {
-                let (cover_lots, residual) = split_lots_by_cover(&lots, cover_abs);
+                let (cover_lots, residual) = split_lots_by_cover(&lots, cover_abs)?;
                 let cover_proceeds: Decimal = cover_lots
                     .iter()
                     .map(|l| l.cost_basis)
@@ -867,14 +909,14 @@ impl Projector<'_> {
                 event.id.as_str(),
                 &to_add,
                 info.allows_negative_lots,
-            );
+            )?;
             let added: Vec<Lot> = position
                 .lots
                 .iter()
                 .filter(|lot| lot.source_event.as_ref() == Some(&event.id))
                 .cloned()
                 .collect();
-            if let Some(g) = group {
+            if let Some(g) = paired_group.as_deref() {
                 if cover_abs > Decimal::ZERO || !added.is_empty() {
                     effects.cache_removals.push(g.to_string());
                 } else {
@@ -888,7 +930,10 @@ impl Projector<'_> {
             (cost_basis, added, cover)
         } else {
             let compiled_basis = {
-                let price_basis = quantity * unit_price * info.contract_multiplier;
+                let price_basis = checked(
+                    arith::product(&[quantity, unit_price, info.contract_multiplier]),
+                    "transferred basis",
+                )?;
                 if !price_basis.is_zero() {
                     price_basis
                 } else if !quantity.is_zero() {
@@ -900,7 +945,10 @@ impl Projector<'_> {
             let lot_unit_price = if quantity.is_zero() {
                 Decimal::ZERO
             } else {
-                compiled_basis / quantity
+                checked(
+                    arith::div(compiled_basis, quantity),
+                    "transferred unit price",
+                )?
             };
             let (price, fee, _tax, fx_used) = self.to_position_currency(
                 lot_unit_price,
@@ -926,7 +974,7 @@ impl Projector<'_> {
                 event,
                 fx_used,
                 &book,
-            );
+            )?;
             let added: Vec<Lot> = position
                 .lots
                 .iter()
@@ -946,7 +994,7 @@ impl Projector<'_> {
                 &position_currency,
                 effects,
                 run,
-            );
+            )?;
             if !position_currency.as_str().is_empty()
                 && reduction.cost_basis_removed != Decimal::ZERO
             {
@@ -1001,9 +1049,9 @@ impl Projector<'_> {
                     run.diagnostics.push(Diagnostic::warning(
                         DiagnosticCode::FxUnavailable,
                         event.source.as_str(),
-                        "no rate for the transferred basis to base; carried unconverted",
+                        "no rate for the transferred basis to base; base contribution not updated",
                     ));
-                    cost_basis_asset
+                    Decimal::ZERO
                 }
             }
         } else {
@@ -1018,6 +1066,24 @@ impl Projector<'_> {
         };
         state.net_contribution += cost_basis_account;
         state.net_contribution_base += cost_basis_base;
+
+        // A paired leg's fee is paid from cash and capitalised into the lots
+        // it delivered, as an unpaired leg's and a trade's fee is (Appendix
+        // A). Net contribution moves by the carried basis alone, so the pair
+        // still nets to zero at portfolio scope (I7).
+        if paired && !event.charges.fee.is_zero() {
+            let (_, fee, _, _) = self.to_position_currency(
+                Decimal::ZERO,
+                event.charges.fee,
+                Decimal::ZERO,
+                event,
+                position_currency.as_str(),
+                account_currency.as_str(),
+            )?;
+            if let Some(position) = state.positions.get_mut(asset) {
+                capitalize_fee(position, &event.id, fee, info.allows_negative_lots)?;
+            }
+        }
         Ok(())
     }
 
@@ -1028,7 +1094,6 @@ impl Projector<'_> {
         state: &mut AccountState,
         asset: &AssetId,
         quantity: Decimal,
-        group: Option<&str>,
         effects: &mut SideEffects,
         run: &mut RunLog,
     ) -> Result<(), String> {
@@ -1069,6 +1134,14 @@ impl Projector<'_> {
             &position_currency,
             effects,
             run,
+        )?;
+        report_shortfall(
+            event,
+            "TRANSFER_OUT",
+            asset,
+            quantity,
+            reduction.quantity_reduced,
+            run,
         );
         if !position_currency.as_str().is_empty() && removed != Decimal::ZERO {
             let removed_account = self.lots_cost_basis_in(
@@ -1090,11 +1163,11 @@ impl Projector<'_> {
             state.net_contribution -= removed_account;
             state.net_contribution_base -= removed_base;
         }
-        if let Some(g) = group {
-            if !reduction.removed_lots.is_empty() {
+        if let Some(pair) = self.pair(event) {
+            if !reduction.removed_lots.is_empty() && self.incoming_leg_pending(pair, event.date) {
                 effects
                     .cache_inserts
-                    .push((g.to_string(), reduction.removed_lots));
+                    .push((pair.group_id.clone(), reduction.removed_lots));
             }
         }
         Ok(())
@@ -1108,19 +1181,24 @@ impl Projector<'_> {
         state: &mut AccountState,
         asset: &AssetId,
         ratio: Decimal,
-        _run: &mut RunLog,
-    ) {
+    ) -> Result<(), String> {
         let Some(position) = state.positions.get_mut(asset) else {
-            return;
+            return Ok(());
         };
         let policy = &self.facts.policy;
         for lot in &mut position.lots {
             if lot.acquisition.with_timezone(&policy.timezone).date_naive() < event.date {
-                lot.split_ratio *= ratio;
+                let split_ratio = checked(arith::mul(lot.split_ratio, ratio), "split ratio")?;
+                // Keeps `Lot::effective_quantity` in range for every later read.
+                checked(
+                    arith::mul(lot.quantity, split_ratio),
+                    "split-adjusted quantity",
+                )?;
+                lot.split_ratio = split_ratio;
             }
         }
         let allows_negative = position.lots.iter().any(|lot| lot.quantity < Decimal::ZERO);
-        recalculate_aggregates(position, allows_negative);
+        recalculate_aggregates(position, allows_negative)
     }
 
     fn option_expiry(
@@ -1131,7 +1209,7 @@ impl Projector<'_> {
         quantity: Decimal,
         effects: &mut SideEffects,
         run: &mut RunLog,
-    ) {
+    ) -> Result<(), String> {
         let account_id = state.account.clone();
         let Some(position) = state.positions.get_mut(asset) else {
             run.diagnostics.push(Diagnostic::warning(
@@ -1139,31 +1217,33 @@ impl Projector<'_> {
                 event.source.as_str(),
                 format!("OPTION_EXPIRY: no position for {asset}; ignored"),
             ));
-            return;
+            return Ok(());
         };
         let position_currency = position.currency.clone();
         let reduction = if position.quantity < Decimal::ZERO {
-            reduce_negative_lots_fifo(position, quantity)
+            reduce_negative_lots_fifo(position, quantity)?
         } else {
-            reduce_positive_lots_fifo(position, quantity)
+            reduce_positive_lots_fifo(position, quantity)?
         };
-        match reduction {
-            Ok(reduction) => self.record_reduction(
-                &account_id,
-                asset,
-                event,
-                &reduction,
-                Decimal::ZERO,
-                &position_currency,
-                effects,
-                run,
-            ),
-            Err(message) => run.diagnostics.push(Diagnostic::error(
-                DiagnosticCode::ActivityRejected,
-                event.source.as_str(),
-                message,
-            )),
-        }
+        self.record_reduction(
+            &account_id,
+            asset,
+            event,
+            &reduction,
+            Decimal::ZERO,
+            &position_currency,
+            effects,
+            run,
+        )?;
+        report_shortfall(
+            event,
+            "OPTION_EXPIRY",
+            asset,
+            quantity,
+            reduction.quantity_reduced,
+            run,
+        );
+        Ok(())
     }
 
     // ------------------------------------------------------------- helpers
@@ -1217,7 +1297,15 @@ impl Projector<'_> {
             position_currency == account_currency || activity_currency == account_currency;
         if can_use_rate {
             if let Some(rate) = self.explicit_rate(event) {
-                return Ok((unit_price * rate, fee * rate, tax * rate, Some(rate)));
+                let at_rate = |amount: Decimal| {
+                    checked(arith::mul(amount, rate), "amount at the supplied rate")
+                };
+                return Ok((
+                    at_rate(unit_price)?,
+                    at_rate(fee)?,
+                    at_rate(tax)?,
+                    Some(rate),
+                ));
             }
         }
         let convert = |amount: Decimal, what: &str| {
@@ -1228,7 +1316,7 @@ impl Projector<'_> {
         let price = convert(unit_price, "unit_price")?;
         let fee = convert(fee, "fee")?;
         let tax = convert(tax, "tax")?;
-        let fx_used = (!unit_price.is_zero()).then(|| price / unit_price);
+        let fx_used = arith::div(price, unit_price);
         Ok((price, fee, tax, fx_used))
     }
 
@@ -1248,7 +1336,7 @@ impl Projector<'_> {
             position_currency == account_currency || activity_currency == account_currency;
         if can_use_rate {
             if let Some(rate) = self.explicit_rate(event) {
-                return Ok(amount * rate);
+                return checked(arith::mul(amount, rate), "proceeds at the supplied rate");
             }
         }
         self.fx
@@ -1269,8 +1357,11 @@ impl Projector<'_> {
             return amount;
         }
         if event.currency.as_str() == position_currency {
-            if let Some(rate) = self.explicit_rate(event) {
-                return amount * rate;
+            if let Some(converted) = self
+                .explicit_rate(event)
+                .and_then(|rate| arith::mul(amount, rate))
+            {
+                return converted;
             }
         }
         match self
@@ -1282,9 +1373,9 @@ impl Projector<'_> {
                 run.diagnostics.push(Diagnostic::warning(
                     DiagnosticCode::FxUnavailable,
                     event.source.as_str(),
-                    format!("no {position_currency}->{account_currency} rate on {}; amount carried unconverted", event.date),
+                    format!("no {position_currency}->{account_currency} rate on {}; net contribution not updated", event.date),
                 ));
-                amount
+                Decimal::ZERO
             }
         }
     }
@@ -1313,7 +1404,7 @@ impl Projector<'_> {
                 Some(explicit_rate)
             } else {
                 self.rate_for_basis(account_currency, base, event, run)
-                    .map(|account_to_base| explicit_rate * account_to_base)
+                    .and_then(|account_to_base| arith::mul(explicit_rate, account_to_base))
             }
         } else {
             self.rate_for_basis(position_currency, base, event, run)
@@ -1341,7 +1432,7 @@ impl Projector<'_> {
         if activity_currency == position_currency {
             Some(rate)
         } else if activity_currency == account_currency {
-            Some(Decimal::ONE / rate)
+            arith::div(Decimal::ONE, rate)
         } else {
             None
         }
@@ -1394,8 +1485,11 @@ impl Projector<'_> {
         if position_currency == target {
             return lot.cost_basis;
         }
-        if let Some(rate) = lot.stored_fx_rate_to(target) {
-            return lot.cost_basis * rate;
+        if let Some(converted) = lot
+            .stored_fx_rate_to(target)
+            .and_then(|rate| arith::mul(lot.cost_basis, rate))
+        {
+            return converted;
         }
         if let Some(converted) = self.fx.convert(
             lot.cost_basis,
@@ -1410,11 +1504,11 @@ impl Projector<'_> {
                 DiagnosticCode::FxUnavailable,
                 event.source.as_str(),
                 format!(
-                    "no {position_currency}->{target} rate on {}; lot basis carried unconverted",
+                    "no {position_currency}->{target} rate on {}; lot basis excluded",
                     lot.acquisition_date
                 ),
             ));
-            return lot.cost_basis;
+            return Decimal::ZERO;
         }
         match self
             .fx
@@ -1422,8 +1516,8 @@ impl Projector<'_> {
         {
             Some(converted) => converted,
             None => {
-                run.diagnostics.push(Diagnostic::warning(DiagnosticCode::FxUnavailable, event.source.as_str(), format!("no {position_currency}->{target} rate on {} or {fallback_date}; lot basis carried unconverted", lot.acquisition_date)));
-                lot.cost_basis
+                run.diagnostics.push(Diagnostic::warning(DiagnosticCode::FxUnavailable, event.source.as_str(), format!("no {position_currency}->{target} rate on {} or {fallback_date}; lot basis excluded", lot.acquisition_date)));
+                Decimal::ZERO
             }
         }
     }
@@ -1448,8 +1542,14 @@ impl Projector<'_> {
             match self.fx.convert(amount, position_currency, target, date) {
                 Some(converted) => converted,
                 None => {
-                    run.diagnostics.push(Diagnostic::warning(DiagnosticCode::FxUnavailable, position.asset.as_str(), format!("no {position_currency}->{target} rate on {date}; book cost carried unconverted")));
-                    amount
+                    run.diagnostics.push(Diagnostic::warning(
+                        DiagnosticCode::FxUnavailable,
+                        position.asset.as_str(),
+                        format!(
+                            "no {position_currency}->{target} rate on {date}; book cost excluded"
+                        ),
+                    ));
+                    Decimal::ZERO
                 }
             }
         };
@@ -1460,9 +1560,14 @@ impl Projector<'_> {
             .lots
             .iter()
             .filter(|lot| !lot.quantity.is_zero() && !lot.cost_basis.is_zero())
-            .map(|lot| match lot.stored_fx_rate_to(target) {
-                Some(rate) => lot.cost_basis * rate,
-                None => soft_convert(lot.cost_basis, lot.acquisition_date, run),
+            .map(|lot| {
+                match lot
+                    .stored_fx_rate_to(target)
+                    .and_then(|rate| arith::mul(lot.cost_basis, rate))
+                {
+                    Some(converted) => converted,
+                    None => soft_convert(lot.cost_basis, lot.acquisition_date, run),
+                }
             })
             .sum()
     }
@@ -1481,19 +1586,19 @@ impl Projector<'_> {
                 continue;
             }
             if let Some(rate) = lot.stored_fx_rate_to(target_major) {
-                total += lot.cost_basis * rate;
+                total += arith::mul(lot.cost_basis, rate)?;
                 continue;
             }
             let rate = self
                 .fx
                 .rate(position_currency, target_major, lot.acquisition_date)?;
-            total += lot.cost_basis * rate;
+            total += arith::mul(lot.cost_basis, rate)?;
         }
         Some(total)
     }
 
     /// Cash totals in account and base currency, once per day; an
-    /// unconvertible bucket is added unconverted (legacy) and diagnosed.
+    /// unconvertible bucket is excluded and diagnosed, as valuation does.
     fn compute_cash_totals(&self, state: &mut AccountState, day: NaiveDate, run: &mut RunLog) {
         let account_currency = state.currency.as_str().to_string();
         let base = self.base().to_string();
@@ -1515,10 +1620,9 @@ impl Projector<'_> {
                                 DiagnosticCode::FxUnavailable,
                                 format!("{}@{day}", state.account),
                                 format!(
-                                    "cash {amount} {code} added to the {target} total unconverted"
+                                    "no {code}->{target} rate on {day}; cash {amount} {code} excluded from the {target} total"
                                 ),
                             ));
-                            *total += *amount;
                         }
                     }
                 }
@@ -1539,7 +1643,7 @@ impl Projector<'_> {
         position_currency: &Currency,
         effects: &mut SideEffects,
         run: &mut RunLog,
-    ) {
+    ) -> Result<(), String> {
         self.record_disposals(
             account,
             asset,
@@ -1550,12 +1654,13 @@ impl Projector<'_> {
             position_currency,
             effects,
             run,
-        );
+        )?;
         for lot in &reduction.fully_consumed {
             effects
                 .closures
-                .push(self.closure(account, asset, lot, event, position_currency));
+                .push(self.closure(account, asset, lot, event, position_currency)?);
         }
+        Ok(())
     }
 
     fn closure(
@@ -1565,7 +1670,7 @@ impl Projector<'_> {
         lot: &Lot,
         event: &EconomicEvent,
         position_currency: &Currency,
-    ) -> LotClosure {
+    ) -> Result<LotClosure, String> {
         let original_quantity = if lot.original_quantity.is_zero() {
             lot.quantity
         } else {
@@ -1573,9 +1678,15 @@ impl Projector<'_> {
         };
         let fees = original_fees(lot);
         let taxes = original_taxes(lot);
-        let original_cost_basis = lot.acquisition_price * original_quantity + fees + taxes;
+        let original_cost_basis = checked(
+            arith::mul(lot.acquisition_price, original_quantity),
+            "closed lot cost",
+        )? + fees
+            + taxes;
         let fx_rate_to_base = self.lot_rate_to_base(lot, position_currency.as_str());
-        LotClosure {
+        let base =
+            |value: Decimal| checked(arith::mul(value, fx_rate_to_base), "closed lot base cost");
+        Ok(LotClosure {
             lot_id: lot.id.clone(),
             account: account.clone(),
             asset: asset.clone(),
@@ -1586,15 +1697,15 @@ impl Projector<'_> {
             original_quantity,
             cost_per_unit: lot.acquisition_price,
             original_cost_basis,
-            original_cost_basis_base: original_cost_basis * fx_rate_to_base,
+            original_cost_basis_base: base(original_cost_basis)?,
             fee_allocated: fees,
-            fee_allocated_base: fees * fx_rate_to_base,
+            fee_allocated_base: base(fees)?,
             tax_allocated: taxes,
-            tax_allocated_base: taxes * fx_rate_to_base,
+            tax_allocated_base: base(taxes)?,
             currency: position_currency.clone(),
             fx_rate_to_base,
             split_ratio: lot.split_ratio,
-        }
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1609,9 +1720,9 @@ impl Projector<'_> {
         position_currency: &Currency,
         effects: &mut SideEffects,
         run: &mut RunLog,
-    ) {
+    ) -> Result<(), String> {
         if removed.is_empty() || total_quantity.is_zero() {
-            return;
+            return Ok(());
         }
         let disposal_rate = self
             .fx
@@ -1626,24 +1737,33 @@ impl Projector<'_> {
         }
         for (index, lot) in removed.iter().enumerate() {
             let effective = lot.effective_quantity();
-            let proceeds = total_proceeds * effective / total_quantity;
+            let proceeds = checked(
+                arith::proportional(total_proceeds, effective, total_quantity),
+                "disposal proceeds",
+            )?;
             let cost_basis = lot.cost_basis;
             let acquisition_rate = self.lot_rate_to_base(lot, position_currency.as_str());
             let base_available = !disposal_rate.is_zero() && !acquisition_rate.is_zero();
             let proceeds_base = if base_available {
-                proceeds * disposal_rate
+                checked(
+                    arith::mul(proceeds, disposal_rate),
+                    "disposal base proceeds",
+                )?
             } else {
                 Decimal::ZERO
             };
             let cost_basis_base = if base_available {
-                cost_basis * acquisition_rate
+                checked(
+                    arith::mul(cost_basis, acquisition_rate),
+                    "disposal base cost",
+                )?
             } else {
                 Decimal::ZERO
             };
-            let stored_proceeds = proceeds.round_dp(STORAGE_SCALE);
-            let stored_cost = cost_basis.round_dp(STORAGE_SCALE);
-            let stored_proceeds_base = proceeds_base.round_dp(STORAGE_SCALE);
-            let stored_cost_base = cost_basis_base.round_dp(STORAGE_SCALE);
+            let stored_proceeds = proceeds.round_dp(STORED_PRECISION);
+            let stored_cost = cost_basis.round_dp(STORED_PRECISION);
+            let stored_proceeds_base = proceeds_base.round_dp(STORED_PRECISION);
+            let stored_cost_base = cost_basis_base.round_dp(STORED_PRECISION);
             effects.disposals.push(LotDisposal {
                 id: format!("{}:{}:{index}", event.id, lot.id),
                 lot_id: lot.id.clone(),
@@ -1654,15 +1774,16 @@ impl Projector<'_> {
                 quantity: effective,
                 proceeds: stored_proceeds,
                 cost_basis: stored_cost,
-                realized_pnl: (stored_proceeds - stored_cost).round_dp(STORAGE_SCALE),
+                realized_pnl: (stored_proceeds - stored_cost).round_dp(STORED_PRECISION),
                 proceeds_base: stored_proceeds_base,
                 cost_basis_base: stored_cost_base,
                 realized_pnl_base: (stored_proceeds_base - stored_cost_base)
-                    .round_dp(STORAGE_SCALE),
+                    .round_dp(STORED_PRECISION),
                 currency: position_currency.clone(),
                 fx_rate_to_base: disposal_rate,
             });
         }
+        Ok(())
     }
 
     fn lot_rate_to_base(&self, lot: &Lot, position_currency: &str) -> Decimal {
@@ -1689,11 +1810,11 @@ fn is_significant(quantity: Decimal) -> bool {
     quantity.abs() >= QUANTITY_THRESHOLD
 }
 
-fn proportional(amount: Decimal, part: Decimal, total: Decimal) -> Decimal {
+fn proportional(amount: Decimal, part: Decimal, total: Decimal) -> Result<Decimal, String> {
     if amount.is_zero() || part.is_zero() || total.is_zero() {
-        Decimal::ZERO
+        Ok(Decimal::ZERO)
     } else {
-        amount * part / total
+        checked(arith::proportional(amount, part, total), "pro-rated amount")
     }
 }
 
@@ -1702,12 +1823,75 @@ fn effective_unit_price(
     gross_abs: Decimal,
     unit_price: Decimal,
     multiplier: Decimal,
-) -> Decimal {
+) -> Result<Decimal, String> {
     if !quantity.is_zero() && !gross_abs.is_zero() {
-        gross_abs / quantity
+        checked(arith::div(gross_abs, quantity), "unit price")
     } else {
-        unit_price * multiplier
+        checked(arith::mul(unit_price, multiplier), "unit price")
     }
+}
+
+/// Reports a reduction that found fewer units than requested (I10): none at
+/// all, or a shortfall beyond the quantity threshold.
+fn report_shortfall(
+    event: &EconomicEvent,
+    verb: &str,
+    asset: &AssetId,
+    requested: Decimal,
+    reduced: Decimal,
+    run: &mut RunLog,
+) {
+    if reduced.is_zero() {
+        run.diagnostics.push(Diagnostic::warning(
+            DiagnosticCode::NoPositionToReduce,
+            event.source.as_str(),
+            format!("{verb} of {asset} with no units held; nothing disposed"),
+        ));
+    } else if is_significant(requested - reduced) {
+        run.diagnostics.push(Diagnostic::warning(
+            DiagnosticCode::InsufficientQuantity,
+            event.source.as_str(),
+            format!(
+                "{verb} of {requested} {asset} with only {reduced} held; the {} units beyond the position have no lot",
+                requested - reduced
+            ),
+        ));
+    }
+}
+
+/// Spreads a fee over the lots an event delivered, by effective units, so
+/// it is part of their basis the way a trade fee is part of its lot's.
+fn capitalize_fee(
+    position: &mut Position,
+    event: &EventId,
+    fee: Decimal,
+    allows_negative: bool,
+) -> Result<(), String> {
+    let delivered: Vec<usize> = (0..position.lots.len())
+        .filter(|i| position.lots[*i].source_event.as_ref() == Some(event))
+        .collect();
+    let Some((&last, rest)) = delivered.split_last() else {
+        return Ok(());
+    };
+    let total: Decimal = delivered
+        .iter()
+        .map(|i| position.lots[*i].effective_quantity().abs())
+        .sum();
+    let mut remaining = fee;
+    for &index in rest {
+        let lot = &mut position.lots[index];
+        let share = proportional(fee, lot.effective_quantity().abs(), total)?;
+        add_fee(lot, share);
+        remaining -= share;
+    }
+    add_fee(&mut position.lots[last], remaining);
+    recalculate_aggregates(position, allows_negative)
+}
+
+fn add_fee(lot: &mut Lot, fee: Decimal) {
+    lot.cost_basis += fee;
+    lot.fees += fee;
+    lot.original_fees += fee;
 }
 
 fn positive_effective(position: &Position) -> Decimal {
@@ -1749,20 +1933,21 @@ fn sort_lots(position: &mut Position) {
 }
 
 /// Legacy `recalculate_aggregates_with_policy`.
-fn recalculate_aggregates(position: &mut Position, allows_negative: bool) {
+fn recalculate_aggregates(position: &mut Position, allows_negative: bool) -> Result<(), String> {
     let quantity: Decimal = position.lots.iter().map(Lot::effective_quantity).sum();
     let cost_basis: Decimal = position.lots.iter().map(|l| l.cost_basis).sum();
     position.quantity = quantity;
     position.total_cost_basis = cost_basis;
     if allows_negative && quantity.is_sign_negative() {
         if is_significant(quantity) {
-            position.average_cost = cost_basis.abs() / quantity.abs();
+            position.average_cost =
+                checked(arith::div(cost_basis.abs(), quantity.abs()), "average cost")?;
         } else {
             position.quantity = Decimal::ZERO;
             position.average_cost = Decimal::ZERO;
         }
     } else if quantity.is_sign_positive() && is_significant(quantity) {
-        position.average_cost = cost_basis / quantity;
+        position.average_cost = checked(arith::div(cost_basis, quantity), "average cost")?;
     } else {
         position.quantity = Decimal::ZERO;
         position.total_cost_basis = Decimal::ZERO;
@@ -1771,6 +1956,7 @@ fn recalculate_aggregates(position: &mut Position, allows_negative: bool) {
     if let Some(first) = position.lots.iter().map(|l| l.acquisition).min() {
         position.inception = first;
     }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1783,14 +1969,14 @@ fn new_lot(
     event: &EconomicEvent,
     fx_used: Option<Decimal>,
     book: &BookBasis,
-) -> Lot {
-    Lot {
+) -> Result<Lot, String> {
+    Ok(Lot {
         id,
         acquisition: event.timestamp,
         acquisition_date: book.acquisition_date,
         quantity,
         original_quantity: quantity,
-        cost_basis: quantity * price + fee + tax,
+        cost_basis: checked(arith::mul(quantity, price), "lot cost")? + fee + tax,
         acquisition_price: price,
         fees: fee,
         original_fees: fee,
@@ -1803,7 +1989,7 @@ fn new_lot(
         base_currency: book.base_currency.clone(),
         source_event: Some(event.id.clone()),
         split_ratio: Decimal::ONE,
-    }
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1817,16 +2003,16 @@ fn add_lot(
     event: &EconomicEvent,
     fx_used: Option<Decimal>,
     book: &BookBasis,
-) -> Decimal {
+) -> Result<Decimal, String> {
     if !quantity.is_sign_positive() || quantity.is_zero() {
-        return Decimal::ZERO;
+        return Ok(Decimal::ZERO);
     }
-    let lot = new_lot(id, quantity, price, fee, tax, event, fx_used, book);
+    let lot = new_lot(id, quantity, price, fee, tax, event, fx_used, book)?;
     let cost_basis = lot.cost_basis;
     position.lots.push(lot);
     sort_lots(position);
-    recalculate_aggregates(position, false);
-    cost_basis
+    recalculate_aggregates(position, false)?;
+    Ok(cost_basis)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1851,11 +2037,11 @@ fn open_lot_signed(
             position.asset
         ));
     }
-    let lot = new_lot(id, signed_quantity, price, fee, tax, event, fx_used, book);
+    let lot = new_lot(id, signed_quantity, price, fee, tax, event, fx_used, book)?;
     let cost_basis = lot.cost_basis;
     position.lots.push(lot);
     sort_lots(position);
-    recalculate_aggregates(position, allows_negative);
+    recalculate_aggregates(position, allows_negative)?;
     Ok(cost_basis)
 }
 
@@ -1865,7 +2051,7 @@ fn add_transferred_lots(
     prefix: &str,
     lots: &[Lot],
     allows_negative: bool,
-) -> Decimal {
+) -> Result<Decimal, String> {
     let mut total = Decimal::ZERO;
     for (i, source) in lots.iter().enumerate() {
         if source.quantity.is_zero() || (source.quantity.is_sign_negative() && !allows_negative) {
@@ -1899,12 +2085,12 @@ fn add_transferred_lots(
         position.lots.push(lot);
     }
     sort_lots(position);
-    recalculate_aggregates(position, allows_negative);
-    total
+    recalculate_aggregates(position, allows_negative)?;
+    Ok(total)
 }
 
 /// Splits single-signed lots into (cover, residual) by effective units.
-fn split_lots_by_cover(lots: &[Lot], cover_abs: Decimal) -> (Vec<Lot>, Vec<Lot>) {
+fn split_lots_by_cover(lots: &[Lot], cover_abs: Decimal) -> Result<(Vec<Lot>, Vec<Lot>), String> {
     let mut cover = Vec::new();
     let mut residual = Vec::new();
     let mut remaining = cover_abs;
@@ -1922,14 +2108,14 @@ fn split_lots_by_cover(lots: &[Lot], cover_abs: Decimal) -> (Vec<Lot>, Vec<Lot>)
         let consumed_acquired = if lot.split_ratio.is_zero() {
             remaining
         } else {
-            remaining / lot.split_ratio
+            checked(arith::div(remaining, lot.split_ratio), "covered quantity")?
         };
         let consumed_signed = if lot.quantity.is_sign_negative() {
             -consumed_acquired
         } else {
             consumed_acquired
         };
-        let fraction = consumed_signed / lot.quantity;
+        let fraction = checked(arith::div(consumed_signed, lot.quantity), "covered share")?;
         let mut cover_lot = lot.clone();
         cover_lot.quantity = consumed_signed;
         cover_lot.original_quantity = consumed_signed;
@@ -1950,7 +2136,7 @@ fn split_lots_by_cover(lots: &[Lot], cover_abs: Decimal) -> (Vec<Lot>, Vec<Lot>)
         residual.push(residual_lot);
         remaining = Decimal::ZERO;
     }
-    (cover, residual)
+    Ok((cover, residual))
 }
 
 /// FIFO relief of long lots in effective units (legacy `reduce_lots_fifo`).
@@ -2021,9 +2207,12 @@ fn reduce_fifo(
         let acquired_abs = if ratio.is_zero() {
             consume
         } else {
-            consume / ratio
+            checked(arith::div(consume, ratio), "reduced quantity")?
         };
-        let share = acquired_abs / lot.quantity.abs();
+        let share = checked(
+            arith::div(acquired_abs, lot.quantity.abs()),
+            "reduced share",
+        )?;
         let basis_removed = lot.cost_basis * share;
         let fees_removed = lot.fees * share;
         let taxes_removed = lot.taxes * share;
@@ -2073,7 +2262,7 @@ fn reduce_fifo(
     }
     position.lots = keep;
     let allows_negative = negative || position.lots.iter().any(|l| l.quantity < Decimal::ZERO);
-    recalculate_aggregates(position, allows_negative);
+    recalculate_aggregates(position, allows_negative)?;
     Ok(Reduction {
         quantity_reduced,
         cost_basis_removed: cost_removed,
@@ -2085,15 +2274,6 @@ fn reduce_fifo(
 /// Lots in storage shape: open lots from the final state plus closed lots,
 /// a closure replacing the open row with the same id. Base amounts use the
 /// lot's stored rate, else the acquisition-date rate.
-/// The activity an event derives from (`None` for an unknown event id).
-pub fn source_activity(ledger: &CompiledLedger, event: &EventId) -> Option<ActivityId> {
-    ledger
-        .events
-        .iter()
-        .find(|e| &e.id == event)
-        .map(|e| e.source.clone())
-}
-
 pub fn lot_records(
     bundle: &ProjectionBundle,
     facts: &CanonicalFacts,
@@ -2101,8 +2281,8 @@ pub fn lot_records(
 ) -> Vec<LotRecord> {
     let base = facts.policy.base_currency.as_str();
     // Legacy parity: lots opened by composite legs (`{activity}:buy`) carry
-    // no open activity; `source_activity` maps such ids for stores that need
-    // a real activity id.
+    // no open activity; `CompiledLedger::source_of` maps such ids for stores
+    // that need a real activity id.
     let activity_ids: BTreeSet<&str> = facts.activities.iter().map(|a| a.id.as_str()).collect();
     let open_activity = |event: Option<&EventId>| -> Option<ActivityId> {
         event
@@ -2129,11 +2309,14 @@ pub fn lot_records(
                 } else {
                     lot.original_taxes
                 };
+                // In range: the fold checked this product when the lot opened.
                 let original_cost_basis = lot.acquisition_price * original_quantity + fees + taxes;
                 let rate = lot
                     .stored_fx_rate_to(base)
                     .or_else(|| fx.rate(position.currency.as_str(), base, lot.acquisition_date))
                     .unwrap_or(Decimal::ZERO);
+                // A base amount outside the range reads like an unavailable rate.
+                let at_rate = |value: Decimal| arith::mul(value, rate).unwrap_or(Decimal::ZERO);
                 records.insert(
                     (account_id.clone(), lot.id.clone()),
                     LotRecord {
@@ -2147,12 +2330,12 @@ pub fn lot_records(
                         cost_per_unit: lot.acquisition_price,
                         original_cost_basis,
                         remaining_cost_basis: lot.cost_basis,
-                        original_cost_basis_base: original_cost_basis * rate,
-                        remaining_cost_basis_base: lot.cost_basis * rate,
+                        original_cost_basis_base: at_rate(original_cost_basis),
+                        remaining_cost_basis_base: at_rate(lot.cost_basis),
                         fee_allocated: fees,
-                        fee_allocated_base: fees * rate,
+                        fee_allocated_base: at_rate(fees),
                         tax_allocated: taxes,
-                        tax_allocated_base: taxes * rate,
+                        tax_allocated_base: at_rate(taxes),
                         currency: position.currency.clone(),
                         fx_rate_to_base: rate,
                         fx_rate_to_account: lot.fx_rate_to_account,

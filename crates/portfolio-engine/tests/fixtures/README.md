@@ -67,6 +67,10 @@ activities:
     override: DIVIDEND      # activity_type_override
     source_group_id: g1     # transfer pairing key
     metadata: { flow: { is_external: true } }
+                            # or, for a linked same-account FX conversion leg:
+                            # { flow: { is_external: false }, fx: { rateSource: implied_from_import,
+                            #   sourceCurrency: USD, destinationCurrency: EUR,
+                            #   sourceAmount: "100", destinationAmount: "92" } }
     source_system: MANUAL
     is_user_modified: false
     updated_at: 2025-01-02T10:00:00Z  # default: date
@@ -74,7 +78,8 @@ quotes:
   - { asset: aapl, day: 2025-01-02, close: 100, currency: USD, source: MANUAL }
                             # same day, several sources: MANUAL wins, then providers, then BROKER
 fx_rates:
-  - { from: USD, to: CAD, day: 2025-01-02, rate: 1.35 }
+  - { from: USD, to: CAD, day: 2025-01-02, rate: 1.35, source: MANUAL }
+                            # source optional (default MANUAL); ranks same-day rows like quotes
 observed_snapshots:         # holdings-mode facts (never rebuilt)
   - account: acc-h
     date: 2025-01-31
@@ -118,7 +123,7 @@ not-applicable reasons, failures) is never parity-gated. Decimals are strings at
 | Kernel goldens | `cargo test -p wealthfolio-portfolio-engine --test goldens` | Kernel output for every non-shell scenario, under `goldens/kernel/`. |
 | Properties | `cargo test -p wealthfolio-portfolio-engine --test properties` | Determinism, chunk/replay equivalence, cash and lot conservation, split neutrality, transfer cancellation, an independent re-derivation of complete days from keyframes and surfaces, exact scope aggregation with ledger-classified transfer days, degradation reporting, override transparency, no panics under mutation. |
 | Coordinator | `cargo test -p wealthfolio-core coordinator` | Every parity scenario through the real fact loading, row mapping and persistence, compared field by field with the kernel golden; freshness (facts, market data by content, partner legs, a new day); per-account failures (invalid snapshot dates, unsupported cost basis); the LIFE lifecycle runner (each step's incremental projection, taken through the resume and revalue paths with a two-day checkpoint cadence, equals a fresh rebuild); the plan chosen for quote changes, new days, backdated edits, deletions, forced rebuilds and retried failures. |
-| SCALE-01 | `cargo bench -p wealthfolio-portfolio-engine --bench scale` | Five stages over a generated 20k-activity portfolio. |
+| SCALE-01 | `cargo bench -p wealthfolio-portfolio-engine --bench scale` | The six stages over a generated 20k-activity portfolio. |
 
 ## Verifying a fixture independently
 

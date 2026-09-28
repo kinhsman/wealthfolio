@@ -293,7 +293,7 @@
   "import_help_docs_activity_ref": "documentazione di riferimento sui movimenti",
   "import_help_how_to_title": "Come importare un CSV?",
   "import_help_how_to_mobile": "Come importare un CSV",
-  "pagination_count": "{{fetched}} / {{total}} movimenti",
+  "pagination_count": "{{fetched}}/{{total}} movimenti",
   "manager": {
     "add_to_account": "Aggiungi una nuova transazione a {{account}}",
     "create_transaction": "Crea una nuova transazione o movimento per il tuo conto",
@@ -347,7 +347,8 @@
     "status_all": "Tutti i movimenti",
     "status_pending": "In attesa di revisione",
     "status_validated": "Convalidati",
-    "instrument": "Strumento"
+    "instrument": "Strumento",
+    "instrument_all": "Tutti gli strumenti"
   },
   "detail": {
     "status_posted": "Registrato",
@@ -634,6 +635,7 @@
     "err_underlying_required": "Il simbolo sottostante è obbligatorio.",
     "err_strike_required": "Il prezzo di esercizio è obbligatorio.",
     "err_expiration_required": "La data di scadenza è obbligatoria.",
+    "err_expiration_invalid": "Inserisci una data di scadenza valida.",
     "err_option_type_required": "Il tipo di opzione è obbligatorio.",
     "err_enter_split_ratio": "Inserisci un rapporto di frazionamento.",
     "err_split_ratio_number": "Il rapporto di frazionamento deve essere un numero.",
@@ -1254,7 +1256,9 @@
       "positionsCount_other": "{{count}} posizioni",
       "readyRows_one": "{{count}} riga",
       "readyRows_many": "{{count}} righe",
-      "readyRows_other": "{{count}} righe"
+      "readyRows_other": "{{count}} righe",
+      "ambiguousDateTitle": "L’ordine della data è ambiguo",
+      "ambiguousDateHint": "Date come {{example}} possono essere interpretate come giorno/mese o mese/giorno e il file non permette di stabilirlo. Torna indietro e scegli un formato data invece del rilevamento automatico."
     },
     "symbolPanel": {
       "unrecognized_one": "{{count}} simbolo non riconosciuto",

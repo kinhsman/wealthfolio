@@ -50,4 +50,6 @@ expected_notes: >
   Kernel golden: with ids a-deposit < b-buy < c-sell the deposit lands
   first, the buy opens 5 @ 100 and the sell closes 2 with realized +20; cash
   720, position 3 (basis 300), total 1050 on 01-03. Any shuffled input
-  order must reproduce exactly this.
+  order must reproduce exactly this. Attribution (inception): contributions
+  1000, realized 20, unrealized 30; the sale on the inception day counts,
+  so the components reconcile and quality is ok.

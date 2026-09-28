@@ -9,10 +9,8 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde_json::Value;
 use support::*;
-use wealthfolio_portfolio_engine::diagnostics::DiagnosticCode;
 use wealthfolio_portfolio_engine::model::*;
-use wealthfolio_portfolio_engine::value::{ValueInputs, Window};
-use wealthfolio_portfolio_engine::{aggregate_scope, project};
+use wealthfolio_portfolio_engine::{aggregate_scope, project, DiagnosticCode, ValueInputs, Window};
 
 const DUST: Decimal = Decimal::from_parts(1, 0, 0, false, 8);
 
@@ -51,6 +49,44 @@ fn p_det_input_order_is_irrelevant() {
         raw.observed_snapshots.reverse();
         let shuffled = body(&Pipeline::run(raw).expect("pipeline"), &scenario);
         assert_same(&scenario.id, "P-DET", &shuffled, &reference);
+
+        // Stores are unique per (key, day, source), so a day can carry the
+        // same price or rate from several sources: which one wins must not
+        // depend on the order the rows arrive in.
+        let mut duplicated = scenario.raw_facts();
+        let echoes: Vec<RawQuote> = duplicated
+            .quotes
+            .iter()
+            .map(|q| RawQuote {
+                close: q.close * Decimal::new(101, 2),
+                source: "BROKER".into(),
+                ..q.clone()
+            })
+            .collect();
+        duplicated.quotes.extend(echoes);
+        let echoes: Vec<RawFxRate> = duplicated
+            .fx_rates
+            .iter()
+            .map(|r| RawFxRate {
+                rate: r.rate * Decimal::new(101, 2),
+                source: "YAHOO".into(),
+                ..r.clone()
+            })
+            .collect();
+        duplicated.fx_rates.extend(echoes);
+        let forward = body(
+            &Pipeline::run(duplicated.clone()).expect("pipeline"),
+            &scenario,
+        );
+        duplicated.quotes.reverse();
+        duplicated.fx_rates.reverse();
+        let reversed = body(&Pipeline::run(duplicated).expect("pipeline"), &scenario);
+        assert_same(
+            &scenario.id,
+            "P-DET (same-day duplicates)",
+            &reversed,
+            &forward,
+        );
     }
 }
 
@@ -61,12 +97,12 @@ fn p_det_input_order_is_irrelevant() {
 fn p_chunk_partitions_are_equivalent() {
     for scenario in corpus() {
         let one_shot = Pipeline::from_scenario(&scenario);
-        let range = one_shot.range;
+        let range = one_shot.range();
         if range.start == range.end {
             continue;
         }
         let mut boundaries: BTreeSet<NaiveDate> = one_shot
-            .ledger
+            .ledger()
             .events
             .iter()
             .map(|e| e.date)
@@ -98,16 +134,16 @@ fn project_chunked(pipeline: &Pipeline, cuts: &[NaiveDate]) -> ProjectionBundle 
     let fx = pipeline.fx();
     let mut state: Option<ProjectionState> = None;
     let mut merged: Option<ProjectionBundle> = None;
-    let mut start = pipeline.range.start;
+    let mut start = pipeline.range().start;
     let mut ends: Vec<NaiveDate> = cuts.to_vec();
-    ends.push(pipeline.range.end);
+    ends.push(pipeline.range().end);
     for end in ends {
         if end < start {
             continue;
         }
         let bundle = project(
-            &pipeline.ledger,
-            &pipeline.facts,
+            pipeline.ledger(),
+            pipeline.facts(),
             &fx,
             state.take(),
             DateRange { start, end },
@@ -166,15 +202,15 @@ fn p_cash_conservation() {
             .map(|d| d.source.as_str())
             .collect();
         let mut expected: BTreeMap<&AccountId, BTreeMap<String, Decimal>> = BTreeMap::new();
-        for event in &pipeline.ledger.events {
-            let Some(account) = pipeline.facts.accounts.get(&event.account) else {
+        for event in &pipeline.ledger().events {
+            let Some(account) = pipeline.facts().accounts().get(&event.account) else {
                 continue;
             };
             if account.archived
                 || account.tracking == TrackingMode::Holdings
                 || rejected.contains(event.id.as_str())
-                || event.date < pipeline.range.start
-                || event.date > pipeline.range.end
+                || event.date < pipeline.range().start
+                || event.date > pipeline.range().end
             {
                 continue;
             }
@@ -214,34 +250,55 @@ fn p_cash_conservation() {
     }
 }
 
-/// P-LOTS (I5): at every keyframe, open-lot effective quantities sum to the
-/// position quantity and lots of one position share a sign.
+/// P-LOTS (I5): at the end of every event day, open-lot effective quantities
+/// sum to the position quantity and lots of one position share a sign.
+/// Keyframes carry totals only, so the law folds one chunk per event day and
+/// checks each chunk's checkpoint, which carries the lots.
 #[test]
 fn p_lots_reconcile_to_positions() {
     for scenario in corpus() {
         let pipeline = Pipeline::from_scenario(&scenario);
-        for (account, frames) in &pipeline.bundle.keyframes {
-            for frame in frames {
-                for (asset, position) in &frame.state.positions {
+        let range = pipeline.range();
+        let days: BTreeSet<NaiveDate> = pipeline
+            .ledger()
+            .events
+            .iter()
+            .map(|e| e.date)
+            .filter(|d| *d >= range.start && *d <= range.end)
+            .collect();
+        let fx = pipeline.fx();
+        let mut state: Option<ProjectionState> = None;
+        let mut start = range.start;
+        for day in days {
+            let bundle = project(
+                pipeline.ledger(),
+                pipeline.facts(),
+                &fx,
+                state.take(),
+                DateRange { start, end: day },
+            )
+            .expect("chunk projects");
+            for (account, account_state) in &bundle.final_state.accounts {
+                for (asset, position) in &account_state.positions {
                     let effective: Decimal =
                         position.lots.iter().map(Lot::effective_quantity).sum();
                     assert!(
                         (effective - position.quantity).abs() <= DUST,
-                        "{}: P-LOTS violated for {account}/{asset} on {}: lots {effective} vs position {}",
+                        "{}: P-LOTS violated for {account}/{asset} on {day}: lots {effective} vs position {}",
                         scenario.id,
-                        frame.date,
                         position.quantity
                     );
                     let positive = position.lots.iter().any(|l| l.quantity > Decimal::ZERO);
                     let negative = position.lots.iter().any(|l| l.quantity < Decimal::ZERO);
                     assert!(
                         !(positive && negative),
-                        "{}: P-LOTS violated for {account}/{asset} on {}: mixed-sign lots",
-                        scenario.id,
-                        frame.date
+                        "{}: P-LOTS violated for {account}/{asset} on {day}: mixed-sign lots",
+                        scenario.id
                     );
                 }
             }
+            state = Some(bundle.final_state);
+            start = day.succ_opt().expect("next day");
         }
     }
 }
@@ -254,7 +311,7 @@ fn p_split_is_basis_and_cash_neutral() {
         let pipeline = Pipeline::from_scenario(&scenario);
         let mut by_account_day: BTreeMap<(&AccountId, NaiveDate), Vec<&EconomicEvent>> =
             BTreeMap::new();
-        for event in &pipeline.ledger.events {
+        for event in &pipeline.ledger().events {
             by_account_day
                 .entry((&event.account, event.date))
                 .or_default()
@@ -313,15 +370,17 @@ fn p_split_is_basis_and_cash_neutral() {
 }
 
 /// P-TXF (I7): a day whose only scoped events are the two legs of matched
-/// internal transfers has zero external flow at portfolio scope.
+/// internal transfers has zero external flow at portfolio scope. The one
+/// deliberate exception is a same-account FX conversion the import linker
+/// did not record: it keeps the legacy per-leg contribution (#1655), which
+/// surfaces as a net-contribution fallback flow.
 #[test]
 fn p_txf_internal_pairs_cancel_at_portfolio_scope() {
     for scenario in corpus() {
         let pipeline = Pipeline::from_scenario(&scenario);
         let scope = pipeline.portfolio_scope();
         let Ok(portfolio) = aggregate_scope(
-            &pipeline.resolved(),
-            &pipeline.bundle.disposals,
+            &pipeline.effects(&pipeline.bundle.disposals),
             &pipeline.series,
             &scope,
             Window::default(),
@@ -330,7 +389,7 @@ fn p_txf_internal_pairs_cancel_at_portfolio_scope() {
         };
         let mut by_day: BTreeMap<NaiveDate, Vec<&EconomicEvent>> = BTreeMap::new();
         for event in pipeline
-            .ledger
+            .ledger()
             .events
             .iter()
             .filter(|e| scope.contains(&e.account))
@@ -338,7 +397,15 @@ fn p_txf_internal_pairs_cancel_at_portfolio_scope() {
             by_day.entry(event.date).or_default().push(event);
         }
         for (day, events) in &by_day {
+            let unlinked_conversion = |e: &&EconomicEvent| {
+                pipeline
+                    .facts()
+                    .transfer_pairs()
+                    .pair_for(&e.source)
+                    .is_some_and(|p| p.in_account == p.out_account && !p.contribution_neutral)
+            };
             let only_internal_pairs = !events.is_empty()
+                && !events.iter().any(unlinked_conversion)
                 && events.iter().all(|e| {
                     matches!(&e.flow.boundary, Boundary::Internal { counterparty } if scope.contains(counterparty))
                 });
@@ -371,15 +438,19 @@ fn p_recon_complete_days_rederive_from_keyframes_and_surfaces() {
     let mut checked = 0usize;
     for scenario in corpus() {
         let pipeline = Pipeline::from_scenario(&scenario);
-        let policy = &pipeline.facts.policy;
+        let policy = pipeline.facts().policy();
         let fx = pipeline.fx();
-        let split_assets: BTreeSet<&AssetId> =
-            pipeline.surfaces.splits.iter().map(|s| &s.asset).collect();
+        let split_assets: BTreeSet<&AssetId> = pipeline
+            .surfaces()
+            .splits
+            .iter()
+            .map(|s| &s.asset)
+            .collect();
         for (account, series) in &pipeline.series {
             let Some(keyframes) = pipeline.bundle.keyframes.get(account) else {
                 continue; // holdings-tracked: valued from observed snapshots
             };
-            let account_currency = pipeline.facts.accounts[account].currency.as_str();
+            let account_currency = pipeline.facts().accounts()[account].currency.as_str();
             for day in &series.days {
                 if day.value_status != ValueStatus::Complete {
                     continue;
@@ -401,7 +472,7 @@ fn p_recon_complete_days_rederive_from_keyframes_and_surfaces() {
                         continue;
                     }
                     let quote = pipeline
-                        .surfaces
+                        .surfaces()
                         .quotes
                         .latest_on_or_before(asset, day.date)
                         .expect("a COMPLETE day prices every held position");
@@ -410,8 +481,8 @@ fn p_recon_complete_days_rederive_from_keyframes_and_surfaces() {
                         .rate(quote_major, account_currency, day.date)
                         .expect("a COMPLETE day converts every quote currency");
                     let multiplier = pipeline
-                        .facts
-                        .assets
+                        .facts()
+                        .assets()
                         .get(asset)
                         .map(|a| a.contract_multiplier)
                         .unwrap_or(Decimal::ONE);
@@ -450,15 +521,14 @@ fn p_agg_scope_aggregation_is_exact() {
     let mut pair_days = 0usize;
     for scenario in corpus() {
         let pipeline = Pipeline::from_scenario(&scenario);
-        let resolved = pipeline.resolved();
+        let effects = pipeline.effects(&pipeline.bundle.disposals);
         let scope = pipeline.portfolio_scope();
         for account in &scope {
             let Some(own) = pipeline.series.get(account) else {
                 continue;
             };
             let Ok(single) = aggregate_scope(
-                &resolved,
-                &pipeline.bundle.disposals,
+                &effects,
                 &pipeline.series,
                 std::slice::from_ref(account),
                 Window::default(),
@@ -490,28 +560,22 @@ fn p_agg_scope_aggregation_is_exact() {
                 );
             }
         }
-        let Ok(portfolio) = aggregate_scope(
-            &resolved,
-            &pipeline.bundle.disposals,
-            &pipeline.series,
-            &scope,
-            Window::default(),
-        ) else {
+        let Ok(portfolio) = aggregate_scope(&effects, &pipeline.series, &scope, Window::default())
+        else {
             continue;
         };
         let activity_date = |id: &ActivityId| {
             pipeline
-                .facts
-                .activities
+                .facts()
+                .activities()
                 .iter()
                 .find(|a| &a.id == id)
                 .map(|a| a.date)
         };
         let internal_days: BTreeSet<NaiveDate> = pipeline
-            .facts
-            .transfer_pairs
-            .by_group
-            .values()
+            .facts()
+            .transfer_pairs()
+            .iter()
             .filter(|pair| scope.contains(&pair.out_account) && scope.contains(&pair.in_account))
             .flat_map(|pair| {
                 [
@@ -598,7 +662,9 @@ fn p_diag_degradation_is_reported() {
                     series.diagnostics.iter().any(|d| {
                         matches!(
                             d.code,
-                            DiagnosticCode::MissingQuote | DiagnosticCode::FxUnavailable
+                            DiagnosticCode::MissingQuote
+                                | DiagnosticCode::FxUnavailable
+                                | DiagnosticCode::ValueOutOfRange
                         )
                     }),
                     "{}: {account} has degraded days without a diagnostic",
@@ -612,7 +678,7 @@ fn p_diag_degradation_is_reported() {
             {
                 assert!(
                     pipeline
-                        .ledger
+                        .ledger()
                         .diagnostics
                         .iter()
                         .any(|d| d.code == DiagnosticCode::UnknownTransferBoundary),
@@ -628,7 +694,7 @@ fn p_diag_degradation_is_reported() {
             .filter(|a| a.currency.trim().is_empty() && a.status == "POSTED")
         {
             assert!(
-                pipeline.normalize_diagnostics.iter().any(|d| {
+                pipeline.normalize_diagnostics().iter().any(|d| {
                     d.code == DiagnosticCode::MissingCurrency && d.source == activity.id
                 }),
                 "{}: empty currency on {} not reported",
@@ -678,28 +744,72 @@ fn p_effective_type_overrides_are_transparent() {
 /// activity, blank every currency, zero every quantity.
 #[test]
 fn p_total_no_panics_on_mutated_inputs() {
+    // Every stage, `measure` included, runs on the mutated facts.
+    let run = |raw: RawFacts, scenario: &Scenario| {
+        if let Ok(pipeline) = Pipeline::run(raw) {
+            body(&pipeline, scenario);
+        }
+    };
     for scenario in load_all_scenarios() {
         let raw = scenario.raw_facts();
-        let _ = Pipeline::run(raw.clone());
+        run(raw.clone(), &scenario);
         for index in 0..raw.activities.len() {
             let mut mutated = raw.clone();
             mutated.activities.remove(index);
-            let _ = Pipeline::run(mutated);
+            run(mutated, &scenario);
         }
         let mut blank = raw.clone();
         for activity in &mut blank.activities {
             activity.currency.clear();
         }
-        let _ = Pipeline::run(blank);
+        run(blank, &scenario);
         let mut zero = raw.clone();
         for activity in &mut zero.activities {
             activity.quantity = Some(Decimal::ZERO);
             activity.unit_price = Some(Decimal::ZERO);
         }
-        let _ = Pipeline::run(zero);
-        let mut no_surfaces = raw;
+        run(zero, &scenario);
+        let mut no_surfaces = raw.clone();
         no_surfaces.quotes.clear();
         no_surfaces.fx_rates.clear();
-        let _ = Pipeline::run(no_surfaces);
+        run(no_surfaces, &scenario);
+
+        // Magnitudes at and beyond the kernel range (architecture §4.3):
+        // accepted inputs whose products overflow, rejected inputs, and
+        // tiny divisors. Declined, diagnosed, never a panic.
+        for (magnitude, tiny) in [
+            (MAX_MAGNITUDE, MIN_RATE),
+            (Decimal::MAX, Decimal::new(1, 28)),
+        ] {
+            let mut extreme = raw.clone();
+            for activity in &mut extreme.activities {
+                activity.quantity = activity.quantity.map(|_| magnitude);
+                activity.unit_price = activity.unit_price.map(|_| magnitude);
+                activity.amount = activity.amount.map(|_| magnitude);
+                activity.fee = activity.fee.map(|_| magnitude);
+                activity.fx_rate = activity.fx_rate.map(|_| magnitude);
+            }
+            run(extreme.clone(), &scenario);
+            for quote in &mut extreme.quotes {
+                quote.close = magnitude;
+            }
+            for rate in &mut extreme.fx_rates {
+                rate.rate = magnitude;
+            }
+            run(extreme, &scenario);
+
+            let mut tiny_divisors = raw.clone();
+            for activity in &mut tiny_divisors.activities {
+                activity.quantity = activity.quantity.map(|_| tiny);
+                activity.fx_rate = activity.fx_rate.map(|_| tiny);
+            }
+            for quote in &mut tiny_divisors.quotes {
+                quote.close = tiny;
+            }
+            for rate in &mut tiny_divisors.fx_rates {
+                rate.rate = tiny;
+            }
+            run(tiny_divisors, &scenario);
+        }
     }
 }

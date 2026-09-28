@@ -226,7 +226,7 @@ impl ValuationServiceTrait for ValuationService {
         let rows = self
             .valuation_repository
             .get_historical_valuations_for_accounts(account_ids, None, None)?;
-        let measured = rows::MeasureFacts::load(
+        let measured = rows::measure_engine(
             &self.sources,
             account_ids,
             base_currency,
@@ -241,16 +241,14 @@ impl ValuationServiceTrait for ValuationService {
         let disposals = rows::stored_disposals(&disposal_rows);
         let scope: Vec<AccountId> = account_ids.iter().map(AccountId::new).collect();
         let aggregated = engine::aggregate_scope(
-            &measured.resolved(),
-            &disposals,
+            &measured.effects(&disposals),
             &series,
             &scope,
             engine::Window {
                 start: start_date_opt,
                 end: end_date_opt,
             },
-        )
-        .map_err(crate::errors::Error::Unexpected)?;
+        )?;
         Ok(valuation_rows(&aggregated, scope_id, base_currency))
     }
 

@@ -185,7 +185,8 @@ stay visible to pairing so a transfer to or from them classifies correctly.
 crates/portfolio-engine/
 ├── Cargo.toml            # runtime deps: the closed list below
 ├── src/
-│   ├── lib.rs            # public API: the six stages + facts_needed
+│   ├── lib.rs            # public API: Engine, the six stages, facts_needed
+│   ├── engine.rs         # Engine: normalise, compile, resolve once; derive on request
 │   ├── model/            # scalars, Policy, facts, events, states, reports
 │   ├── normalize.rs      # stage 1: parsing, ordering, transfer pairing
 │   ├── compile.rs        # stage 2: the single economics authority
@@ -291,6 +292,7 @@ pub struct EconomicEvent {
     pub action: Action,              // trade | security transfer | split | option expiry
     pub contribution: Contribution,  // net-contribution effect
     pub flow: Flow,                  // external-flow classification and provenance
+    pub attribution: Attributed,     // income, fees and taxes performance counts
     pub diagnostics: Vec<Diagnostic>,
 }
 ```
@@ -304,7 +306,9 @@ eligibility and never upgrades under aggregation.
 **Transfer pairing** is resolved in `normalize` from the transfer group id only,
 deterministically. A group with a leg count other than two, mismatched assets,
 or quantities differing by more than a tolerance is unpaired and yields a
-diagnostic. Same-account, two-currency cash conversions are valid pairs.
+diagnostic. Same-account, two-currency cash conversions are valid pairs. Only a
+valid pair carries lots from its outgoing to its incoming leg; an unpaired
+incoming leg opens a lot at its own price.
 
 **Deferred flows.** Two ladder steps cannot be priced at compile time because
 they need later outputs: the removed-lot-basis fallback for an unquoted security
@@ -321,6 +325,7 @@ pub struct ProjectionState { /* positions, FIFO lot book, cash by currency,
                                 cache — the state at one date, and the persisted
                                 checkpoint that makes a resume possible */ }
 pub struct ProjectionBundle{ keyframes, final_state, disposals, closures, diagnostics }
+                            // keyframes carry totals only; lots live in final_state
 pub struct ValuationSeries { /* dense daily values, statuses and final flows */ }
 pub struct PerformanceResult{ /* TWR, IRR, value return, attribution, risk,
                                  summary, series, data quality */ }
@@ -334,6 +339,14 @@ is, which FX pair was missing, which fallback fired — travels in diagnostics
 rather than multiplying status values.
 
 ### 4.3 Stage contracts
+
+`Engine::new(raw)` normalises, compiles and resolves the facts once over the
+range every stage must cover (the first activity's business date to `as_of`);
+`project`, `value`, `lots` and `measure_inputs` then derive the rest. The stage
+functions below stay public for what an engine does not cover alone: chunked
+folds and resumes from a checkpoint, revaluing stored keyframes and measuring
+stored rows. Everything else in the crate is private, and `CanonicalFacts` can
+only come from `normalize`.
 
 ```rust
 /// 1. Strings and instants become types, once. Applies the total order
@@ -371,22 +384,27 @@ pub fn project(
 ///    from their observed snapshots instead of the projection.
 pub fn value(inputs: &ValueInputs<'_>) -> BTreeMap<AccountId, ValuationSeries>;
 
+/// Every event priced once, as plain data: its flow in base, its
+/// attribution and trade charges in base, the resolved pairs and each
+/// account's profile. What aggregation and measurement need from the facts.
+pub fn effects(resolved: &Resolved<'_>, disposals: &[LotDisposal]) -> Effects;
+
 /// Scope aggregation: per-day sums in base currency with internal transfers
 /// (both legs in scope) netted out.
 pub fn aggregate_scope(
-    resolved: &Resolved<'_>,
-    disposals: &[LotDisposal],
+    effects: &Effects,
     series: &BTreeMap<AccountId, ValuationSeries>,
     scope: &[AccountId],
     window: Window,
-) -> Result<ValuationSeries, String>;
+) -> Result<ValuationSeries, EngineError>;
 
 /// 6. Returns over the valuation series: TWR (chain-linked, with the
 ///    fatal/benign/pre-chain day taxonomy), IRR (bisection, annualised),
 ///    value return, holdings-mode book-basis returns, attribution with a
 ///    residual term, risk, annualisation behind a minimum-window gate.
-///    The series alone is not sufficient — attribution needs ledger events,
-///    disposals and the FX surface — hence MeasureInputs.
+///    Arithmetic over plain data: MeasureInputs holds the priced events
+///    (Effects), the series, lots and disposals, and no facts, ledger or FX
+///    surface, so measuring stored rows resolves nothing.
 pub fn measure_account(
     inputs: &MeasureInputs<'_>,
     account: &AccountId,
@@ -410,7 +428,8 @@ pub fn lot_records(
 ) -> Vec<LotRecord>;
 
 /// What the shell must load for a scope and range: assets, currency pairs,
-/// the observation window and the transfer-pair closure. Pure.
+/// the observation window and the transfer-pair closure, plus the transfer
+/// groups the loaded facts cannot pair yet (load them and ask again). Pure.
 pub fn facts_needed(
     facts: &CanonicalFacts,
     scope: &[AccountId],
@@ -430,6 +449,12 @@ done and thrown away.
   of their arguments.
 - No stage panics on user data. Panics are reserved for internal invariant
   violations, which the property suite hunts.
+- Magnitudes are bounded. `normalize` rejects any input above `MAX_MAGNITUDE`
+  (1e20), and any rate outside [1e-20, 1e20], with a `ValueOutOfRange`
+  diagnostic. A product or quotient that would leave the range is declined: the
+  event is rejected, the day is `Unavailable` or the metric is unavailable, with
+  a diagnostic. Kernel values therefore stay far enough below `Decimal::MAX`
+  that summing them cannot overflow either.
 - Inputs are data-complete. An unresolvable rate is a typed degradation and a
   diagnostic, never a fetch, a silent `rate = 1`, or an unconverted addition.
 - Chunking is the caller's right: `project` and `value` may run over sub-ranges
@@ -439,11 +464,17 @@ done and thrown away.
 
 ### 4.4 Errors and diagnostics
 
-Two channels, deliberately distinct:
+Three typed channels, deliberately distinct:
 
 - **`EngineError`** — the _request_ is unusable: an inverted range, an invalid
-  policy, a prior state that does not meet the range start. The caller made a
-  mistake and there is no result.
+  policy, an account row without a currency, a prior state that does not meet
+  the range start, a measured scope that names an archived account or whose
+  valuation histories are incomplete. The caller made a mistake and there is no
+  result. Every variant is typed; no stage returns a string error.
+- **`QualityNote`** — why a performance figure is partial or unavailable,
+  carried on `PerformanceResult.data_quality`: a stable code with its data
+  (dates, accounts, amounts), rendered to today's English by `Display` so a host
+  can show it or localise it. No stage builds UI copy as strings.
 - **`Diagnostic`** — the _data_ is imperfect: an unparseable decimal, a missing
   currency, an unknown subtype, a missing quote, an unresolvable pair, an
   unpaired transfer, a negative balance. It is attached to the event or day it
@@ -477,19 +508,35 @@ product shows when the inputs are imperfect.
   currency stays unknown: its positions take the currency of the activity that
   opens them and its quotes need an explicit currency, never a default.
 - **Archiving is a scope boundary.** An archived account is outside the tracked
-  portfolio, so transfers to it are external outflows and transfers from it are
-  external inflows, priced like any other flow. Pairing still resolves, so the
-  amount is known rather than an unknown boundary. A scope that explicitly
-  includes the archived account nets both legs to zero, as for any internal
-  transfer.
+  portfolio and is neither projected nor valued, so transfers to it are external
+  outflows and transfers from it are external inflows, priced like any other
+  flow. Pairing still resolves, so the amount is known rather than an unknown
+  boundary. Measuring a scope that names an archived account is refused with
+  `ArchivedAccountInScope`: a total without one of its accounts would be
+  silently wrong.
+- **Units beyond a position have no lot.** A sell, transfer-out or expiry of
+  more units than held disposes the held units; a sell realises only their share
+  of the proceeds, books its stored cash in full, and reports the shortfall
+  (`InsufficientQuantity`, or `NoPositionToReduce` when nothing is held).
+- **An unrepresentable magnitude is declined, not wrapped.** See §4.3: a row
+  above the range is dropped at normalise, and a computation that would leave it
+  rejects the event or makes the day or metric unavailable, with a
+  `ValueOutOfRange` diagnostic.
 - **An unpriceable holding is not a total loss.** A position whose asset has no
   quote makes the day unavailable rather than valuing it at zero, which would
   otherwise report a complete −100 % return for an asset the system simply could
   not price.
-- **A carried quote is visible when it matters.** Prices carry forward from the
-  last observation. A carry of a week or more is reported once per account and
-  asset as an informational diagnostic with its age, so a stale series is never
-  mistaken for a live one; shorter carries (weekends, holidays) are silent.
+- **A carried quote or rate is visible when it matters.** Prices carry forward
+  from the last observation and FX rates resolve to the nearest observation in
+  either direction. A carry of a week or more is reported once per account and
+  asset (`CarriedQuote`) or pair (`CarriedFxRate`) as an informational
+  diagnostic with its age, so a stale series is never mistaken for a live one;
+  shorter carries (weekends, holidays) are silent.
+- **An amount without a rate is excluded, never added as another currency.** A
+  cash bucket, contribution or lot basis that no rate converts is left out of
+  the converted total with an `FxUnavailable` diagnostic, in the projection as
+  in valuation, and a flow that cannot be priced is `Unknown` so it gates
+  returns instead of vanishing.
 - **A non-positive price or rate is a broken row.** Quote closes and FX rates at
   or below zero are dropped at normalise with a diagnostic instead of being
   used, so a glitch cannot value a position at nothing or a bucket at zero while
@@ -502,18 +549,18 @@ product shows when the inputs are imperfect.
 
 Testable contract; the property suite (§5) encodes each one.
 
-| ID      | Invariant                                                                                                                                                                                                           |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **I1**  | **Replay equivalence.** `project(genesis..T)` ≡ `project(D..T, from state(D−1))` for any D, given a lossless typed checkpoint. This is what makes resume safe.                                                      |
-| **I2**  | **Chunk equivalence.** Any partition of a range, folding the final state forward, yields identical daily states to a one-shot run.                                                                                  |
-| **I3**  | **Determinism.** Identical facts, including `as_of` and policy, give byte-identical output regardless of machine, clock or input vector order.                                                                      |
-| **I4**  | **Cash conservation.** Per account and currency: closing cash = opening cash + Σ cash postings. Cash never appears or vanishes outside events.                                                                      |
-| **I5**  | **Position and lot conservation.** Position quantity = Σ postings; open-lot effective quantities sum to the position; positions stay single-signed per asset; closed lots never mutate.                             |
-| **I6**  | **Split invariance.** A split changes lot split ratios only, for lots acquired before its local date: never value at the split instant, never cost-basis totals, never flows, never cash.                           |
-| **I7**  | **Transfer scope.** A matched internal transfer is equal and opposite at account scope and zero at portfolio scope when both accounts are in scope; paired security transfers preserve acquisition dates and basis. |
-| **I8**  | **Valuation reconciliation.** Day over day, `Δvalue = flows + event effects + market and FX movement + unreconciled`, where the residual is an explicit diagnostic term, never silently absorbed.                   |
-| **I9**  | **Aggregation.** Portfolio valuation = Σ account valuations for the same day and policy; portfolio flows = account flows net of internal transfers; statuses and provenance combine by their absorption laws.       |
-| **I10** | **Degradation honesty.** Every carried, missing, estimated or fallback input is visible in a status or a diagnostic. No silent zeros, no silent `rate = 1`, no silent currency default, no silent fills.            |
+| ID      | Invariant                                                                                                                                                                                                                                                                                                                                                           |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **I1**  | **Replay equivalence.** `project(genesis..T)` ≡ `project(D..T, from state(D−1))` for any D, given a lossless typed checkpoint. This is what makes resume safe.                                                                                                                                                                                                      |
+| **I2**  | **Chunk equivalence.** Any partition of a range, folding the final state forward, yields identical daily states to a one-shot run.                                                                                                                                                                                                                                  |
+| **I3**  | **Determinism.** Identical facts, including `as_of` and policy, give byte-identical output regardless of machine, clock or input vector order (the two `f64` read-path statistics of §4.7 excepted).                                                                                                                                                                |
+| **I4**  | **Cash conservation.** Per account and currency: closing cash = opening cash + Σ cash postings. Cash never appears or vanishes outside events.                                                                                                                                                                                                                      |
+| **I5**  | **Position and lot conservation.** Position quantity = Σ postings; open-lot effective quantities sum to the position; positions stay single-signed per asset; closed lots never mutate.                                                                                                                                                                             |
+| **I6**  | **Split invariance.** A split changes lot split ratios only, for lots acquired before its local date: never value at the split instant, never cost-basis totals, never flows, never cash.                                                                                                                                                                           |
+| **I7**  | **Transfer scope.** A matched internal transfer is equal and opposite at account scope and zero at portfolio scope when both accounts are in scope; paired security transfers preserve acquisition dates and basis. A same-account FX conversion moves no contribution when the import linker recorded it; an unrecorded one keeps the legacy per-leg contribution. |
+| **I8**  | **Valuation reconciliation.** Day over day, `Δvalue = flows + event effects + market and FX movement + unreconciled`, where the residual is an explicit diagnostic term, never silently absorbed.                                                                                                                                                                   |
+| **I9**  | **Aggregation.** Portfolio valuation = Σ account valuations for the same day and policy; portfolio flows = account flows net of internal transfers; statuses and provenance combine by their absorption laws.                                                                                                                                                       |
+| **I10** | **Degradation honesty.** Every carried, missing, estimated or fallback input is visible in a status or a diagnostic. No silent zeros, no silent `rate = 1`, no silent currency default, no silent fills.                                                                                                                                                            |
 
 ### 4.7 Determinism rules
 
@@ -529,14 +576,22 @@ Testable contract; the property suite (§5) encodes each one.
 - Composite legs preserve their order: the income leg precedes the buy leg.
 - Every ordering, pairing, expansion and detection rule keys on the
   **effective** activity type, so an override is honoured everywhere or nowhere.
-- One quote per asset and day: when several sources quote the same day, the
-  manual price wins, then a provider's, then a broker's, then the source name,
-  so the input order of rows never decides a valuation.
+- One quote per asset and day, and one FX observation per pair and day: when
+  several sources report the same day, the manual row wins, then a provider's,
+  then a broker's, then the source name, then the value, so the input order of
+  rows never decides a valuation. An observed rate always beats the inverse of
+  the opposite pair; an inverse only fills days that pair has no row for.
 - Iteration in any output-affecting path uses ordered maps. FX paths are chosen
   by fewest hops, then lexicographic currency codes, so equal-length
   triangulations never resolve by hash order.
-- Rounding is a policy applied at defined points (posting, valuation, report),
-  not ad hoc.
+- Rounding has one scale, `STORED_PRECISION` (8 places), applied where amounts
+  become rows (disposals, valuation rows as read back, flow deltas between
+  stored rows) and to performance outputs; nothing rounds in between.
+- Exact decimal arithmetic everywhere except two read-path statistics: the IRR
+  solver and volatility's log returns run in `f64` (a Decimal discount factor
+  underflows below 1e-28 over long histories) and are rounded to 8 places. They
+  feed no other stage and no checkpoint, so every projection, valuation and
+  checkpoint stays byte-identical across machines.
 - FX nearest-neighbour resolution may look forward in time. A valuation is
   deterministic given the surface, and the surface is part of the facts; a
   late-arriving rate changing history is therefore a recalculation trigger for
@@ -598,22 +653,22 @@ transfers (non-empty asset) book only their fee as cash, and a transfer in
 additionally capitalises that fee into the lot basis. A split has no cash
 effect.
 
-| Type         | Cash sign × amount                                                                                                              | Position and lots                                                                                                                                    | Net contribution                                         | Flow (portfolio scope)                                                                                                         |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| BUY          | − amount; gross = amount − charges                                                                                              | + qty; opens a lot (basis = gross + charges); a short cover uses POSITION_CLOSE intent with cash prorated to the covered quantity                    | —                                                        | Internal                                                                                                                       |
-| SELL         | + amount; − amount when charges exceed proceeds and the derivation reproduces the stored amount within tolerance (NOM-TRADE-05) | − qty; FIFO close with realised P&L; a short open uses POSITION_OPEN intent (negative lot); a sell with no position is cash only + warning           | —                                                        | Internal                                                                                                                       |
-| DIVIDEND     | + amount                                                                                                                        | — (DRIP and dividend-in-kind expand into two legs first)                                                                                             | —                                                        | Internal                                                                                                                       |
-| INTEREST     | + amount; on credit-card accounts − amount (EDGE-CC-01)                                                                         | — (staking rewards expand)                                                                                                                           | —                                                        | Internal                                                                                                                       |
-| DEPOSIT      | + amount                                                                                                                        | —                                                                                                                                                    | **+ amount**                                             | **External**                                                                                                                   |
-| WITHDRAWAL   | − amount; gross = amount − charges                                                                                              | —                                                                                                                                                    | **− amount**                                             | **External**                                                                                                                   |
-| TRANSFER_IN  | cash variant: + amount · security variant: − fee only                                                                           | security: paired lots via the transfer cache (dates and basis preserved, opposite-sign residents netted first), else the book-basis fallback ladder  | cash: + amount · security: + lot basis at acquisition FX | External when marked; pair resolved **and both accounts in scope** → Internal; unpaired and unmarked → Unknown (gates returns) |
-| TRANSFER_OUT | cash variant: − amount · security variant: − fee only                                                                           | security: FIFO removal on the net-sign leg; disposal proceeds = basis (P&L 0); removed lots staged for the pair                                      | cash: − amount · security: − removed basis               | as TRANSFER_IN                                                                                                                 |
-| FEE          | − amount                                                                                                                        | —                                                                                                                                                    | —                                                        | Internal                                                                                                                       |
-| TAX          | − amount                                                                                                                        | —                                                                                                                                                    | —                                                        | Internal                                                                                                                       |
-| SPLIT        | **none**                                                                                                                        | multiplies the split ratio of lots acquired before the split's local date; ratio from amount, else quantity; a fractional cashout is a separate sell | —                                                        | Internal                                                                                                                       |
-| CREDIT       | + amount                                                                                                                        | —                                                                                                                                                    | **+ amount only for subtype BONUS**                      | External for BONUS, else Internal                                                                                              |
-| ADJUSTMENT   | none                                                                                                                            | OPTION_EXPIRY: FIFO removal at zero proceeds (basis becomes a realised loss); other subtypes are no-ops                                              | —                                                        | Internal                                                                                                                       |
-| UNKNOWN      | none                                                                                                                            | none (warn and skip)                                                                                                                                 | —                                                        | Internal                                                                                                                       |
+| Type         | Cash sign × amount                                                                                                              | Position and lots                                                                                                                                                                                   | Net contribution                                         | Flow (portfolio scope)                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| BUY          | − amount; gross = amount − charges                                                                                              | + qty; opens a lot (basis = gross + charges); a short cover uses POSITION_CLOSE intent with cash prorated to the covered quantity                                                                   | —                                                        | Internal                                                                                                                       |
+| SELL         | + amount; − amount when charges exceed proceeds and the derivation reproduces the stored amount within tolerance (NOM-TRADE-05) | − qty; FIFO close with realised P&L; a short open uses POSITION_OPEN intent (negative lot); a sell with no position is cash only + warning; units beyond the position realise no proceeds + warning | —                                                        | Internal                                                                                                                       |
+| DIVIDEND     | + amount                                                                                                                        | — (DRIP and dividend-in-kind expand into two legs first)                                                                                                                                            | —                                                        | Internal                                                                                                                       |
+| INTEREST     | + amount; on credit-card accounts − amount (EDGE-CC-01)                                                                         | — (staking rewards expand)                                                                                                                                                                          | —                                                        | Internal                                                                                                                       |
+| DEPOSIT      | + amount                                                                                                                        | —                                                                                                                                                                                                   | **+ amount**                                             | **External**                                                                                                                   |
+| WITHDRAWAL   | − amount; gross = amount − charges                                                                                              | —                                                                                                                                                                                                   | **− amount**                                             | **External**                                                                                                                   |
+| TRANSFER_IN  | cash variant: + amount · security variant: − fee only                                                                           | security: paired lots via the transfer cache (dates and basis preserved, opposite-sign residents netted first, fee capitalised), else the book-basis fallback ladder                                | cash: + amount · security: + lot basis at acquisition FX | External when marked; pair resolved **and both accounts in scope** → Internal; unpaired and unmarked → Unknown (gates returns) |
+| TRANSFER_OUT | cash variant: − amount · security variant: − fee only                                                                           | security: FIFO removal on the net-sign leg; disposal proceeds = basis (P&L 0); removed lots staged for the pair                                                                                     | cash: − amount · security: − removed basis               | as TRANSFER_IN                                                                                                                 |
+| FEE          | − amount                                                                                                                        | —                                                                                                                                                                                                   | —                                                        | Internal                                                                                                                       |
+| TAX          | − amount                                                                                                                        | —                                                                                                                                                                                                   | —                                                        | Internal                                                                                                                       |
+| SPLIT        | **none**                                                                                                                        | multiplies the split ratio of lots acquired before the split's local date; ratio from amount, else quantity; a fractional cashout is a separate sell                                                | —                                                        | Internal                                                                                                                       |
+| CREDIT       | + amount                                                                                                                        | —                                                                                                                                                                                                   | **+ amount only for subtype BONUS**                      | External for BONUS, else Internal                                                                                              |
+| ADJUSTMENT   | none                                                                                                                            | OPTION_EXPIRY: FIFO removal at zero proceeds (basis becomes a realised loss); other subtypes are no-ops                                                                                             | —                                                        | Internal                                                                                                                       |
+| UNKNOWN      | none                                                                                                                            | none (warn and skip)                                                                                                                                                                                | —                                                        | Internal                                                                                                                       |
 
 **Subtypes.** `DRIP` (dividend into two legs), `STAKING_REWARD` (interest into
 two legs), `DIVIDEND_IN_KIND` (two legs), `BONUS`, `REBATE`, `REFUND` and
@@ -624,9 +679,14 @@ buy leg carries the income as its amount, so net cash is about zero, with price
 precedence: explicit positive unit price, then amount over quantity, then the
 raw unit price.
 
-**Cross-cutting rules.** Income attribution is gross. Fees and taxes are
-attributed for trades, income and standalone charge rows; fees on deposits,
-withdrawals and transfers are booked to cash but knowingly not attributed.
+**Cross-cutting rules.** `compile` decides what attribution counts and records
+it on the event (`EconomicEvent::attribution`); `measure` never re-reads the
+activity. A window attributes the events after its start row; an all-time
+(inception) window, whose change runs from zero, also counts the first day's.
+Income attribution is gross. Fees and taxes are attributed for trades, income
+and standalone charge rows; fees on deposits, withdrawals and transfers are
+booked to cash but knowingly not attributed. Credit-card interest is a charge on
+a liability, so its amount is attributed as a fee, never as income (EDGE-CC-01).
 Shortability: options may go negative implicitly, equities require explicit
 intent, everything else rejects a negative lot. Cash books into the account
 currency at the supplied rate when the activity carries one and the currencies

@@ -6,20 +6,59 @@ use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use super::facts::RawFxConversion;
 use super::policy::Policy;
 use super::scalar::{AccountId, ActivityId, AssetId, Currency};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Facts as `normalize` validated and ordered them: the only way to build
+/// one, so every later stage can rely on its invariants (known accounts,
+/// the total order, resolved pairs, one observation per key and day).
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CanonicalFacts {
-    pub policy: Policy,
-    pub accounts: BTreeMap<AccountId, AccountFacts>,
-    pub assets: BTreeMap<AssetId, AssetFacts>,
+    pub(crate) policy: Policy,
+    pub(crate) accounts: BTreeMap<AccountId, AccountFacts>,
+    pub(crate) assets: BTreeMap<AssetId, AssetFacts>,
     /// Posted activities in the total order (local date, timestamp, id).
-    pub activities: Vec<Activity>,
-    pub transfer_pairs: TransferPairs,
-    pub quotes: Vec<QuoteObservation>,
-    pub fx_rates: Vec<FxObservation>,
-    pub observed_snapshots: Vec<ObservedSnapshot>,
+    pub(crate) activities: Vec<Activity>,
+    pub(crate) transfer_pairs: TransferPairs,
+    pub(crate) quotes: Vec<QuoteObservation>,
+    pub(crate) fx_rates: Vec<FxObservation>,
+    pub(crate) observed_snapshots: Vec<ObservedSnapshot>,
+}
+
+impl CanonicalFacts {
+    pub fn policy(&self) -> &Policy {
+        &self.policy
+    }
+
+    pub fn accounts(&self) -> &BTreeMap<AccountId, AccountFacts> {
+        &self.accounts
+    }
+
+    pub fn assets(&self) -> &BTreeMap<AssetId, AssetFacts> {
+        &self.assets
+    }
+
+    /// Posted activities in the total order (local date, timestamp, id).
+    pub fn activities(&self) -> &[Activity] {
+        &self.activities
+    }
+
+    pub fn transfer_pairs(&self) -> &TransferPairs {
+        &self.transfer_pairs
+    }
+
+    pub fn quotes(&self) -> &[QuoteObservation] {
+        &self.quotes
+    }
+
+    pub fn fx_rates(&self) -> &[FxObservation] {
+        &self.fx_rates
+    }
+
+    pub fn observed_snapshots(&self) -> &[ObservedSnapshot] {
+        &self.observed_snapshots
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -175,6 +214,9 @@ pub struct Activity {
     pub source_group_id: Option<String>,
     /// `metadata.flow.is_external` when present.
     pub external_transfer: Option<bool>,
+    /// The import linker's record of a same-account cash FX conversion.
+    #[serde(default)]
+    pub fx_conversion: Option<RawFxConversion>,
     /// Transfer of a non-cash asset (cash placeholders count as cash).
     pub is_security_transfer: bool,
     /// Provenance used to rank competing split rows (`resolve_surfaces`).
@@ -191,6 +233,11 @@ pub struct TransferPair {
     pub out_account: AccountId,
     pub in_account: AccountId,
     pub security: bool,
+    /// A same-account cash FX conversion the import linker recorded as
+    /// internal: the money only changes currency, so neither leg moves net
+    /// contribution.
+    #[serde(default)]
+    pub contribution_neutral: bool,
 }
 
 impl TransferPair {
@@ -208,12 +255,17 @@ impl TransferPair {
 /// Resolved transfer pairs keyed by `source_group_id`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct TransferPairs {
-    pub by_group: BTreeMap<String, TransferPair>,
+    pub(crate) by_group: BTreeMap<String, TransferPair>,
     group_by_activity: BTreeMap<ActivityId, String>,
 }
 
 impl TransferPairs {
-    pub fn insert(&mut self, pair: TransferPair) {
+    /// Resolved pairs in group order.
+    pub fn iter(&self) -> impl Iterator<Item = &TransferPair> {
+        self.by_group.values()
+    }
+
+    pub(crate) fn insert(&mut self, pair: TransferPair) {
         self.group_by_activity
             .insert(pair.transfer_in.clone(), pair.group_id.clone());
         self.group_by_activity

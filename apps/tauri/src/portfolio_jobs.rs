@@ -5,7 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use log::error;
-use tauri::{AppHandle, Emitter};
+use tauri::async_runtime::JoinHandle;
+use tauri::AppHandle;
 use wealthfolio_core::health::HealthServiceTrait;
 use wealthfolio_core::portfolio::coordinator::{
     run_periodic_consistency, AccountFailure, JobObserver, PortfolioJobReport, PortfolioJobRequest,
@@ -33,7 +34,9 @@ impl TauriJobObserver {
     }
 
     fn emit<P: serde::Serialize>(&self, event: &str, payload: &P) {
-        if let Err(e) = self.app_handle.emit(event, payload) {
+        if let Err(e) =
+            crate::events::emit_for_profile(&self.app_handle, &self.context, event, payload)
+        {
             error!("Failed to emit {} event: {}", event, e);
         }
     }
@@ -132,7 +135,10 @@ pub async fn ensure_consistent(app_handle: AppHandle, context: Arc<ServiceContex
 }
 
 /// Periodic market sync plus consistency pass (6h, after a 2min delay).
-pub fn spawn_periodic_consistency(app_handle: AppHandle, context: Arc<ServiceContext>) {
+pub fn spawn_periodic_consistency(
+    app_handle: AppHandle,
+    context: Arc<ServiceContext>,
+) -> JoinHandle<()> {
     let observer: Arc<dyn JobObserver> =
         Arc::new(TauriJobObserver::new(app_handle, Arc::clone(&context)));
     tauri::async_runtime::spawn(run_periodic_consistency(
@@ -140,5 +146,5 @@ pub fn spawn_periodic_consistency(app_handle: AppHandle, context: Arc<ServiceCon
         observer,
         Duration::from_secs(120),
         Duration::from_secs(6 * 3600),
-    ));
+    ))
 }

@@ -4,23 +4,30 @@
 //! (positions, lots, valuations, performance). No I/O, no clock, no locks, no
 //! async. See `docs/architecture/portfolio-engine.md`.
 //!
-//! Stages: [`normalize`] → [`compile`] → resolve → project → value → measure.
-//! Every stage is a total function of its arguments; imperfect data becomes
-//! [`Diagnostic`]s, an unusable request becomes an [`EngineError`].
+//! Stages: [`normalize`] → [`compile`] → [`resolve_surfaces`] → [`project`]
+//! → [`value`] → [`measure_account`] / [`measure_scope`]. Every stage is a
+//! total function of its arguments; imperfect data becomes [`Diagnostic`]s,
+//! an unusable request becomes an [`EngineError`]. [`Engine`] runs them over
+//! one set of facts; the stage functions stay public for chunked, resumed and
+//! stored-row runs. Everything else is private: the public surface is this
+//! file plus [`model`].
 
-pub mod compile;
-pub mod diagnostics;
-pub mod error;
-pub mod measure;
+mod arith;
+mod compile;
+mod diagnostics;
+mod engine;
+mod error;
+mod measure;
 pub mod model;
-pub mod normalize;
-pub mod project;
-pub mod resolve;
-pub mod scope;
-pub mod value;
+mod normalize;
+mod project;
+mod resolve;
+mod scope;
+mod value;
 
 pub use compile::{compile, CompiledLedger};
 pub use diagnostics::{Diagnostic, DiagnosticCode, Severity};
+pub use engine::Engine;
 pub use error::EngineError;
 pub use measure::{
     measure_account, measure_price_series, measure_scope, MeasureInputs, MeasureProfile,
@@ -28,6 +35,8 @@ pub use measure::{
 pub use normalize::{normalize, Normalized};
 pub use project::lot_records;
 pub use project::project;
-pub use resolve::{resolve_surfaces, FxResolver, FxSurface, QuoteSurface, ResolvedSurfaces};
+pub use resolve::{
+    resolve_surfaces, FxResolver, FxSurface, QuoteSurface, ResolvedSurfaces, SplitEvent,
+};
 pub use scope::{facts_needed, FactsRequest};
-pub use value::{aggregate_scope, value, Resolved, ValueInputs, Window};
+pub use value::{aggregate_scope, effects, value, Resolved, ValueInputs, Window};

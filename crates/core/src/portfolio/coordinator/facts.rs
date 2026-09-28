@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use wealthfolio_portfolio_engine::model::{
-    Currency, Policy, RawAccount, RawActivity, RawAsset, RawFacts, RawFxRate, RawObservedPosition,
-    RawObservedSnapshot, RawQuote,
+    Currency, Policy, RawAccount, RawActivity, RawAsset, RawFacts, RawFxConversion, RawFxRate,
+    RawObservedPosition, RawObservedSnapshot, RawQuote,
 };
 
 use std::sync::Arc;
@@ -216,10 +216,35 @@ fn raw_activity(a: &Activity) -> RawActivity {
         fx_rate: a.fx_rate,
         source_group_id: a.source_group_id.clone(),
         external_transfer: a.explicit_external_transfer(),
+        fx_conversion: raw_fx_conversion(a),
         source_system: a.source_system.clone(),
         is_user_modified: a.is_user_modified,
         updated_at: a.updated_at,
     }
+}
+
+/// `metadata.fx`: the import linker's record of a same-account cash FX
+/// conversion. The kernel decides whether it makes the pair neutral.
+fn raw_fx_conversion(a: &Activity) -> Option<RawFxConversion> {
+    let fx = a.metadata.as_ref()?.get("fx")?;
+    let text = |key: &str| {
+        fx.get(key)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let amount = |key: &str| {
+        fx.get(key)
+            .and_then(serde_json::Value::as_str)
+            .and_then(|value| value.parse::<Decimal>().ok())
+    };
+    Some(RawFxConversion {
+        rate_source: text("rateSource"),
+        source_currency: text("sourceCurrency"),
+        destination_currency: text("destinationCurrency"),
+        source_amount: amount("sourceAmount"),
+        destination_amount: amount("destinationAmount"),
+    })
 }
 
 fn raw_quote(q: &crate::quotes::Quote) -> RawQuote {
@@ -238,6 +263,7 @@ fn raw_fx_rate(r: &crate::fx::ExchangeRate) -> RawFxRate {
         to: r.to_currency.clone(),
         day: r.timestamp.date_naive(),
         rate: r.rate,
+        source: r.source.clone(),
     }
 }
 
@@ -429,6 +455,7 @@ pub fn load(
             to: r.to_currency.clone(),
             day: r.timestamp.date_naive(),
             rate: r.rate,
+            source: r.source.clone(),
         })
         .collect();
 

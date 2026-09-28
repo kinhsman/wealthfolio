@@ -37,6 +37,11 @@
     "transactionCount_other": "{{count}} transazioni",
     "editCategoryTitle": "Modifica categoria",
     "deleteCategoryTitle": "Elimina categoria",
+    "excludeLabel": "Escludi dalle spese",
+    "excludeDescription": "Nascosta da totali, grafici, analisi e budget",
+    "excludeDisabledParent": "Esclusa perché la categoria principale è esclusa",
+    "excludedTooltip": "Esclusa dalle spese",
+    "excludedWithParent": "Esclusa insieme a {{name}}",
     "categoryActions": "Azioni categoria",
     "deleteTitle": "Elimina categoria",
     "deleteConfirm": "Sei sicuro di voler eliminare \"{{name}}\"?",
@@ -203,10 +208,10 @@
     "statusNeedsReview": "Richiede revisione",
     "statusUncategorized": "Non categorizzate",
     "statusCategorized": "Categorizzate",
-    "countLabel": "{{visible}} / {{total}} transazioni",
-    "countLabel_one": "{{visible}} / {{total}} transazione",
-    "countLabel_many": "{{visible}} / {{total}} transazioni",
-    "countLabel_other": "{{visible}} / {{total}} transazioni",
+    "countLabel": "{{visible}}/{{total}} transazioni",
+    "countLabel_one": "{{visible}}/{{total}} transazione",
+    "countLabel_many": "{{visible}}/{{total}} transazioni",
+    "countLabel_other": "{{visible}}/{{total}} transazioni",
     "countZero": "0 transazioni",
     "category": "Categoria",
     "subcategory": "Sottocategoria",
@@ -214,7 +219,9 @@
     "filterTransactions": "Filtra transazioni",
     "clearAll": "Cancella tutto",
     "done": "Fatto",
-    "refreshing": "Aggiornamento"
+    "refreshing": "Aggiornamento",
+    "selectedNet": "Netto selezionato",
+    "filteredNet": "Netto filtrato"
   },
   "period": {
     "thisMonth": "Questo mese",
@@ -224,7 +231,13 @@
     "viewingMonth": "Visualizzazione di {{label}}, clicca per cambiare",
     "pickMonth": "Scegli un mese specifico",
     "selectMonth": "Seleziona mese",
-    "clearMonth": "Cancella la selezione del mese"
+    "clearMonth": "Cancella la selezione del mese",
+    "chooseMonth": "Scegli un mese",
+    "selectDates": "Seleziona le date",
+    "startDate": "Data di inizio",
+    "chooseCustomDates": "Scegli date personalizzate",
+    "invalidRange": "La data di fine deve coincidere con o essere successiva alla data di inizio",
+    "endDate": "Data di fine"
   },
   "presets": {
     "loading": "Caricamento preset…",
@@ -380,9 +393,8 @@
     "spent": "Speso",
     "allSubcategories": "Tutte le sottocategorie",
     "tx": "Tx",
-    "outflowsCount": "{{count}} uscite",
     "avgPerTx": "Media / tx",
-    "outflowsOnly": "Solo uscite",
+    "acrossAllTx": "Su tutte le transazioni",
     "dailyPace": "Ritmo giornaliero",
     "inThisPeriod": "In questo periodo",
     "subcategoryMix": "Composizione sottocategorie",
@@ -394,9 +406,6 @@
     "noTransactions": "Nessuna transazione in questo periodo.",
     "loadMore": "Carica altre {{count}}",
     "openInTransactions": "Apri in Transazioni",
-    "outflowsCount_one": "{{count}} uscita",
-    "outflowsCount_many": "{{count}} uscite",
-    "outflowsCount_other": "{{count}} uscite",
     "totalCount_one": "{{count}} totale",
     "totalCount_many": "{{count}} totale",
     "totalCount_other": "{{count}} totale",
@@ -415,7 +424,8 @@
     "largest": "Maggiore",
     "noSpending": "Nessuna spesa in questa fascia.",
     "outlier": "Anomalia",
-    "weekOf": "Settimana del {{date}}"
+    "weekOf": "Settimana del {{date}}",
+    "customSubtitle": "Transazioni nel periodo selezionato"
   },
   "split": {
     "title": "Dividi transazione",
@@ -572,7 +582,11 @@
     "brighter": "Più chiaro",
     "moreSpend": "= più spesa.",
     "less": "meno",
-    "more": "più"
+    "more": "più",
+    "customSubtitleShort": "Periodo selezionato",
+    "customNoActivity": "Nessun movimento di liquidità nel periodo selezionato.",
+    "customLegendIntro": "Ogni cella rappresenta un’ora di un giorno della settimana nel periodo selezionato.",
+    "customSubtitle": "Periodo selezionato · intensità delle spese per giorno della settimana e ora."
   },
   "eventDetail": {
     "previousEvent": "Evento precedente",
@@ -756,10 +770,14 @@
     "categoriesShown_one": "{{shown}} di {{total}} categoria mostrata",
     "categoriesShown_many": "{{shown}} di {{total}} categorie mostrate",
     "categoriesShown_other": "{{shown}} di {{total}} categorie mostrate",
+    "excludedInSettings_one": "{{count}} esclusa nelle impostazioni",
+    "excludedInSettings_many": "{{count}} escluse nelle impostazioni",
+    "excludedInSettings_other": "{{count}} escluse nelle impostazioni",
     "openTransactions": "Apri transazioni →",
     "moreCount_one": "+{{count}} altre",
     "moreCount_many": "+{{count}} altre",
-    "moreCount_other": "+{{count}} altre"
+    "moreCount_other": "+{{count}} altre",
+    "vsRange": "rispetto a {{from}} – {{to}}"
   },
   "budgetChart": {
     "overBudget": "Budget superato",
@@ -871,7 +889,14 @@
     "addTransaction": "Aggiungi transazione",
     "deselectAllVisible": "Deseleziona tutte le transazioni visibili",
     "selectAllVisible": "Seleziona tutte le transazioni visibili",
-    "nameNotes": "Nome / Note"
+    "nameNotes": "Nome / Note",
+    "time": "Ora",
+    "net": "Netto",
+    "dayCount_one": "{{count}} transazione",
+    "dayCount_other": "{{count}} transazioni",
+    "dayCount_many": "{{count}} transazioni",
+    "selectDay": "Seleziona tutte le transazioni del {{date}}",
+    "deselectDay": "Deseleziona tutte le transazioni del {{date}}"
   },
   "tabContent": {
     "stageWhereLabel": "Dove sono",
@@ -896,6 +921,9 @@
     "automateMatching": "Automatizza la corrispondenza per i commercianti ricorrenti",
     "loadError": "Impossibile caricare i dati di spesa.",
     "spentLabel": "Speso",
+    "excludedCategoriesHint_one": "{{count}} categoria esclusa",
+    "excludedCategoriesHint_many": "{{count}} categorie escluse",
+    "excludedCategoriesHint_other": "{{count}} categorie escluse",
     "noSpendingInPeriod": "Nessuna spesa in questo periodo",
     "whereItWent": "Dove è finita",
     "whereItWentView": "Vista di dove è finita",

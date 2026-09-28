@@ -544,9 +544,14 @@ export interface ResolvedQuote {
 
 export interface ExchangeInfo {
   mic: string;
+  operatingMic: string;
+  micType: "OPRT" | "SGMT";
   name: string;
   longName: string;
-  currency: string;
+  countryCode: string;
+  status: "ACTIVE" | "UPDATED";
+  currency?: string | null;
+  configured: boolean;
 }
 
 export interface MarketDataProviderInfo {
@@ -754,6 +759,8 @@ export interface HoldingSummary {
   id: string;
   symbol: string;
   name?: string | null;
+  exchangeMic?: string | null;
+  instrumentType?: string | null;
   accountName?: string | null;
   holdingType: HoldingType;
   quantity: number;
@@ -820,6 +827,30 @@ export interface Asset {
   updatedAt: string; // ISO date string
 }
 
+/** One row of the custom-logo index (no image bytes). */
+export interface AssetLogoSummary {
+  assetId: string;
+  displayCode: string | null;
+  sha256: string;
+  updatedAt: string;
+}
+
+/** A custom logo override for an asset, including the PNG bytes as base64. */
+export interface AssetLogo {
+  assetId: string;
+  mimeType: string;
+  dataBase64: string;
+  sha256: string;
+  width: number;
+  height: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertAssetLogoInput {
+  dataBase64: string;
+}
+
 export interface Quote {
   id: string;
   createdAt: string;
@@ -859,6 +890,9 @@ export interface QuoteUpdate {
 }
 
 export interface Settings {
+  insightsOverviewLayout?: Record<string, unknown> | null;
+  /** Read-only restore state, absent on older backends. */
+  restoreReconnectRequired?: boolean;
   theme: string;
   font: string;
   language: string;
@@ -1031,7 +1065,8 @@ export interface AccountValuation {
     | "ACTIVITY_DERIVED"
     | "STORED_GROSS"
     | "NET_CONTRIBUTION_FALLBACK"
-    | "MIXED";
+    | "MIXED"
+    | "MIXED_EXACT";
   performanceEligibleValueBase: number;
   valueStatus: ValuationStatus;
   basisStatus: BasisStatus;
@@ -1907,6 +1942,7 @@ export interface CategoryAllocation {
   value: number; // Base currency value
   percentage: number; // 0-100
   children?: CategoryAllocation[]; // Child allocations for drill-down
+  isResidual?: boolean; // True for the synthetic "rest of the parent" drill-down child
 }
 
 export interface TaxonomyAllocation {
@@ -2452,6 +2488,8 @@ export interface RetirementOverview {
   portfolioAtGoalAge: number;
   requiredCapitalReachable: boolean;
   requiredCapitalAtGoalAge: number;
+  leanRequiredCapitalAtGoalAge?: number | null;
+  fatRequiredCapitalAtGoalAge?: number | null;
   shortfallAtGoalAge: number;
   surplusAtGoalAge: number;
   fundedThroughAge: number | null;
@@ -2692,6 +2730,8 @@ export interface DriftHoldingRow {
   sourceAccountIds?: string[];
   symbol: string;
   name: string;
+  exchangeMic?: string | null;
+  instrumentType?: string | null;
   categoryId: string;
   categoryName: string;
   categoryColor?: string | null;

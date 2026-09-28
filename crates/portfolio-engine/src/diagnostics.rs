@@ -47,12 +47,21 @@ pub enum DiagnosticCode {
     NegativeCash,
     /// Quote carried forward from an earlier observation.
     CarriedQuote,
+    /// FX rate resolved from an observation a week or more away from the
+    /// valued day, in either direction (nearest-neighbour resolution).
+    CarriedFxRate,
     /// No quote observation usable for the day.
     MissingQuote,
     /// Quote observation with a non-positive close; ignored.
     InvalidQuote,
     /// FX observation with a non-positive rate; ignored.
     InvalidFxRate,
+    /// A magnitude outside the kernel range (`MAX_MAGNITUDE`): the input row
+    /// was ignored, or the value it would produce was declined.
+    ValueOutOfRange,
+    /// Sell, transfer-out or expiry of more units than held: the held units
+    /// were disposed and the excess has no lot.
+    InsufficientQuantity,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

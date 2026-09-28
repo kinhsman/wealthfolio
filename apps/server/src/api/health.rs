@@ -9,7 +9,6 @@ use crate::{
     main_lib::AppState,
 };
 use axum::{
-    extract::State,
     http::HeaderMap,
     routing::{get, post},
     Json, Router,
@@ -22,7 +21,7 @@ use wealthfolio_core::{
 
 /// Get current health status (cached or fresh check).
 async fn get_health_status(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     headers: HeaderMap,
 ) -> ApiResult<Json<HealthStatus>> {
     // Try to get cached status first
@@ -42,7 +41,7 @@ async fn get_health_status(
 
 /// Run health checks and return fresh status.
 async fn run_health_checks(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     headers: HeaderMap,
 ) -> ApiResult<Json<HealthStatus>> {
     let base_currency = state.base_currency.read().unwrap().clone();
@@ -97,7 +96,7 @@ struct DismissRequest {
 
 /// Dismiss a health issue.
 async fn dismiss_health_issue(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<DismissRequest>,
 ) -> ApiResult<()> {
     state
@@ -115,7 +114,7 @@ struct RestoreRequest {
 
 /// Restore a dismissed health issue.
 async fn restore_health_issue(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<RestoreRequest>,
 ) -> ApiResult<()> {
     state.health_service.restore_issue(&body.issue_id).await?;
@@ -124,7 +123,7 @@ async fn restore_health_issue(
 
 /// Get list of dismissed issue IDs.
 async fn get_dismissed_health_issues(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<Json<Vec<String>>> {
     let ids = state.health_service.get_dismissed_ids().await?;
     Ok(Json(ids))
@@ -132,7 +131,7 @@ async fn get_dismissed_health_issues(
 
 /// Execute a fix action.
 async fn execute_health_fix(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(action): Json<FixAction>,
 ) -> ApiResult<()> {
     // Handle migrate_legacy_classifications action specially
@@ -225,21 +224,23 @@ async fn execute_health_fix(
 }
 
 /// Get health configuration.
-async fn get_health_config(State(state): State<Arc<AppState>>) -> ApiResult<Json<HealthConfig>> {
+async fn get_health_config(
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
+) -> ApiResult<Json<HealthConfig>> {
     let config = state.health_service.get_config().await;
     Ok(Json(config))
 }
 
 /// Update health configuration.
 async fn update_health_config(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(config): Json<HealthConfig>,
 ) -> ApiResult<()> {
     state.health_service.update_config(config).await?;
     Ok(())
 }
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new()
         .route("/health/status", get(get_health_status))
         .route("/health/check", post(run_health_checks))

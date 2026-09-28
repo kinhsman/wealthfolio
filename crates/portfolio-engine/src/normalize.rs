@@ -3,7 +3,7 @@
 //! timestamp, id), resolves transfer pairs by `source_group_id`, and keeps
 //! only POSTED activities.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
@@ -30,10 +30,10 @@ pub fn normalize(raw: RawFacts) -> Result<Normalized, EngineError> {
     for account in raw.accounts {
         let id = AccountId::new(account.id.clone());
         let Some(currency) = Currency::parse(&account.currency) else {
-            return Err(EngineError::InvalidPolicy(format!(
-                "account {} has no currency",
-                account.id
-            )));
+            return Err(EngineError::InvalidAccount {
+                account: account.id,
+                reason: "it has no currency".into(),
+            });
         };
         let facts = AccountFacts {
             id: id.clone(),
@@ -77,6 +77,14 @@ pub fn normalize(raw: RawFacts) -> Result<Normalized, EngineError> {
             ));
             continue;
         };
+        if let Some(reason) = activity_out_of_range(&activity) {
+            diagnostics.push(Diagnostic::error(
+                DiagnosticCode::ValueOutOfRange,
+                activity.id.clone(),
+                format!("{reason}; activity ignored"),
+            ));
+            continue;
+        }
         activities.push(canonical_activity(
             activity,
             account,
@@ -119,6 +127,17 @@ pub fn normalize(raw: RawFacts) -> Result<Normalized, EngineError> {
             ));
             continue;
         }
+        if quote.close > MAX_MAGNITUDE {
+            diagnostics.push(Diagnostic::warning(
+                DiagnosticCode::ValueOutOfRange,
+                format!("{}@{}", quote.asset_id, quote.day),
+                format!(
+                    "quote close {} is outside the kernel range; ignored",
+                    quote.close
+                ),
+            ));
+            continue;
+        }
         quotes.push(QuoteObservation {
             asset,
             day: quote.day,
@@ -129,13 +148,16 @@ pub fn normalize(raw: RawFacts) -> Result<Normalized, EngineError> {
     }
     // One observation per asset and day. Several sources may quote the same
     // day (the store is unique on asset, day and source); the winner is
-    // decided by source rank, then source name, never by input order.
+    // decided by source rank, then source name, then value, never by input
+    // order.
     quotes.sort_by(|a, b| {
         a.asset
             .cmp(&b.asset)
             .then_with(|| a.day.cmp(&b.day))
             .then_with(|| source_rank(&a.source).cmp(&source_rank(&b.source)))
             .then_with(|| a.source.cmp(&b.source))
+            .then_with(|| a.close.cmp(&b.close))
+            .then_with(|| a.currency.cmp(&b.currency))
     });
     quotes.dedup_by(|later, earlier| later.asset == earlier.asset && later.day == earlier.day);
 
@@ -151,12 +173,25 @@ pub fn normalize(raw: RawFacts) -> Result<Normalized, EngineError> {
                     format!("FX rate {} is not positive; ignored", rate.rate),
                 ));
             }
-            (Some(from), Some(to)) if from != to => fx_rates.push(FxObservation {
-                from,
-                to,
-                day: rate.day,
-                rate: rate.rate,
-            }),
+            (Some(from), Some(to))
+                if from != to && (rate.rate < MIN_RATE || rate.rate > MAX_MAGNITUDE) =>
+            {
+                diagnostics.push(Diagnostic::warning(
+                    DiagnosticCode::ValueOutOfRange,
+                    format!("fx {}/{}@{}", rate.from, rate.to, rate.day),
+                    format!("FX rate {} is outside the kernel range; ignored", rate.rate),
+                ));
+            }
+            (Some(from), Some(to)) if from != to => fx_rates.push((
+                source_rank(&rate.source),
+                rate.source,
+                FxObservation {
+                    from,
+                    to,
+                    day: rate.day,
+                    rate: rate.rate,
+                },
+            )),
             _ => diagnostics.push(Diagnostic::warning(
                 DiagnosticCode::MissingCurrency,
                 format!("fx {}/{}@{}", rate.from, rate.to, rate.day),
@@ -164,16 +199,39 @@ pub fn normalize(raw: RawFacts) -> Result<Normalized, EngineError> {
             )),
         }
     }
-    fx_rates.sort_by(|a, b| {
+    // One observation per pair and day, chosen like quotes: source rank,
+    // then source name, then value, never by input order.
+    fx_rates.sort_by(|(a_rank, a_source, a), (b_rank, b_source, b)| {
         a.from
             .cmp(&b.from)
             .then_with(|| a.to.cmp(&b.to))
             .then_with(|| a.day.cmp(&b.day))
+            .then_with(|| a_rank.cmp(b_rank))
+            .then_with(|| a_source.cmp(b_source))
+            .then_with(|| a.rate.cmp(&b.rate))
+    });
+    let mut fx_rates: Vec<FxObservation> = fx_rates
+        .into_iter()
+        .map(|(_, _, observation)| observation)
+        .collect();
+    fx_rates.dedup_by(|later, earlier| {
+        later.from == earlier.from && later.to == earlier.to && later.day == earlier.day
     });
 
     let mut observed_snapshots = Vec::new();
     for snapshot in raw.observed_snapshots {
         let account = AccountId::new(snapshot.account_id.clone());
+        if snapshot_out_of_range(&snapshot) {
+            diagnostics.push(Diagnostic::error(
+                DiagnosticCode::ValueOutOfRange,
+                format!("observed@{}", snapshot.date),
+                format!(
+                    "observed snapshot of {} holds a value outside the kernel range; ignored",
+                    snapshot.account_id
+                ),
+            ));
+            continue;
+        }
         if !accounts.contains_key(&account) {
             diagnostics.push(Diagnostic::error(
                 DiagnosticCode::UnknownAccount,
@@ -202,11 +260,22 @@ pub fn normalize(raw: RawFacts) -> Result<Normalized, EngineError> {
                 )
             })
             .collect();
-        let cash = snapshot
-            .cash
-            .into_iter()
-            .filter_map(|(currency, amount)| Currency::parse(&currency).map(|c| (c, amount)))
-            .collect();
+        let mut cash = BTreeMap::new();
+        for (currency, amount) in snapshot.cash {
+            match Currency::parse(&currency) {
+                Some(currency) => {
+                    cash.insert(currency, amount);
+                }
+                None => diagnostics.push(Diagnostic::warning(
+                    DiagnosticCode::MissingCurrency,
+                    format!("observed@{}", snapshot.date),
+                    format!(
+                        "observed snapshot of {} holds {amount} of cash without a currency; ignored",
+                        snapshot.account_id
+                    ),
+                )),
+            }
+        }
         observed_snapshots.push(ObservedSnapshot {
             account,
             date: snapshot.date,
@@ -281,9 +350,16 @@ fn asset_facts(id: &AssetId, asset: &RawAsset, diagnostics: &mut Vec<Diagnostic>
     let is_option = instrument.as_deref() == Some("OPTION");
     let equity_like =
         kind == "INVESTMENT" && matches!(instrument.as_deref(), None | Some("EQUITY"));
+    if asset.contract_multiplier.is_some_and(|m| m > MAX_MAGNITUDE) {
+        diagnostics.push(Diagnostic::warning(
+            DiagnosticCode::ValueOutOfRange,
+            id.as_str().to_string(),
+            "contract multiplier is outside the kernel range; the instrument default is used",
+        ));
+    }
     let contract_multiplier = asset
         .contract_multiplier
-        .filter(|m| *m > Decimal::ZERO)
+        .filter(|m| *m > Decimal::ZERO && *m <= MAX_MAGNITUDE)
         .unwrap_or(if is_option {
             Decimal::from(100)
         } else {
@@ -305,6 +381,49 @@ fn asset_facts(id: &AssetId, asset: &RawAsset, diagnostics: &mut Vec<Diagnostic>
         allows_negative_lots: is_option || equity_like,
         requires_explicit_short_intent: equity_like,
     }
+}
+
+/// Why an activity's magnitudes cannot be computed with, if they cannot
+/// (architecture §4.3): a value above `MAX_MAGNITUDE`, or a supplied rate
+/// whose inverse would be.
+fn activity_out_of_range(raw: &RawActivity) -> Option<String> {
+    let fields = [
+        ("quantity", raw.quantity),
+        ("unit_price", raw.unit_price),
+        ("amount", raw.amount),
+        ("fee", raw.fee),
+        ("tax", raw.tax),
+    ];
+    if let Some((name, value)) = fields
+        .iter()
+        .find_map(|(name, value)| value.filter(|v| v.abs() > MAX_MAGNITUDE).map(|v| (name, v)))
+    {
+        return Some(format!("{name} {value} is outside the kernel range"));
+    }
+    raw.fx_rate
+        .filter(|rate| *rate > Decimal::ZERO && (*rate < MIN_RATE || *rate > MAX_MAGNITUDE))
+        .map(|rate| format!("fx_rate {rate} is outside the kernel range"))
+}
+
+fn snapshot_out_of_range(snapshot: &RawObservedSnapshot) -> bool {
+    let out = |value: &Decimal| value.abs() > MAX_MAGNITUDE;
+    [
+        snapshot.cost_basis,
+        snapshot.net_contribution,
+        snapshot.net_contribution_base,
+        snapshot.cash_total_account_currency,
+        snapshot.cash_total_base_currency,
+    ]
+    .iter()
+    .any(out)
+        || snapshot.cash.iter().any(|(_, amount)| out(amount))
+        || snapshot.positions.iter().any(|p| {
+            [p.quantity, p.average_cost, p.total_cost_basis]
+                .iter()
+                .chain(p.cost_basis_account.iter())
+                .chain(p.cost_basis_base.iter())
+                .any(out)
+        })
 }
 
 fn canonical_activity(
@@ -372,6 +491,7 @@ fn canonical_activity(
             .map(|g| g.trim().to_string())
             .filter(|g| !g.is_empty()),
         external_transfer: raw.external_transfer,
+        fx_conversion: raw.fx_conversion,
         is_security_transfer,
         source_system: raw
             .source_system
@@ -383,12 +503,12 @@ fn canonical_activity(
 }
 
 /// UTC instant → user-local business date, exactly once (architecture §4.7).
-pub fn local_date(instant: DateTime<Utc>, policy: &Policy) -> NaiveDate {
+pub(crate) fn local_date(instant: DateTime<Utc>, policy: &Policy) -> NaiveDate {
     instant.with_timezone(&policy.timezone).date_naive()
 }
 
 /// `$CASH-USD`, `CASH_USD`, `CASH:USD` placeholders (case-insensitive).
-pub fn is_cash_symbol(symbol: &str) -> bool {
+pub(crate) fn is_cash_symbol(symbol: &str) -> bool {
     let upper = symbol.trim().to_ascii_uppercase();
     let stripped = upper.strip_prefix('$').unwrap_or(&upper);
     let Some(rest) = stripped.strip_prefix("CASH") else {
@@ -557,11 +677,40 @@ fn build_pair(group: &str, legs: &[&Activity]) -> Result<TransferPair, String> {
         out_account: transfer_out.account.clone(),
         in_account: transfer_in.account.clone(),
         security,
+        contribution_neutral: is_recorded_fx_conversion(transfer_in, transfer_out),
     })
 }
 
-#[allow(dead_code)]
-fn _lookup_helpers(_: &HashMap<String, String>) {}
+/// A same-account cash FX conversion whose legs both carry the import
+/// linker's record of it (internal flow, `implied_from_import`, matching
+/// currencies and amounts). Structural pairing alone is deliberately not
+/// enough to make a conversion contribution-neutral.
+fn is_recorded_fx_conversion(transfer_in: &Activity, transfer_out: &Activity) -> bool {
+    if transfer_in.account != transfer_out.account
+        || transfer_in.is_security_transfer
+        || transfer_out.is_security_transfer
+    {
+        return false;
+    }
+    let (Some(source_amount), Some(destination_amount)) = (transfer_out.amount, transfer_in.amount)
+    else {
+        return false;
+    };
+    [transfer_in, transfer_out].iter().all(|leg| {
+        leg.external_transfer == Some(false)
+            && leg.fx_conversion.as_ref().is_some_and(|fx| {
+                fx.rate_source == "implied_from_import"
+                    && fx
+                        .source_currency
+                        .eq_ignore_ascii_case(transfer_out.currency.as_str())
+                    && fx
+                        .destination_currency
+                        .eq_ignore_ascii_case(transfer_in.currency.as_str())
+                    && fx.source_amount.map(|a| a.abs()) == Some(source_amount)
+                    && fx.destination_amount.map(|a| a.abs()) == Some(destination_amount)
+            })
+    })
+}
 
 #[cfg(test)]
 mod tests {
@@ -630,6 +779,7 @@ mod tests {
             fx_rate: None,
             source_group_id: None,
             external_transfer: None,
+            fx_conversion: None,
             source_system: None,
             is_user_modified: false,
             created_at: Utc.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),
