@@ -22,8 +22,6 @@ use crate::resolve::FxResolver;
 
 /// Positions below this effective quantity are treated as closed.
 const QUANTITY_THRESHOLD: Decimal = Decimal::from_parts(1, 0, 0, false, 8);
-/// Storage scale for disposal money fields (legacy `DECIMAL_PRECISION`).
-const STORAGE_SCALE: u32 = 8;
 
 /// A value outside the kernel range rejects the event (architecture §4.3):
 /// the fold keeps the scratch state from before it and reports why.
@@ -1762,10 +1760,10 @@ impl Projector<'_> {
             } else {
                 Decimal::ZERO
             };
-            let stored_proceeds = proceeds.round_dp(STORAGE_SCALE);
-            let stored_cost = cost_basis.round_dp(STORAGE_SCALE);
-            let stored_proceeds_base = proceeds_base.round_dp(STORAGE_SCALE);
-            let stored_cost_base = cost_basis_base.round_dp(STORAGE_SCALE);
+            let stored_proceeds = proceeds.round_dp(STORED_PRECISION);
+            let stored_cost = cost_basis.round_dp(STORED_PRECISION);
+            let stored_proceeds_base = proceeds_base.round_dp(STORED_PRECISION);
+            let stored_cost_base = cost_basis_base.round_dp(STORED_PRECISION);
             effects.disposals.push(LotDisposal {
                 id: format!("{}:{}:{index}", event.id, lot.id),
                 lot_id: lot.id.clone(),
@@ -1776,11 +1774,11 @@ impl Projector<'_> {
                 quantity: effective,
                 proceeds: stored_proceeds,
                 cost_basis: stored_cost,
-                realized_pnl: (stored_proceeds - stored_cost).round_dp(STORAGE_SCALE),
+                realized_pnl: (stored_proceeds - stored_cost).round_dp(STORED_PRECISION),
                 proceeds_base: stored_proceeds_base,
                 cost_basis_base: stored_cost_base,
                 realized_pnl_base: (stored_proceeds_base - stored_cost_base)
-                    .round_dp(STORAGE_SCALE),
+                    .round_dp(STORED_PRECISION),
                 currency: position_currency.clone(),
                 fx_rate_to_base: disposal_rate,
             });

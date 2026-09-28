@@ -553,7 +553,7 @@ Testable contract; the property suite (§5) encodes each one.
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **I1**  | **Replay equivalence.** `project(genesis..T)` ≡ `project(D..T, from state(D−1))` for any D, given a lossless typed checkpoint. This is what makes resume safe.                                                                                                                                                                                                      |
 | **I2**  | **Chunk equivalence.** Any partition of a range, folding the final state forward, yields identical daily states to a one-shot run.                                                                                                                                                                                                                                  |
-| **I3**  | **Determinism.** Identical facts, including `as_of` and policy, give byte-identical output regardless of machine, clock or input vector order.                                                                                                                                                                                                                      |
+| **I3**  | **Determinism.** Identical facts, including `as_of` and policy, give byte-identical output regardless of machine, clock or input vector order (the two `f64` read-path statistics of §4.7 excepted).                                                                                                                                                                |
 | **I4**  | **Cash conservation.** Per account and currency: closing cash = opening cash + Σ cash postings. Cash never appears or vanishes outside events.                                                                                                                                                                                                                      |
 | **I5**  | **Position and lot conservation.** Position quantity = Σ postings; open-lot effective quantities sum to the position; positions stay single-signed per asset; closed lots never mutate.                                                                                                                                                                             |
 | **I6**  | **Split invariance.** A split changes lot split ratios only, for lots acquired before its local date: never value at the split instant, never cost-basis totals, never flows, never cash.                                                                                                                                                                           |
@@ -584,8 +584,14 @@ Testable contract; the property suite (§5) encodes each one.
 - Iteration in any output-affecting path uses ordered maps. FX paths are chosen
   by fewest hops, then lexicographic currency codes, so equal-length
   triangulations never resolve by hash order.
-- Rounding is a policy applied at defined points (posting, valuation, report),
-  not ad hoc.
+- Rounding has one scale, `STORED_PRECISION` (8 places), applied where amounts
+  become rows (disposals, valuation rows as read back, flow deltas between
+  stored rows) and to performance outputs; nothing rounds in between.
+- Exact decimal arithmetic everywhere except two read-path statistics: the IRR
+  solver and volatility's log returns run in `f64` (a Decimal discount factor
+  underflows below 1e-28 over long histories) and are rounded to 8 places. They
+  feed no other stage and no checkpoint, so every projection, valuation and
+  checkpoint stays byte-identical across machines.
 - FX nearest-neighbour resolution may look forward in time. A valuation is
   deterministic given the surface, and the surface is part of the facts; a
   late-arriving rate changing history is therefore a recalculation trigger for

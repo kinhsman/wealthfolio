@@ -1,7 +1,10 @@
 //! Parse-don't-validate scalars. Constructed once in `normalize`; interior
 //! stages never see raw strings.
 
-/// Decimal places every stored amount keeps (legacy `DECIMAL_PRECISION`).
+/// Decimal places every stored amount keeps (legacy `DECIMAL_PRECISION`):
+/// the one rounding scale of the kernel. Amounts round to it where they
+/// become rows (disposals, valuation rows as read back, flow deltas between
+/// stored rows) and in performance outputs; nothing rounds in between.
 pub const STORED_PRECISION: u32 = 8;
 
 /// Largest magnitude the kernel computes with (architecture §4.3). `normalize`

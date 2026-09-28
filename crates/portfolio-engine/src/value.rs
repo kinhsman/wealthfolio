@@ -25,9 +25,6 @@ use crate::resolve::{FxResolver, ResolvedSurfaces};
 /// account and asset or pair.
 const CARRIED_INFO_DAYS: i64 = 7;
 
-/// Decimal places legacy storage keeps; flow fallbacks diff at this scale.
-const STORAGE_PRECISION: u32 = 8;
-
 /// Facts after the pure stages that need no projection: canonical facts,
 /// the compiled ledger and the resolved surfaces over `range`. Both the
 /// projection write path and the stored-row read path start here.
@@ -1309,7 +1306,7 @@ fn stamp_flows(
         // Legacy diffs persisted (8dp) values; dust below storage precision is
         // not a flow.
         let delta = (days[index].net_contribution_base - days[index - 1].net_contribution_base)
-            .round_dp(STORAGE_PRECISION);
+            .round_dp(STORED_PRECISION);
         if let Some(flow) = flows.get(&days[index].date) {
             days[index].flow = *flow;
             continue;
