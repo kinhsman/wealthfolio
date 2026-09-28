@@ -491,7 +491,7 @@ pub fn capture_valuation(
     inputs: &ValueInputs<'_>,
     series: &BTreeMap<AccountId, ValuationSeries>,
     account: &AccountId,
-) -> Result<ValuationCapture, String> {
+) -> Result<ValuationCapture, EngineError> {
     let valuations = series
         .get(account)
         .map(|s| s.days.iter().map(valuation_value).collect())
@@ -536,7 +536,7 @@ pub fn flow_values(days: &[DailyValuation]) -> Vec<Value> {
 pub fn capture_portfolio_flows(
     inputs: &ValueInputs<'_>,
     series: &BTreeMap<AccountId, ValuationSeries>,
-) -> Result<Vec<Value>, String> {
+) -> Result<Vec<Value>, EngineError> {
     let scope: Vec<AccountId> = inputs
         .resolved
         .facts

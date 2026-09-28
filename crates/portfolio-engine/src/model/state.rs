@@ -192,12 +192,10 @@ impl Lot {
     }
 
     /// Stored acquisition rate to `target`, when the lot recorded one.
+    /// Codes compare exactly: `GBp` (pence) is not `GBP`.
     pub fn stored_fx_rate_to(&self, target: &str) -> Option<Decimal> {
-        let matches = |currency: &Option<Currency>| {
-            currency
-                .as_ref()
-                .is_some_and(|c| c.as_str().eq_ignore_ascii_case(target))
-        };
+        let matches =
+            |currency: &Option<Currency>| currency.as_ref().is_some_and(|c| c.as_str() == target);
         if matches(&self.account_currency) {
             if let Some(rate) = self.fx_rate_to_account.filter(|r| !r.is_zero()) {
                 return Some(rate);

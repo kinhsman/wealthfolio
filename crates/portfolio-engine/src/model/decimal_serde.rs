@@ -98,3 +98,24 @@ pub mod map {
             .collect())
     }
 }
+
+pub mod pairs {
+    use super::*;
+
+    pub fn serialize<S: Serializer>(
+        value: &[(String, Decimal)],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let exact: Vec<(&String, Exact)> = value.iter().map(|(k, v)| (k, Exact(*v))).collect();
+        exact.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Vec<(String, Decimal)>, D::Error> {
+        Ok(Vec::<(String, Exact)>::deserialize(deserializer)?
+            .into_iter()
+            .map(|(k, v)| (k, v.0))
+            .collect())
+    }
+}

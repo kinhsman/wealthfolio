@@ -19,8 +19,18 @@ pub fn compile(facts: &CanonicalFacts) -> CompiledLedger {
     let mut events = Vec::with_capacity(facts.activities.len());
     let mut diagnostics = Vec::new();
     for activity in &facts.activities {
+        // `normalize` only admits activities of known accounts; facts built
+        // any other way still compile without a panic.
+        let Some(account) = facts.accounts.get(&activity.account) else {
+            diagnostics.push(Diagnostic::error(
+                DiagnosticCode::UnknownAccount,
+                activity.id.as_str(),
+                format!("activity references unknown account {}", activity.account),
+            ));
+            continue;
+        };
         for leg in expand(activity) {
-            let mut event = compile_leg(&leg, facts);
+            let mut event = compile_leg(&leg, account, facts);
             event.sequence = events.len() as u32;
             diagnostics.extend(event.diagnostics.iter().cloned());
             events.push(event);
@@ -96,9 +106,8 @@ fn expand(activity: &Activity) -> Vec<Leg> {
     ]
 }
 
-fn compile_leg(leg: &Leg, facts: &CanonicalFacts) -> EconomicEvent {
+fn compile_leg(leg: &Leg, account: &AccountFacts, facts: &CanonicalFacts) -> EconomicEvent {
     let activity = &leg.activity;
-    let account = &facts.accounts[&activity.account];
     let multiplier = activity
         .asset
         .as_ref()
@@ -424,12 +433,13 @@ fn flow_for(
             value: FlowValue::Cash(gross_abs),
         },
         TransferIn | TransferOut => {
-            let boundary = match facts.transfer_pairs.pair_for(&activity.id) {
-                Some(pair) => Boundary::Internal {
-                    counterparty: pair
-                        .counterparty(&activity.id)
-                        .cloned()
-                        .expect("pair contains the activity"),
+            let counterparty = facts
+                .transfer_pairs
+                .pair_for(&activity.id)
+                .and_then(|pair| pair.counterparty(&activity.id));
+            let boundary = match counterparty {
+                Some(counterparty) => Boundary::Internal {
+                    counterparty: counterparty.clone(),
                 },
                 None if activity.external_transfer == Some(true) => Boundary::External,
                 None => {

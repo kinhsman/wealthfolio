@@ -10,8 +10,16 @@ use crate::model::*;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FactsRequest {
     /// The scope plus every transfer counterparty of a scoped activity
-    /// (paired legs fold together and share the lot cache).
+    /// (paired legs fold together and share the lot cache), as far as the
+    /// loaded facts resolve pairs.
     pub accounts: BTreeSet<AccountId>,
+    /// Transfer groups a scoped activity names that the loaded facts do not
+    /// resolve into a pair: the other leg is not loaded (or the group is
+    /// genuinely invalid). A loader adds these groups' activities and asks
+    /// again until the set stops changing; only then is `accounts` the full
+    /// transfer closure. A pair cannot be resolved from one leg, so this is
+    /// what makes a partial load able to find its counterparties.
+    pub incomplete_groups: BTreeSet<String>,
     /// Assets referenced by those accounts' activities and observed
     /// snapshots.
     pub assets: BTreeSet<AssetId>,
@@ -51,6 +59,14 @@ pub fn facts_needed(facts: &CanonicalFacts, scope: &[AccountId], range: DateRang
             break;
         }
     }
+
+    let incomplete_groups: BTreeSet<String> = facts
+        .activities
+        .iter()
+        .filter(|a| accounts.contains(&a.account) && a.kind.is_transfer())
+        .filter(|a| facts.transfer_pairs.pair_for(&a.id).is_none())
+        .filter_map(|a| a.source_group_id.clone())
+        .collect();
 
     let mut assets = BTreeSet::new();
     let mut currency_pairs = BTreeSet::new();
@@ -101,6 +117,7 @@ pub fn facts_needed(facts: &CanonicalFacts, scope: &[AccountId], range: DateRang
 
     FactsRequest {
         accounts,
+        incomplete_groups,
         assets,
         currency_pairs,
         range,
@@ -189,6 +206,40 @@ mod tests {
             closure,
             vec!["a", "b", "c"],
             "d shares no pair and stays out"
+        );
+        assert!(request.incomplete_groups.is_empty());
+    }
+
+    #[test]
+    fn a_partial_load_names_the_groups_it_cannot_pair() {
+        // Only a's activities are loaded: g1 has one leg, so no pair and no
+        // counterparty yet, but the group is reported for the next load.
+        let raw = RawFacts {
+            policy: Policy::new(
+                Currency::parse("USD").unwrap(),
+                chrono_tz::UTC,
+                NaiveDate::from_ymd_opt(2025, 1, 31).unwrap(),
+            ),
+            accounts: vec![account("a"), account("b")],
+            assets: vec![],
+            activities: vec![transfer("out-1", "a", "TRANSFER_OUT", "g1", 2)],
+            quotes: vec![],
+            fx_rates: vec![],
+            observed_snapshots: vec![],
+        };
+        let facts = normalize(raw).unwrap().facts;
+        let request = facts_needed(
+            &facts,
+            &[AccountId::new("a")],
+            DateRange {
+                start: NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+                end: NaiveDate::from_ymd_opt(2025, 1, 31).unwrap(),
+            },
+        );
+        assert_eq!(request.accounts.len(), 1);
+        assert_eq!(
+            request.incomplete_groups,
+            BTreeSet::from(["g1".to_string()])
         );
     }
 }

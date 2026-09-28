@@ -30,10 +30,10 @@ pub fn normalize(raw: RawFacts) -> Result<Normalized, EngineError> {
     for account in raw.accounts {
         let id = AccountId::new(account.id.clone());
         let Some(currency) = Currency::parse(&account.currency) else {
-            return Err(EngineError::InvalidPolicy(format!(
-                "account {} has no currency",
-                account.id
-            )));
+            return Err(EngineError::InvalidAccount {
+                account: account.id,
+                reason: "it has no currency".into(),
+            });
         };
         let facts = AccountFacts {
             id: id.clone(),
@@ -260,11 +260,22 @@ pub fn normalize(raw: RawFacts) -> Result<Normalized, EngineError> {
                 )
             })
             .collect();
-        let cash = snapshot
-            .cash
-            .into_iter()
-            .filter_map(|(currency, amount)| Currency::parse(&currency).map(|c| (c, amount)))
-            .collect();
+        let mut cash = BTreeMap::new();
+        for (currency, amount) in snapshot.cash {
+            match Currency::parse(&currency) {
+                Some(currency) => {
+                    cash.insert(currency, amount);
+                }
+                None => diagnostics.push(Diagnostic::warning(
+                    DiagnosticCode::MissingCurrency,
+                    format!("observed@{}", snapshot.date),
+                    format!(
+                        "observed snapshot of {} holds {amount} of cash without a currency; ignored",
+                        snapshot.account_id
+                    ),
+                )),
+            }
+        }
         observed_snapshots.push(ObservedSnapshot {
             account,
             date: snapshot.date,

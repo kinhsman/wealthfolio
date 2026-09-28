@@ -8,8 +8,8 @@ description = "Pure, deterministic portfolio calculation kernel (facts in, value
 [lints]
 workspace = true
 
-# Closed runtime dependency list (PRD §4.1). CI asserts this set; anything
-# else is a build failure, not a review comment.
+# Closed runtime dependency list (architecture §4.1): tests/dependencies.rs
+# asserts this set, so anything else fails the test suite, not a review.
 [dependencies]
 chrono = { workspace = true }
 chrono-tz = { version = "0.10", features = ["serde"] }

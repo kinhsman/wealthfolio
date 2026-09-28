@@ -1,4 +1,4 @@
-//! FX resolution over an observation surface (architecture §4.3, the resolve stage; FX half).
+//! Stage 3: quote and FX surfaces resolved over an observation set.
 //! Codifies the legacy ladder as policy: minor-unit normalization, per-day
 //! direct or inverse observation, bidirectional nearest observation (tie →
 //! past), then a deterministic fewest-hops path through intermediate

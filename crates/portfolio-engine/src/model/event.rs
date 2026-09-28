@@ -71,6 +71,7 @@ pub enum Booking {
     /// Trades carrying a broker FX rate settle in account currency at
     /// `amount × rate`.
     AccountCurrency {
+        #[serde(with = "crate::model::decimal_serde")]
         rate: Decimal,
     },
 }
@@ -89,28 +90,35 @@ pub enum Action {
     Trade {
         asset: AssetId,
         side: Side,
+        #[serde(with = "crate::model::decimal_serde")]
         quantity: Decimal,
         /// Reported unit price (activity currency); the effective book price
         /// derives from the gross cash when available.
+        #[serde(with = "crate::model::decimal_serde")]
         unit_price: Decimal,
         intent: Option<Intent>,
     },
     SecurityTransfer {
         asset: AssetId,
         direction: Direction,
+        #[serde(with = "crate::model::decimal_serde")]
         quantity: Decimal,
+        #[serde(with = "crate::model::decimal_serde")]
         unit_price: Decimal,
         /// Legacy transfers carried the book basis in `amount`.
+        #[serde(default, with = "crate::model::decimal_serde::option")]
         legacy_amount: Option<Decimal>,
         /// Pairing key (present even when unpaired; the pair table decides).
         group: Option<String>,
     },
     Split {
         asset: AssetId,
+        #[serde(with = "crate::model::decimal_serde")]
         ratio: Decimal,
     },
     OptionExpiry {
         asset: AssetId,
+        #[serde(with = "crate::model::decimal_serde")]
         quantity: Decimal,
     },
 }
@@ -173,12 +181,15 @@ pub enum Boundary {
 pub enum FlowValue {
     None,
     /// Gross cash magnitude in the activity currency.
-    Cash(Decimal),
+    Cash(#[serde(with = "crate::model::decimal_serde")] Decimal),
     /// Priced in `value`: transfer-day quote × quantity, else book basis,
     /// else (transfer-out) removed-lot basis, else legacy amount.
     SecurityAtMarket {
+        #[serde(with = "crate::model::decimal_serde")]
         quantity: Decimal,
+        #[serde(default, with = "crate::model::decimal_serde::option")]
         book_basis: Option<Decimal>,
+        #[serde(default, with = "crate::model::decimal_serde::option")]
         legacy_amount: Option<Decimal>,
     },
 }

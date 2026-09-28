@@ -1,4 +1,4 @@
-//! Stage 5: performance over stored valuation rows — a port of the legacy
+//! Stage 6: performance over stored valuation rows — a port of the legacy
 //! performance service (time-weighted and money-weighted returns, value
 //! return, attribution, risk, holdings-mode and mixed-scope handling).
 //!

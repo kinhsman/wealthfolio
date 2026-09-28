@@ -123,7 +123,7 @@ not-applicable reasons, failures) is never parity-gated. Decimals are strings at
 | Kernel goldens | `cargo test -p wealthfolio-portfolio-engine --test goldens` | Kernel output for every non-shell scenario, under `goldens/kernel/`. |
 | Properties | `cargo test -p wealthfolio-portfolio-engine --test properties` | Determinism, chunk/replay equivalence, cash and lot conservation, split neutrality, transfer cancellation, an independent re-derivation of complete days from keyframes and surfaces, exact scope aggregation with ledger-classified transfer days, degradation reporting, override transparency, no panics under mutation. |
 | Coordinator | `cargo test -p wealthfolio-core coordinator` | Every parity scenario through the real fact loading, row mapping and persistence, compared field by field with the kernel golden; freshness (facts, market data by content, partner legs, a new day); per-account failures (invalid snapshot dates, unsupported cost basis); the LIFE lifecycle runner (each step's incremental projection, taken through the resume and revalue paths with a two-day checkpoint cadence, equals a fresh rebuild); the plan chosen for quote changes, new days, backdated edits, deletions, forced rebuilds and retried failures. |
-| SCALE-01 | `cargo bench -p wealthfolio-portfolio-engine --bench scale` | Five stages over a generated 20k-activity portfolio. |
+| SCALE-01 | `cargo bench -p wealthfolio-portfolio-engine --bench scale` | The six stages over a generated 20k-activity portfolio. |
 
 ## Verifying a fixture independently
 

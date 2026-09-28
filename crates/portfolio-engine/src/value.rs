@@ -1,4 +1,4 @@
-//! Stage 4b: price the projected (or observed) states day by day and
+//! Stage 5: price the projected (or observed) states day by day and
 //! finalize external flows — a pure port of the legacy valuation calculator
 //! and the valuation service's flow assembly.
 //!
@@ -17,6 +17,7 @@ use rust_decimal::Decimal;
 use crate::arith;
 use crate::compile::CompiledLedger;
 use crate::diagnostics::{Diagnostic, DiagnosticCode};
+use crate::error::EngineError;
 use crate::model::*;
 use crate::resolve::{FxResolver, ResolvedSurfaces};
 
@@ -148,14 +149,14 @@ pub fn aggregate_scope(
     series: &BTreeMap<AccountId, ValuationSeries>,
     scope: &[AccountId],
     window: Window,
-) -> Result<ValuationSeries, String> {
+) -> Result<ValuationSeries, EngineError> {
     let base = resolved.facts.policy.base_currency.clone();
     if let Some(archived) = scope
         .iter()
         .find(|id| resolved.facts.accounts.get(*id).is_some_and(|a| a.archived))
     {
-        return Err(format!(
-            "account '{archived}' is archived; archived accounts are neither projected nor valued"
+        return Err(EngineError::ArchivedAccountInScope(
+            archived.as_str().to_string(),
         ));
     }
     // Stored rows inside the window, as the persisted read returns them.
@@ -279,13 +280,15 @@ pub(crate) fn external_flow_base(
 }
 
 /// Legacy `validate_scoped_history_completeness`.
-fn validate_completeness(scope: &[AccountId], histories: &[ValuationSeries]) -> Result<(), String> {
+fn validate_completeness(
+    scope: &[AccountId],
+    histories: &[ValuationSeries],
+) -> Result<(), EngineError> {
     if histories.len() != scope.len() {
-        return Err(format!(
-            "scoped valuation history count mismatch: expected {} histories, got {}",
-            scope.len(),
-            histories.len()
-        ));
+        return Err(EngineError::ScopeHistoryCount {
+            expected: scope.len(),
+            found: histories.len(),
+        });
     }
     let union: BTreeSet<NaiveDate> = histories
         .iter()
@@ -302,10 +305,10 @@ fn validate_completeness(scope: &[AccountId], histories: &[ValuationSeries]) -> 
             .iter()
             .find(|date| **date >= first && **date <= last && !dates.contains(date))
         {
-            return Err(format!(
-                "incomplete scoped valuation history for account '{}': missing {missing}",
-                history.account
-            ));
+            return Err(EngineError::ScopeHistoryGap {
+                account: history.account.as_str().to_string(),
+                missing: *missing,
+            });
         }
         if let Some(scope_last) = scope_last {
             if last < scope_last
@@ -314,10 +317,11 @@ fn validate_completeness(scope: &[AccountId], histories: &[ValuationSeries]) -> 
                     .last()
                     .is_some_and(|d| !d.total_value_base.is_zero())
             {
-                return Err(format!(
-                    "incomplete scoped valuation history for account '{}': latest valuation is {last}, scope continues through {scope_last}",
-                    history.account
-                ));
+                return Err(EngineError::ScopeHistoryEndsEarly {
+                    account: history.account.as_str().to_string(),
+                    last,
+                    scope_last,
+                });
             }
         }
     }

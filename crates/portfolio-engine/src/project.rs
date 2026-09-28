@@ -1,4 +1,4 @@
-//! Stage 3: fold economic events into daily account state — a pure port of
+//! Stage 4: fold economic events into daily account state — a pure port of
 //! the legacy holdings calculator (positions, FIFO lots, shorts, transfers
 //! with lot carry-over, splits, net contribution, cash totals).
 //!
@@ -2273,9 +2273,6 @@ fn reduce_fifo(
     })
 }
 
-/// Lots in storage shape: open lots from the final state plus closed lots,
-/// a closure replacing the open row with the same id. Base amounts use the
-/// lot's stored rate, else the acquisition-date rate.
 /// The activity an event derives from (`None` for an unknown event id).
 pub fn source_activity(ledger: &CompiledLedger, event: &EventId) -> Option<ActivityId> {
     ledger
@@ -2285,6 +2282,9 @@ pub fn source_activity(ledger: &CompiledLedger, event: &EventId) -> Option<Activ
         .map(|e| e.source.clone())
 }
 
+/// Lots in storage shape: open lots from the final state plus closed lots,
+/// a closure replacing the open row with the same id. Base amounts use the
+/// lot's stored rate, else the acquisition-date rate.
 pub fn lot_records(
     bundle: &ProjectionBundle,
     facts: &CanonicalFacts,

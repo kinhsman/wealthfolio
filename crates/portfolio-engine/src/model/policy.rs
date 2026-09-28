@@ -26,6 +26,7 @@ pub struct Policy {
 pub struct MinorUnitRule {
     pub minor: String,
     pub major: String,
+    #[serde(with = "crate::model::decimal_serde")]
     pub factor: Decimal,
     /// `GBp` is case-sensitive (`gbp` is not pence); `GBX`/`KWF`/`ILA`/`USX`
     /// match any case; `ZAc` matches exactly or as `ZAC`.

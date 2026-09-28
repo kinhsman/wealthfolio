@@ -414,7 +414,8 @@ pub fn lot_records(
 ) -> Vec<LotRecord>;
 
 /// What the shell must load for a scope and range: assets, currency pairs,
-/// the observation window and the transfer-pair closure. Pure.
+/// the observation window and the transfer-pair closure, plus the transfer
+/// groups the loaded facts cannot pair yet (load them and ask again). Pure.
 pub fn facts_needed(
     facts: &CanonicalFacts,
     scope: &[AccountId],
@@ -452,9 +453,10 @@ done and thrown away.
 Two channels, deliberately distinct:
 
 - **`EngineError`** — the _request_ is unusable: an inverted range, an invalid
-  policy, a prior state that does not meet the range start, a measured scope
-  that names an archived account. The caller made a mistake and there is no
-  result.
+  policy, an account row without a currency, a prior state that does not meet
+  the range start, a measured scope that names an archived account or whose
+  valuation histories are incomplete. The caller made a mistake and there is no
+  result. Every variant is typed; no stage returns a string error.
 - **`Diagnostic`** — the _data_ is imperfect: an unparseable decimal, a missing
   currency, an unknown subtype, a missing quote, an unresolvable pair, an
   unpaired transfer, a negative balance. It is attached to the event or day it

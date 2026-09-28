@@ -42,6 +42,7 @@ pub struct RawAsset {
     pub instrument_type: Option<String>,
     /// Explicit `contractMultiplier` metadata; `None` means the instrument
     /// default (100 for options, 1 otherwise).
+    #[serde(default, with = "crate::model::decimal_serde::option")]
     pub contract_multiplier: Option<Decimal>,
 }
 
@@ -59,13 +60,19 @@ pub struct RawActivity {
     /// Row creation time: the tiebreaker for same-instant activities
     /// (date-only imports share one timestamp), before the id.
     pub created_at: DateTime<Utc>,
+    #[serde(default, with = "crate::model::decimal_serde::option")]
     pub quantity: Option<Decimal>,
+    #[serde(default, with = "crate::model::decimal_serde::option")]
     pub unit_price: Option<Decimal>,
     /// Stored FINAL cash (the writer's output); never re-derived at runtime.
+    #[serde(default, with = "crate::model::decimal_serde::option")]
     pub amount: Option<Decimal>,
+    #[serde(default, with = "crate::model::decimal_serde::option")]
     pub fee: Option<Decimal>,
+    #[serde(default, with = "crate::model::decimal_serde::option")]
     pub tax: Option<Decimal>,
     pub currency: String,
+    #[serde(default, with = "crate::model::decimal_serde::option")]
     pub fx_rate: Option<Decimal>,
     pub source_group_id: Option<String>,
     /// `metadata.flow.is_external` when present.
@@ -86,7 +93,9 @@ pub struct RawFxConversion {
     pub rate_source: String,
     pub source_currency: String,
     pub destination_currency: String,
+    #[serde(default, with = "crate::model::decimal_serde::option")]
     pub source_amount: Option<Decimal>,
+    #[serde(default, with = "crate::model::decimal_serde::option")]
     pub destination_amount: Option<Decimal>,
 }
 
@@ -94,6 +103,7 @@ pub struct RawFxConversion {
 pub struct RawQuote {
     pub asset_id: String,
     pub day: NaiveDate,
+    #[serde(with = "crate::model::decimal_serde")]
     pub close: Decimal,
     /// Empty means "the asset's quote currency".
     pub currency: String,
@@ -105,6 +115,7 @@ pub struct RawFxRate {
     pub from: String,
     pub to: String,
     pub day: NaiveDate,
+    #[serde(with = "crate::model::decimal_serde")]
     pub rate: Decimal,
     /// Provider of the observation; ranks same-day rows like quotes.
     #[serde(default)]
@@ -116,11 +127,17 @@ pub struct RawObservedSnapshot {
     pub account_id: String,
     pub date: NaiveDate,
     pub positions: Vec<RawObservedPosition>,
+    #[serde(with = "crate::model::decimal_serde::pairs")]
     pub cash: Vec<(String, Decimal)>,
+    #[serde(with = "crate::model::decimal_serde")]
     pub cost_basis: Decimal,
+    #[serde(with = "crate::model::decimal_serde")]
     pub net_contribution: Decimal,
+    #[serde(with = "crate::model::decimal_serde")]
     pub net_contribution_base: Decimal,
+    #[serde(with = "crate::model::decimal_serde")]
     pub cash_total_account_currency: Decimal,
+    #[serde(with = "crate::model::decimal_serde")]
     pub cash_total_base_currency: Decimal,
 }
 
@@ -130,9 +147,14 @@ pub struct RawObservedPosition {
     /// Stored position currency; empty means the asset's quote currency.
     #[serde(default)]
     pub currency: String,
+    #[serde(with = "crate::model::decimal_serde")]
     pub quantity: Decimal,
+    #[serde(with = "crate::model::decimal_serde")]
     pub average_cost: Decimal,
+    #[serde(with = "crate::model::decimal_serde")]
     pub total_cost_basis: Decimal,
+    #[serde(default, with = "crate::model::decimal_serde::option")]
     pub cost_basis_account: Option<Decimal>,
+    #[serde(default, with = "crate::model::decimal_serde::option")]
     pub cost_basis_base: Option<Decimal>,
 }
