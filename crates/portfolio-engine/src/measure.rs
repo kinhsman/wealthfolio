@@ -2741,6 +2741,120 @@ mod tests {
     }
 
     #[test]
+    fn frequency_ignores_gaps_left_by_excluded_days() {
+        // Every third day excluded; each surviving return still covers one day.
+        let start = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let gapped: Vec<RiskSample> = (0..90u64)
+            .filter(|offset| offset % 3 != 0)
+            .map(|offset| RiskSample {
+                date: start + chrono::Days::new(offset),
+                simple_return: Decimal::ZERO,
+                period_days: 1,
+            })
+            .collect();
+        assert_eq!(periods_per_year(&gapped), Some(DAYS_PER_YEAR));
+    }
+
+    #[test]
+    fn frequency_counts_the_first_returns_own_period() {
+        // Two returns covering eight days: 2 * 365.25 / 8. Reading the one-day
+        // gap between the two sample dates would claim 365.25.
+        let per_year = periods_per_year(&samples(&[7, 1])).unwrap();
+        assert_eq!(per_year.round_dp(2), dec!(91.31));
+    }
+
+    #[test]
+    fn volatility_declines_when_the_returns_cover_no_period() {
+        assert_eq!(volatility(&samples(&[0, 0])), None);
+    }
+
+    #[test]
+    fn volatility_scales_with_the_sampling_rate() {
+        let returns = [dec!(0), dec!(0.01), dec!(-0.01), dec!(0.02), dec!(-0.02)];
+        let at = |step: i64| {
+            let start = NaiveDate::from_ymd_opt(2026, 1, 5).unwrap();
+            let series: Vec<RiskSample> = returns
+                .iter()
+                .enumerate()
+                .map(|(index, simple_return)| RiskSample {
+                    date: start + chrono::Days::new(index as u64 * step as u64),
+                    simple_return: *simple_return,
+                    period_days: step,
+                })
+                .collect();
+            volatility(&series).unwrap()
+        };
+        // Same returns at one seventh the rate: sqrt(1/7) of the figure.
+        let ratio = at(7) / at(1);
+        assert!((ratio - dec!(0.3779)).abs() < dec!(0.001), "{ratio}");
+    }
+
+    fn row(date: &str, total: Decimal) -> DailyValuation {
+        DailyValuation {
+            date: date.parse().unwrap(),
+            fx_rate_to_base: Decimal::ONE,
+            cash_balance: Decimal::ZERO,
+            investment_market_value: total,
+            total_value: total,
+            cost_basis: dec!(100),
+            book_basis: dec!(100),
+            net_contribution: dec!(100),
+            cash_balance_base: Decimal::ZERO,
+            investment_market_value_base: total,
+            total_value_base: total,
+            cost_basis_base: dec!(100),
+            book_basis_base: dec!(100),
+            net_contribution_base: dec!(100),
+            performance_eligible_value_base: total,
+            value_status: ValueStatus::Complete,
+            basis_status: BasisStatus::default(),
+            flow: DailyFlow::default(),
+        }
+    }
+
+    #[test]
+    fn an_excluded_day_does_not_change_the_annualisation_around_it() {
+        let volatility_of = |history: &[DailyValuation]| {
+            let currency = Currency::parse("CAD").unwrap();
+            performance_core(
+                history,
+                false,
+                None,
+                false,
+                MeasureProfile::Full,
+                false,
+                true,
+                &currency,
+            )
+            .risk
+            .volatility
+            .expect("three returns are enough for a volatility")
+        };
+        // 05-04 is unavailable, so the returns into and out of it are
+        // dropped; +10%, -10%, -10% survive.
+        let mut gapped = vec![
+            row("2026-05-01", dec!(100)),
+            row("2026-05-02", dec!(110)),
+            row("2026-05-03", dec!(99)),
+            row("2026-05-04", dec!(108.9)),
+            row("2026-05-05", dec!(108.9)),
+            row("2026-05-06", dec!(98.01)),
+        ];
+        gapped[3].value_status = ValueStatus::Unavailable;
+        let contiguous = vec![
+            row("2026-05-01", dec!(100)),
+            row("2026-05-02", dec!(110)),
+            row("2026-05-03", dec!(99)),
+            row("2026-05-04", dec!(89.1)),
+        ];
+        let gapped_volatility = volatility_of(&gapped);
+        assert!(gapped_volatility > Decimal::ZERO);
+        // Annualising by the span between the first and last surviving dates
+        // would scale the gapped series by sqrt(1/2) of this.
+        assert_eq!(gapped_volatility, volatility_of(&contiguous));
+    }
+
+    #[test]
     fn annualisation_overflow_is_not_applicable_instead_of_a_panic() {
         let start = NaiveDate::from_ymd_opt(2025, 1, 2).unwrap();
         let end = NaiveDate::from_ymd_opt(2025, 2, 2).unwrap();
