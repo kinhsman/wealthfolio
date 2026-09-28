@@ -57,10 +57,10 @@ pub fn project(
     let projector = Projector {
         facts,
         fx,
-        explicit_rates: facts
-            .activities
+        event_dates: ledger
+            .events
             .iter()
-            .filter_map(|a| a.fx_rate.map(|rate| (a.id.as_str(), rate)))
+            .map(|e| (e.source.as_str(), e.date))
             .collect(),
     };
     let mut state = start.unwrap_or_else(|| ProjectionState {
@@ -249,8 +249,8 @@ struct RunLog {
 struct Projector<'a> {
     facts: &'a CanonicalFacts,
     fx: &'a FxResolver<'a>,
-    /// Activity → account rate supplied with the row, by activity id.
-    explicit_rates: HashMap<&'a str, Decimal>,
+    /// Business date of every event's source activity (transfer staging).
+    event_dates: HashMap<&'a str, NaiveDate>,
 }
 
 struct Reduction {
@@ -368,7 +368,7 @@ impl Projector<'_> {
                 quantity,
                 unit_price,
                 legacy_amount,
-                group,
+                ..
             } => match direction {
                 Direction::In => self.transfer_in(
                     event,
@@ -377,20 +377,11 @@ impl Projector<'_> {
                     *quantity,
                     *unit_price,
                     *legacy_amount,
-                    group.as_deref(),
                     cache,
                     effects,
                     run,
                 ),
-                Direction::Out => self.transfer_out(
-                    event,
-                    state,
-                    asset,
-                    *quantity,
-                    group.as_deref(),
-                    effects,
-                    run,
-                ),
+                Direction::Out => self.transfer_out(event, state, asset, *quantity, effects, run),
             },
             Action::Split { asset, ratio } => self.split(event, state, asset, *ratio),
             Action::OptionExpiry { asset, quantity } => {
@@ -446,7 +437,8 @@ impl Projector<'_> {
     }
 
     /// Legacy `convert_to_account_currency`: explicit rate, else FX on the
-    /// activity date, else the unconverted amount (diagnosed).
+    /// activity date, else nothing: an amount in another currency is never
+    /// added as if it were the account's (architecture §4.3), only diagnosed.
     fn to_account_currency(
         &self,
         amount: Decimal,
@@ -469,11 +461,11 @@ impl Projector<'_> {
                         DiagnosticCode::FxUnavailable,
                         event.source.as_str(),
                         format!(
-                            "no {from}->{account_currency} rate on {}; amount carried unconverted",
+                            "no {from}->{account_currency} rate on {}; net contribution not updated",
                             event.date
                         ),
                     ));
-                    amount
+                    Decimal::ZERO
                 }
             },
         )
@@ -503,7 +495,28 @@ impl Projector<'_> {
     }
 
     fn explicit_rate(&self, event: &EconomicEvent) -> Option<Decimal> {
-        self.explicit_rates.get(event.source.as_str()).copied()
+        event.fx_rate
+    }
+
+    /// The resolved pair of a transfer leg: only a valid pair moves lots.
+    fn pair(&self, event: &EconomicEvent) -> Option<&TransferPair> {
+        self.facts.transfer_pairs.pair_for(&event.source)
+    }
+
+    /// Whether the fold will still apply the pair's incoming leg, so lots
+    /// staged for it are consumed rather than left in every later checkpoint:
+    /// its account is projected and it is not dated before the outgoing leg.
+    fn incoming_leg_pending(&self, pair: &TransferPair, out_date: NaiveDate) -> bool {
+        let projected = self
+            .facts
+            .accounts
+            .get(&pair.in_account)
+            .is_some_and(|a| !a.archived && a.tracking != TrackingMode::Holdings);
+        projected
+            && self
+                .event_dates
+                .get(pair.transfer_in.as_str())
+                .is_some_and(|date| *date >= out_date)
     }
 
     // --------------------------------------------------------------- trades
@@ -838,7 +851,6 @@ impl Projector<'_> {
         quantity: Decimal,
         unit_price: Decimal,
         legacy_amount: Option<Decimal>,
-        group: Option<&str>,
         cache: &BTreeMap<String, Vec<Lot>>,
         effects: &mut SideEffects,
         run: &mut RunLog,
@@ -857,7 +869,8 @@ impl Projector<'_> {
         let base = self.base().to_string();
         let position = self.position_mut(state, asset, &info, event);
         let position_currency = position.currency.clone();
-        let cached = group.and_then(|g| cache.get(g).cloned());
+        let paired_group = self.pair(event).map(|pair| pair.group_id.clone());
+        let cached = paired_group.as_deref().and_then(|g| cache.get(g).cloned());
         let paired = cached.is_some();
 
         let (cost_basis_asset, added_lots, cover) = if let Some(lots) = cached {
@@ -905,7 +918,7 @@ impl Projector<'_> {
                 .filter(|lot| lot.source_event.as_ref() == Some(&event.id))
                 .cloned()
                 .collect();
-            if let Some(g) = group {
+            if let Some(g) = paired_group.as_deref() {
                 if cover_abs > Decimal::ZERO || !added.is_empty() {
                     effects.cache_removals.push(g.to_string());
                 } else {
@@ -1038,9 +1051,9 @@ impl Projector<'_> {
                     run.diagnostics.push(Diagnostic::warning(
                         DiagnosticCode::FxUnavailable,
                         event.source.as_str(),
-                        "no rate for the transferred basis to base; carried unconverted",
+                        "no rate for the transferred basis to base; base contribution not updated",
                     ));
-                    cost_basis_asset
+                    Decimal::ZERO
                 }
             }
         } else {
@@ -1083,7 +1096,6 @@ impl Projector<'_> {
         state: &mut AccountState,
         asset: &AssetId,
         quantity: Decimal,
-        group: Option<&str>,
         effects: &mut SideEffects,
         run: &mut RunLog,
     ) -> Result<(), String> {
@@ -1153,11 +1165,11 @@ impl Projector<'_> {
             state.net_contribution -= removed_account;
             state.net_contribution_base -= removed_base;
         }
-        if let Some(g) = group {
-            if !reduction.removed_lots.is_empty() {
+        if let Some(pair) = self.pair(event) {
+            if !reduction.removed_lots.is_empty() && self.incoming_leg_pending(pair, event.date) {
                 effects
                     .cache_inserts
-                    .push((g.to_string(), reduction.removed_lots));
+                    .push((pair.group_id.clone(), reduction.removed_lots));
             }
         }
         Ok(())
@@ -1363,9 +1375,9 @@ impl Projector<'_> {
                 run.diagnostics.push(Diagnostic::warning(
                     DiagnosticCode::FxUnavailable,
                     event.source.as_str(),
-                    format!("no {position_currency}->{account_currency} rate on {}; amount carried unconverted", event.date),
+                    format!("no {position_currency}->{account_currency} rate on {}; net contribution not updated", event.date),
                 ));
-                amount
+                Decimal::ZERO
             }
         }
     }
@@ -1494,11 +1506,11 @@ impl Projector<'_> {
                 DiagnosticCode::FxUnavailable,
                 event.source.as_str(),
                 format!(
-                    "no {position_currency}->{target} rate on {}; lot basis carried unconverted",
+                    "no {position_currency}->{target} rate on {}; lot basis excluded",
                     lot.acquisition_date
                 ),
             ));
-            return lot.cost_basis;
+            return Decimal::ZERO;
         }
         match self
             .fx
@@ -1506,8 +1518,8 @@ impl Projector<'_> {
         {
             Some(converted) => converted,
             None => {
-                run.diagnostics.push(Diagnostic::warning(DiagnosticCode::FxUnavailable, event.source.as_str(), format!("no {position_currency}->{target} rate on {} or {fallback_date}; lot basis carried unconverted", lot.acquisition_date)));
-                lot.cost_basis
+                run.diagnostics.push(Diagnostic::warning(DiagnosticCode::FxUnavailable, event.source.as_str(), format!("no {position_currency}->{target} rate on {} or {fallback_date}; lot basis excluded", lot.acquisition_date)));
+                Decimal::ZERO
             }
         }
     }
@@ -1532,8 +1544,14 @@ impl Projector<'_> {
             match self.fx.convert(amount, position_currency, target, date) {
                 Some(converted) => converted,
                 None => {
-                    run.diagnostics.push(Diagnostic::warning(DiagnosticCode::FxUnavailable, position.asset.as_str(), format!("no {position_currency}->{target} rate on {date}; book cost carried unconverted")));
-                    amount
+                    run.diagnostics.push(Diagnostic::warning(
+                        DiagnosticCode::FxUnavailable,
+                        position.asset.as_str(),
+                        format!(
+                            "no {position_currency}->{target} rate on {date}; book cost excluded"
+                        ),
+                    ));
+                    Decimal::ZERO
                 }
             }
         };
@@ -1582,7 +1600,7 @@ impl Projector<'_> {
     }
 
     /// Cash totals in account and base currency, once per day; an
-    /// unconvertible bucket is added unconverted (legacy) and diagnosed.
+    /// unconvertible bucket is excluded and diagnosed, as valuation does.
     fn compute_cash_totals(&self, state: &mut AccountState, day: NaiveDate, run: &mut RunLog) {
         let account_currency = state.currency.as_str().to_string();
         let base = self.base().to_string();
@@ -1604,10 +1622,9 @@ impl Projector<'_> {
                                 DiagnosticCode::FxUnavailable,
                                 format!("{}@{day}", state.account),
                                 format!(
-                                    "cash {amount} {code} added to the {target} total unconverted"
+                                    "no {code}->{target} rate on {day}; cash {amount} {code} excluded from the {target} total"
                                 ),
                             ));
-                            *total += *amount;
                         }
                     }
                 }

@@ -134,8 +134,9 @@ expected_notes: >
   01-03 and rises by the 01-08 quote change; valuation fx_rate_to_base is the
   direct rate (1.25 / 0.05 / 0.28 / 1 / 3.25). Lowercase `gbp`: the lot is
   NOT scaled (cost_per_unit 2.5, basis 25), the cash is booked in a separate
-  `gbp` bucket (-25) that the keyframe totals add unconverted
-  (cash_total_account_currency 975), the lot has no book FX to GBP/USD
-  (fx_rate_to_base 0), and the valuation of acc-lower FAILS
-  (VALUATION_CALCULATION_FAILED, missing gbp->GBP) so it has no valuation
-  rows and no performance.
+  `gbp` bucket (-25) that no rate converts, so the keyframe totals exclude
+  it (cash_total_account_currency 1000) with diagnostics, the lot has no
+  book FX to GBP/USD (fx_rate_to_base 0), and acc-lower's rows from 01-03
+  are Unavailable (bucket and position unpriced) rather than missing. The
+  rates are observed on 01-02 only, so each account reports a CarriedFxRate
+  informational diagnostic (8 days by 01-10).

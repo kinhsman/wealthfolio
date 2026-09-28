@@ -59,14 +59,13 @@ quotes:
   - { asset: msft, day: 2025-01-03, close: 100 }
   - { asset: msft, day: 2025-01-06, close: 110 }
 expected_notes: >
-  acc-div keyframe 01-04: cash {JPY: 5000, USD: 1000}, cash_total_account_
-  currency 6000 (LEGACY BEHAVIOR: the JPY amount is added unconverted, a silent
-  rate=1), net_contribution 1000. Diagnostics carry the valuation failure
-  "Incomplete valuation history for account 'acc-div': 4 date(s) could not be
-  calculated" (01-04..01-07, missing JPY->USD); no valuation rows; account
-  performance "at least two valuation points are required". The portfolio
-  scope silently drops acc-div (its deposit is not in the aggregate) - ledger
-  candidate (I10).
+  acc-div keyframe 01-04: cash {JPY: 5000, USD: 1000}; no JPY->USD rate, so
+  the JPY bucket is excluded from cash_total_account_currency (1000) with a
+  diagnostic rather than added as a silent rate=1; net_contribution 1000.
+  Valuation rows exist for every day: complete at 1000 on 01-02/03, then
+  Unavailable at 1000 (JPY bucket excluded) from 01-04, so account TWR is
+  unavailable and quality partial; the portfolio scope keeps acc-div's rows
+  and reports the gap instead of dropping the account.
   acc-trade: lot buy-jpy cost_per_unit 100.5 USD, basis 1015.05 incl.
   fee_allocated 10.05, fx_rate_to_account 0.0067; cash 984.95; value 1984.95
   from 01-03 and 2084.95 from 01-06; TWR 0.042475. Attribution: contributions

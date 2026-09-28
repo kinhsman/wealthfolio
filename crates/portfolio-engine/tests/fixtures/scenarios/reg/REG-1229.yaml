@@ -54,13 +54,8 @@ expected_notes: >
   (denominator 0); value_return (0 - 100 + 120)/100 = 0.2. IRR: -100 @01-02
   / +120 @01-06 is +20% in four days, beyond the solver bracket (high
   10 x 2^16) -> warning "IRR unavailable: solver did not converge.", irr
-  null. Attribution (inception): contributions 0, distributions 120,
-  income 0, realized 0, unrealized 0 -> components -120 vs delta 0: warning
-  "Performance attribution is incomplete ... Difference: 120; tolerance: 1".
-  LEGACY BEHAVIOR (ledger candidates): (1) the DRIP row sits on the inception
-  day and activities dated on the period start are excluded from attribution
-  (activity_date <= start_date), so the 100 of dividend income is never
-  attributed; (2) the external transfer flow is valued at market (120) while
-  the disposal is valued at basis (100), leaving 20 of unrealized gain
-  unattributed even when the income is counted. Portfolio all_time equals
-  the account; portfolio_flows carry the same 120 outflow.
+  null. Attribution (inception): contributions 0, distributions 120, income
+  100 (the DRIP on the inception day counts against an inception baseline),
+  realized 0, unrealized 0; summary amount 100. Quality stays partial: the
+  transfer-out is valued at market (120) while its disposal is at basis
+  (100), so the 20 earned before the transfer is not attributed yet.

@@ -47,6 +47,9 @@ pub enum DiagnosticCode {
     NegativeCash,
     /// Quote carried forward from an earlier observation.
     CarriedQuote,
+    /// FX rate resolved from an observation a week or more away from the
+    /// valued day, in either direction (nearest-neighbour resolution).
+    CarriedFxRate,
     /// No quote observation usable for the day.
     MissingQuote,
     /// Quote observation with a non-positive close; ignored.

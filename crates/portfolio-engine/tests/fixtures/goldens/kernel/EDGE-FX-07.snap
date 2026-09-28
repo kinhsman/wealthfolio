@@ -263,7 +263,9 @@ baseline:
           total_value: "1313"
           total_value_base: "1010"
           value_status: complete
-  diagnostics: []
+  diagnostics:
+    - "value/acc-1:CAD->USD: Info CarriedFxRate: CAD->USD rate taken from an observation up to 373 days away (valued 2025-01-08)"
+    - "value/acc-1:USD->CAD: Info CarriedFxRate: USD->CAD rate taken from an observation up to 373 days away (valued 2025-01-08)"
   portfolio:
     all_time:
       attribution:

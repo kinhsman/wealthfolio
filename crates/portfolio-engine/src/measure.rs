@@ -350,7 +350,7 @@ pub fn measure_scope(
         Baseline::PeriodStart
     };
     let unrealized = scoped_unrealized_effects(inputs, &result, scope, baseline);
-    let transfers = transfer_pair_effects(inputs, &result, scope);
+    let transfers = transfer_pair_effects(inputs, &result, scope, baseline);
     let mut seed = Seed::default();
     if unrealized.complete {
         seed.include_base_market_movement = false;
@@ -1590,16 +1590,16 @@ fn finalize_attribution(
     effects.extend(seed.effects);
     let mut warnings = seed.warnings;
 
-    let activity = activity_effects(inputs, result, scope);
+    let activity = activity_effects(inputs, result, scope, baseline);
     effects.extend(activity.effects);
     warnings.extend(activity.warnings);
 
-    let disposals = period_disposals(inputs, result, scope);
+    let disposals = period_disposals(inputs, result, scope, baseline);
     let realized = realized_effects(inputs, &disposals);
     effects.extend(realized.effects);
     warnings.extend(realized.warnings);
 
-    let charges = trade_charge_effects(inputs, result, scope, &disposals);
+    let charges = trade_charge_effects(inputs, result, scope, baseline, &disposals);
     effects.extend(charges.effects);
     warnings.extend(charges.warnings);
 
@@ -1702,9 +1702,34 @@ fn recompute_residual(
     refresh_quality_status(&mut result.data_quality);
 }
 
-/// Dated attribution counts events strictly after the period start.
-fn in_period(date: NaiveDate, start: NaiveDate, end: NaiveDate) -> bool {
-    date > start && date <= end
+/// The days whose events a window attributes. Against a period-start
+/// baseline the start row already holds that day's activity, so counting
+/// starts the day after; against an inception baseline the delta runs from
+/// zero, so the first day's fees, income and trades count too.
+#[derive(Debug, Clone, Copy)]
+struct Period {
+    start: NaiveDate,
+    end: NaiveDate,
+    includes_start: bool,
+}
+
+impl Period {
+    fn of(result: &PerformanceResult, baseline: Baseline) -> Option<Self> {
+        Some(Self {
+            start: result.period_start?,
+            end: result.period_end?,
+            includes_start: baseline == Baseline::Inception,
+        })
+    }
+
+    fn contains(self, date: NaiveDate) -> bool {
+        let after_start = if self.includes_start {
+            date >= self.start
+        } else {
+            date > self.start
+        };
+        after_start && date <= self.end
+    }
 }
 
 fn convert_for_attribution(
@@ -1726,8 +1751,9 @@ fn activity_effects(
     inputs: &MeasureInputs<'_>,
     result: &PerformanceResult,
     scope: &[AccountId],
+    baseline: Baseline,
 ) -> EffectSet {
-    let (Some(start), Some(end)) = (result.period_start, result.period_end) else {
+    let Some(period) = Period::of(result, baseline) else {
         return EffectSet::default();
     };
     let mut set = EffectSet::default();
@@ -1736,7 +1762,7 @@ fn activity_effects(
         .ledger
         .events
         .iter()
-        .filter(|e| scope.contains(&e.account) && in_period(e.date, start, end))
+        .filter(|e| scope.contains(&e.account) && period.contains(e.date))
     {
         let attributed = event.attribution;
         let mut effect = Effect::default();
@@ -1773,8 +1799,9 @@ fn period_disposals<'a>(
     inputs: &'a MeasureInputs<'a>,
     result: &PerformanceResult,
     scope: &[AccountId],
+    baseline: Baseline,
 ) -> Vec<&'a LotDisposal> {
-    let (Some(start), Some(end)) = (result.period_start, result.period_end) else {
+    let Some(period) = Period::of(result, baseline) else {
         return Vec::new();
     };
     let trade_ids: HashSet<&str> = inputs
@@ -1785,14 +1812,14 @@ fn period_disposals<'a>(
         .filter(|e| {
             matches!(e.action, Action::Trade { .. })
                 && scope.contains(&e.account)
-                && in_period(e.date, start, end)
+                && period.contains(e.date)
         })
         .map(|e| e.id.as_str())
         .collect();
     inputs
         .disposals
         .iter()
-        .filter(|d| scope.contains(&d.account) && in_period(d.date, start, end))
+        .filter(|d| scope.contains(&d.account) && period.contains(d.date))
         .filter(|d| trade_ids.contains(d.event.as_str()))
         .collect()
 }
@@ -1841,9 +1868,10 @@ fn trade_charge_effects(
     inputs: &MeasureInputs<'_>,
     result: &PerformanceResult,
     scope: &[AccountId],
+    baseline: Baseline,
     disposals: &[&LotDisposal],
 ) -> EffectSet {
-    let (Some(start), Some(end)) = (result.period_start, result.period_end) else {
+    let Some(period) = Period::of(result, baseline) else {
         return EffectSet::default();
     };
     struct Charge {
@@ -1857,7 +1885,7 @@ fn trade_charge_effects(
         .facts
         .activities
         .iter()
-        .filter(|a| scope.contains(&a.account) && in_period(a.date, start, end))
+        .filter(|a| scope.contains(&a.account) && period.contains(a.date))
         .filter(|a| matches!(a.kind, ActivityKind::Buy | ActivityKind::Sell))
     {
         let raw_charge = activity.fee + activity.tax;
@@ -1905,7 +1933,7 @@ fn trade_charge_effects(
             continue;
         };
         if !charge_by_activity.contains_key(open_activity.as_str())
-            || !in_period(lot.open_date, start, end)
+            || !period.contains(lot.open_date)
         {
             continue;
         }
@@ -1949,7 +1977,7 @@ fn trade_charge_effects(
         let Some(lot) = lot_by_id.get(&(&disposal.account, disposal.lot_id.as_str())) else {
             continue;
         };
-        if !in_period(lot.open_date, start, end) {
+        if !period.contains(lot.open_date) {
             continue;
         }
         let Some(open_activity) = lot.open_activity.as_ref() else {
@@ -2113,8 +2141,9 @@ fn transfer_pair_effects(
     inputs: &MeasureInputs<'_>,
     result: &PerformanceResult,
     scope: &[AccountId],
+    baseline: Baseline,
 ) -> EffectSet {
-    let (Some(start), Some(end)) = (result.period_start, result.period_end) else {
+    let Some(period) = Period::of(result, baseline) else {
         return EffectSet::default();
     };
     let facts = inputs.resolved.facts;
@@ -2145,7 +2174,7 @@ fn transfer_pair_effects(
         };
         let touches_period = [transfer_in, transfer_out]
             .iter()
-            .any(|leg| scope.contains(&leg.account) && in_period(leg.date, start, end));
+            .any(|leg| scope.contains(&leg.account) && period.contains(leg.date));
         if !touches_period {
             continue;
         }

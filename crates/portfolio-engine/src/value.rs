@@ -20,8 +20,9 @@ use crate::diagnostics::{Diagnostic, DiagnosticCode};
 use crate::model::*;
 use crate::resolve::{FxResolver, ResolvedSurfaces};
 
-/// A quote carried at least this many days is reported once per asset.
-const CARRIED_QUOTE_INFO_DAYS: i64 = 7;
+/// A quote or FX rate carried at least this many days is reported once per
+/// account and asset or pair.
+const CARRIED_INFO_DAYS: i64 = 7;
 
 /// Decimal places legacy storage keeps; flow fallbacks diff at this scale.
 const STORAGE_PRECISION: u32 = 8;
@@ -117,13 +118,13 @@ pub fn value(inputs: &ValueInputs<'_>) -> BTreeMap<AccountId, ValuationSeries> {
             }
             days.push(valuer.value_day(&keyframes[active], day, None));
         }
-        valuer.report_carried_quotes();
 
         // Flows: activity map for this account's scope, then fallbacks, then
         // holdings-transition inference (authoritative on observed rows).
         let flows = valuer.activity_flows(std::slice::from_ref(account_id), Window::default());
         stamp_flows(&mut days, &flows, false);
         valuer.infer_holdings_flows(&mut days, &keyframes);
+        valuer.report_carries();
 
         series.insert(
             account_id.clone(),
@@ -441,6 +442,8 @@ struct Valuer<'a> {
     reported: BTreeSet<String>,
     /// Longest carry seen per asset: (age in days, observation day, valued day).
     carried: BTreeMap<AssetId, (i64, NaiveDate, NaiveDate)>,
+    /// Longest distance seen per FX pair: (days, valued day).
+    carried_fx: BTreeMap<(String, String), (i64, NaiveDate)>,
 }
 
 impl<'a> Valuer<'a> {
@@ -463,7 +466,24 @@ impl<'a> Valuer<'a> {
             diagnostics: Vec::new(),
             reported: BTreeSet::new(),
             carried: BTreeMap::new(),
+            carried_fx: BTreeMap::new(),
         }
+    }
+
+    /// FX through the surface, remembering how far the observation used was
+    /// from the valued day so a long carry is reported (I10).
+    fn fx_rate(&mut self, from: &str, to: &str, day: NaiveDate) -> Option<Decimal> {
+        let (rate, age) = self.fx.rate_with_age(from, to, day)?;
+        if age > 0 {
+            let entry = self
+                .carried_fx
+                .entry((from.to_string(), to.to_string()))
+                .or_insert((0, day));
+            if age > entry.0 {
+                *entry = (age, day);
+            }
+        }
+        Some(rate)
     }
 
     fn base(&self) -> &str {
@@ -473,13 +493,30 @@ impl<'a> Valuer<'a> {
             .major_currency(self.resolved.facts.policy.base_currency.as_str())
     }
 
-    /// One informational diagnostic per asset whose quote was carried for
-    /// more than a week somewhere in the range: weekends and holidays stay
-    /// silent, a stale series is visible (I10) without a row per day.
-    fn report_carried_quotes(&mut self) {
+    /// One informational diagnostic per asset whose quote, and per FX pair
+    /// whose rate, was carried a week or more somewhere in the range:
+    /// weekends and holidays stay silent, a stale series is visible (I10)
+    /// without a row per day.
+    fn report_carries(&mut self) {
+        let carried_fx = std::mem::take(&mut self.carried_fx);
+        for ((from, to), (age, valued)) in carried_fx {
+            if age < CARRIED_INFO_DAYS {
+                continue;
+            }
+            let key = format!("{}:{from}->{to}", self.account);
+            if self.reported.insert(format!("CarriedFxRate:{key}")) {
+                self.diagnostics.push(Diagnostic::info(
+                    DiagnosticCode::CarriedFxRate,
+                    key,
+                    format!(
+                        "{from}->{to} rate taken from an observation up to {age} days away (valued {valued})"
+                    ),
+                ));
+            }
+        }
         let carried = std::mem::take(&mut self.carried);
         for (asset, (age, observed, valued)) in carried {
-            if age < CARRIED_QUOTE_INFO_DAYS {
+            if age < CARRIED_INFO_DAYS {
                 continue;
             }
             let key = format!("{}:{asset}", self.account);
@@ -550,7 +587,7 @@ impl<'a> Valuer<'a> {
             let rate = if quote_major == account_currency {
                 Some(Decimal::ONE)
             } else {
-                self.fx.rate(quote_major, &account_currency, day)
+                self.fx_rate(quote_major, &account_currency, day)
             };
             let Some(rate) = rate else {
                 unpriced += 1;
@@ -598,7 +635,7 @@ impl<'a> Valuer<'a> {
             let rate = if major == account_currency {
                 Some(Decimal::ONE)
             } else {
-                self.fx.rate(major, &account_currency, day)
+                self.fx_rate(major, &account_currency, day)
             };
             match rate {
                 Some(rate) => match arith::product(&[*amount, factor, rate]) {
@@ -630,7 +667,7 @@ impl<'a> Valuer<'a> {
         let fx_rate_to_base = if account_currency == base {
             Some(Decimal::ONE)
         } else {
-            self.fx.rate(&account_currency, &base, day)
+            self.fx_rate(&account_currency, &base, day)
         };
         let base_values = fx_rate_to_base.map(|rate| {
             Some((
@@ -838,7 +875,6 @@ impl<'a> Valuer<'a> {
         boundary: ScopeBoundary,
     ) -> (Decimal, FlowSource) {
         let policy = &self.resolved.facts.policy;
-        let base = self.base().to_string();
         let unknown = boundary == ScopeBoundary::Unknown;
         match &event.flow.value {
             FlowValue::None => (
@@ -858,10 +894,7 @@ impl<'a> Valuer<'a> {
                 } else {
                     FlowSource::CashAmount
                 };
-                (
-                    self.flow_to_base(*gross, event.currency.as_str(), event),
-                    source,
-                )
+                self.priced(*gross, event.currency.as_str(), event, source)
             }
             FlowValue::SecurityAtMarket {
                 quantity,
@@ -931,10 +964,7 @@ impl<'a> Valuer<'a> {
                         } else {
                             FlowSource::QuoteDerivedMarketValue
                         };
-                        return (
-                            self.flow_to_base(market_value.abs(), quote_major, event),
-                            source,
-                        );
+                        return self.priced(market_value.abs(), quote_major, event, source);
                     }
                 }
                 if direction == Direction::Out {
@@ -974,10 +1004,7 @@ impl<'a> Valuer<'a> {
                     } else {
                         FlowSource::CostBasisFallback
                     };
-                    return (
-                        self.flow_to_base(basis.abs(), event.currency.as_str(), event),
-                        source,
-                    );
+                    return self.priced(basis.abs(), event.currency.as_str(), event, source);
                 }
                 if let Some(amount) = legacy_amount {
                     let source = if unknown {
@@ -985,29 +1012,47 @@ impl<'a> Valuer<'a> {
                     } else {
                         FlowSource::LegacyActivityAmountFallback
                     };
-                    return (
-                        self.flow_to_base(amount.abs(), event.currency.as_str(), event),
-                        source,
-                    );
+                    return self.priced(amount.abs(), event.currency.as_str(), event, source);
                 }
-                let _ = base;
                 (Decimal::ZERO, FlowSource::UnknownBoundaryTransfer)
             }
         }
     }
 
-    fn flow_to_base(&mut self, amount: Decimal, currency: &str, event: &EconomicEvent) -> Decimal {
+    /// A flow amount in base with its provenance. A real flow that cannot be
+    /// converted is Unknown, so it gates returns instead of vanishing as a
+    /// zero cash amount (I10).
+    fn priced(
+        &mut self,
+        amount: Decimal,
+        currency: &str,
+        event: &EconomicEvent,
+        source: FlowSource,
+    ) -> (Decimal, FlowSource) {
+        match self.flow_to_base(amount, currency, event) {
+            Some(converted) => (converted, source),
+            None if source == FlowSource::UnknownBoundaryTransfer => (Decimal::ZERO, source),
+            None => (Decimal::ZERO, FlowSource::Unknown),
+        }
+    }
+
+    fn flow_to_base(
+        &mut self,
+        amount: Decimal,
+        currency: &str,
+        event: &EconomicEvent,
+    ) -> Option<Decimal> {
         if amount.is_zero() {
-            return Decimal::ZERO;
+            return Some(Decimal::ZERO);
         }
         let policy = &self.resolved.facts.policy;
         let from = policy.major_currency(currency).to_string();
         let base = self.base().to_string();
         if from == base {
-            return amount;
+            return Some(amount);
         }
         match self.fx.convert(amount, &from, &base, event.date) {
-            Some(converted) => converted,
+            Some(converted) => Some(converted),
             None => {
                 self.report(
                     DiagnosticCode::FxUnavailable,
@@ -1017,7 +1062,7 @@ impl<'a> Valuer<'a> {
                         event.date, event.source
                     ),
                 );
-                Decimal::ZERO
+                None
             }
         }
     }

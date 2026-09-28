@@ -125,6 +125,7 @@ fn compile_leg(leg: &Leg, facts: &CanonicalFacts) -> EconomicEvent {
         timestamp: activity.timestamp,
         sequence: 0,
         currency: activity.currency.clone(),
+        fx_rate: activity.fx_rate,
         cash,
         charges,
         action,

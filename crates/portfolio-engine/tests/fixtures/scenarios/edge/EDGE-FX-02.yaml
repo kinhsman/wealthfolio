@@ -47,4 +47,6 @@ expected_notes: >
   cost_basis_account 119.15. Valuations: 01-03 investment 119.15 EUR, cash
   880.85, total 1000, fx_rate_to_base 1.034, total_base 1034; 01-08
   investment 131.06 (110 GBP), total 1011.91, base 1046.32.
-  net_contribution 1000 EUR / 1034 USD. No FX diagnostics.
+  net_contribution 1000 EUR / 1034 USD. The rates are observed on 01-02
+  only, so the GBP->EUR and EUR->USD carries of up to 8 days by 01-10 are
+  reported as CarriedFxRate informational diagnostics.

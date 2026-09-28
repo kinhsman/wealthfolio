@@ -25,6 +25,9 @@ pub struct EconomicEvent {
     pub sequence: u32,
     /// Activity currency: charges and activity-currency bookings use it.
     pub currency: Currency,
+    /// Activity -> account rate supplied with the row, when positive.
+    #[serde(default, with = "crate::model::decimal_serde::option")]
+    pub fx_rate: Option<Decimal>,
     pub cash: Option<CashEffect>,
     pub charges: Charges,
     pub action: Action,

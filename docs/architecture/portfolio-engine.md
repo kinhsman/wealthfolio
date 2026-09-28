@@ -305,7 +305,9 @@ eligibility and never upgrades under aggregation.
 **Transfer pairing** is resolved in `normalize` from the transfer group id only,
 deterministically. A group with a leg count other than two, mismatched assets,
 or quantities differing by more than a tolerance is unpaired and yields a
-diagnostic. Same-account, two-currency cash conversions are valid pairs.
+diagnostic. Same-account, two-currency cash conversions are valid pairs. Only a
+valid pair carries lots from its outgoing to its incoming leg; an unpaired
+incoming leg opens a lot at its own price.
 
 **Deferred flows.** Two ladder steps cannot be priced at compile time because
 they need later outputs: the removed-lot-basis fallback for an unquoted security
@@ -503,10 +505,17 @@ product shows when the inputs are imperfect.
   quote makes the day unavailable rather than valuing it at zero, which would
   otherwise report a complete −100 % return for an asset the system simply could
   not price.
-- **A carried quote is visible when it matters.** Prices carry forward from the
-  last observation. A carry of a week or more is reported once per account and
-  asset as an informational diagnostic with its age, so a stale series is never
-  mistaken for a live one; shorter carries (weekends, holidays) are silent.
+- **A carried quote or rate is visible when it matters.** Prices carry forward
+  from the last observation and FX rates resolve to the nearest observation in
+  either direction. A carry of a week or more is reported once per account and
+  asset (`CarriedQuote`) or pair (`CarriedFxRate`) as an informational
+  diagnostic with its age, so a stale series is never mistaken for a live one;
+  shorter carries (weekends, holidays) are silent.
+- **An amount without a rate is excluded, never added as another currency.** A
+  cash bucket, contribution or lot basis that no rate converts is left out of
+  the converted total with an `FxUnavailable` diagnostic, in the projection as
+  in valuation, and a flow that cannot be priced is `Unknown` so it gates
+  returns instead of vanishing.
 - **A non-positive price or rate is a broken row.** Quote closes and FX rates at
   or below zero are dropped at normalise with a diagnostic instead of being
   used, so a glitch cannot value a position at nothing or a bucket at zero while
@@ -645,15 +654,17 @@ raw unit price.
 
 **Cross-cutting rules.** `compile` decides what attribution counts and records
 it on the event (`EconomicEvent::attribution`); `measure` never re-reads the
-activity. Income attribution is gross. Fees and taxes are attributed for trades,
-income and standalone charge rows; fees on deposits, withdrawals and transfers
-are booked to cash but knowingly not attributed. Credit-card interest is a
-charge on a liability, so its amount is attributed as a fee, never as income
-(EDGE-CC-01). Shortability: options may go negative implicitly, equities require
-explicit intent, everything else rejects a negative lot. Cash books into the
-account currency at the supplied rate when the activity carries one and the
-currencies differ, otherwise into the activity-currency bucket; an empty
-currency is a diagnostic, never a bucket key.
+activity. A window attributes the events after its start row; an all-time
+(inception) window, whose change runs from zero, also counts the first day's.
+Income attribution is gross. Fees and taxes are attributed for trades, income
+and standalone charge rows; fees on deposits, withdrawals and transfers are
+booked to cash but knowingly not attributed. Credit-card interest is a charge on
+a liability, so its amount is attributed as a fee, never as income (EDGE-CC-01).
+Shortability: options may go negative implicitly, equities require explicit
+intent, everything else rejects a negative lot. Cash books into the account
+currency at the supplied rate when the activity carries one and the currencies
+differ, otherwise into the activity-currency bucket; an empty currency is a
+diagnostic, never a bucket key.
 
 ## Glossary
 

@@ -38,10 +38,10 @@ fx_rates:
 expected_notes: >
   Keyframe 01-02: cash CAD 1000, net_contribution 1000, net_contribution_base
   700, totals 1000 / 700. Keyframe 01-03: cash {CAD 1000, CHF 500},
-  net_contribution 1800 (explicit 1.60), net_contribution_base 700 (base leg
-  skipped: 500 CHF worth 0 USD), cash_total_account_currency 1500 and
-  cash_total_base_currency 1200 (raw 500 added unconverted) - three
-  inconsistent views of one deposit. Valuation of acc-1 fails
-  (VALUATION_CALCULATION_FAILED: "Failed to convert external flow 500
-  CHF->USD on 2025-01-03 for activity dep-chf"); no valuation rows, no
-  flows, no performance, and the scoped portfolio read fails as well.
+  net_contribution 1800 (the deposit's explicit 1.60 rate), net_contribution
+  _base 700 ("base contribution not updated": no CHF->USD rate), and the
+  totals stay 1000 / 700 because the CHF bucket, which no rate converts, is
+  excluded from them with a diagnostic rather than added unconverted.
+  Valuations 01-03 onward are Unavailable (cash bucket excluded) at 1000 CAD
+  / 700 USD. The 01-03 deposit cannot be priced in USD, so its flow is
+  UNKNOWN (0/0) and returns are gated instead of reading it as a gain.

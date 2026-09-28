@@ -75,7 +75,7 @@ baseline:
             fees: "0"
             fx_effect: "0"
             income: "0"
-            realized_pnl: "0"
+            realized_pnl: "20"
             residual: "0"
             taxes: "0"
             unrealized_pnl_change: "30"
@@ -85,7 +85,7 @@ baseline:
           method: timeWeighted
           period_end: 2025-01-08
           period_start: 2025-01-03
-          quality: partial
+          quality: ok
           returns:
             annualized_irr: "0"
             annualized_twr: ~
@@ -114,14 +114,14 @@ baseline:
             - date: 2025-01-08
               value: "0"
           summary:
-            amount: "30"
+            amount: "50"
             amount_status: complete
             basis: marketValue
             basis_status: notApplicable
             method: timeWeighted
             percent: "0"
             percent_status: complete
-            quality: partial
+            quality: ok
       tracking_mode: TRANSACTIONS
       valuations:
         - basis_status: complete
@@ -253,7 +253,7 @@ baseline:
         fees: "0"
         fx_effect: "0"
         income: "0"
-        realized_pnl: "0"
+        realized_pnl: "20"
         residual: "0"
         taxes: "0"
         unrealized_pnl_change: "30"
@@ -263,7 +263,7 @@ baseline:
       method: timeWeighted
       period_end: 2025-01-08
       period_start: 2025-01-03
-      quality: partial
+      quality: ok
       returns:
         annualized_irr: "0"
         annualized_twr: ~
@@ -292,13 +292,13 @@ baseline:
         - date: 2025-01-08
           value: "0"
       summary:
-        amount: "30"
+        amount: "50"
         amount_status: complete
         basis: marketValue
         basis_status: notApplicable
         method: timeWeighted
         percent: "0"
         percent_status: complete
-        quality: partial
+        quality: ok
   portfolio_flows: []
 scenario: EDGE-ORD-01

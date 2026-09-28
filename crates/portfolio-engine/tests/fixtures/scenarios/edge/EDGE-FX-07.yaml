@@ -46,9 +46,11 @@ quotes:
 fx_rates:
   - { from: USD, to: CAD, day: 2024-01-01, rate: 1.30 }
 expected_notes: >
-  LEGACY BEHAVIOR: every conversion uses the 2024-01-01 rate: lot
-  fx_rate_to_account 1.30, fx_rate_to_base 1, cost_basis_account 650; cash
-  {CAD 1300, USD -500}; valuations 01-03 investment 650 CAD, cash 650, total
-  1300, fx_rate_to_base 0.76923077 (1/1.30), total_base 1000; 01-06
-  investment 663, total 1313, base 1010; value_status complete on every
-  row and no diagnostics despite the 370-day-old observation.
+  The only USD/CAD observation is dated 2024-01-01 and nearest-neighbour
+  resolution uses it for every day: lot fx_rate_to_account 1.30,
+  fx_rate_to_base 1, cost_basis_account 650; cash {CAD 1300, USD -500};
+  valuations 01-03 investment 650 CAD, cash 650, total 1300,
+  fx_rate_to_base 0.76923077 (1/1.30), total_base 1000; 01-06 investment
+  663, total 1313, base 1010; complete on every row. The carry is visible:
+  CarriedFxRate informational diagnostics for USD->CAD and CAD->USD report
+  an observation up to 373 days away.

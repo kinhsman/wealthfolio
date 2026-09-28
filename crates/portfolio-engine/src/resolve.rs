@@ -70,21 +70,25 @@ impl FxSurface {
     }
 
     /// Nearest observation for a direct pair: exact day, else the closer of
-    /// the last-before and first-after observations (tie → past).
-    fn direct_rate(&self, from: &str, to: &str, date: NaiveDate) -> Option<Decimal> {
+    /// the last-before and first-after observations (tie → past), with its
+    /// distance in days from `date`.
+    fn direct_rate(&self, from: &str, to: &str, date: NaiveDate) -> Option<(Decimal, i64)> {
         let history = self.series.get(&(from.to_string(), to.to_string()))?;
         let prev = history.range(..=date).next_back();
         let next = history.range(date..).next();
+        let distance = |day: &NaiveDate| (date - *day).num_days().abs();
         match (prev, next) {
             (Some((d1, r1)), Some((d2, r2))) => {
                 if d1 == d2 {
-                    return Some(*r1);
+                    return Some((*r1, 0));
                 }
-                let dist_prev = (date - *d1).num_days().abs();
-                let dist_next = (*d2 - date).num_days().abs();
-                Some(if dist_prev <= dist_next { *r1 } else { *r2 })
+                Some(if distance(d1) <= distance(d2) {
+                    (*r1, distance(d1))
+                } else {
+                    (*r2, distance(d2))
+                })
             }
-            (Some((_, rate)), None) | (None, Some((_, rate))) => Some(*rate),
+            (Some((day, rate)), None) | (None, Some((day, rate))) => Some((*rate, distance(day))),
             (None, None) => None,
         }
     }
@@ -92,17 +96,18 @@ impl FxSurface {
     /// Rate between major-unit codes: direct pair first, else the fewest-hops
     /// path (neighbors visited in code order, so equal-length paths resolve
     /// deterministically), each hop nearest-neighbour resolved on `date`.
-    fn path_rate(&self, from: &str, to: &str, date: NaiveDate) -> Option<Decimal> {
+    /// Also returns the largest distance of any hop's observation from `date`.
+    fn path_rate(&self, from: &str, to: &str, date: NaiveDate) -> Option<(Decimal, i64)> {
         if from == to {
-            return Some(Decimal::ONE);
+            return Some((Decimal::ONE, 0));
         }
-        let mut queue: VecDeque<(String, Decimal)> = VecDeque::new();
+        let mut queue: VecDeque<(String, Decimal, i64)> = VecDeque::new();
         let mut visited: BTreeSet<String> = BTreeSet::new();
-        queue.push_back((from.to_string(), Decimal::ONE));
+        queue.push_back((from.to_string(), Decimal::ONE, 0));
         visited.insert(from.to_string());
-        while let Some((current, accumulated)) = queue.pop_front() {
+        while let Some((current, accumulated, age)) = queue.pop_front() {
             if current == to {
-                return Some(accumulated);
+                return Some((accumulated, age));
             }
             let Some(neighbors) = self.adjacency.get(&current) else {
                 continue;
@@ -111,12 +116,12 @@ impl FxSurface {
                 if visited.contains(neighbor) {
                     continue;
                 }
-                if let Some(rate) = self
+                if let Some((rate, hop_age)) = self
                     .direct_rate(&current, neighbor, date)
-                    .and_then(|rate| arith::mul(accumulated, rate))
+                    .and_then(|(rate, hop_age)| Some((arith::mul(accumulated, rate)?, hop_age)))
                 {
                     visited.insert(neighbor.clone());
-                    queue.push_back((neighbor.clone(), rate));
+                    queue.push_back((neighbor.clone(), rate, age.max(hop_age)));
                 }
             }
         }
@@ -135,8 +140,14 @@ impl FxResolver<'_> {
     /// Units of `to` per unit of `from` on `date`, or `None` when unresolvable
     /// (no observation path, or a rate outside the kernel range).
     pub fn rate(&self, from: &str, to: &str, date: NaiveDate) -> Option<Decimal> {
+        self.rate_with_age(from, to, date).map(|(rate, _)| rate)
+    }
+
+    /// [`Self::rate`] plus how many days the furthest observation it used lies
+    /// from `date` (0 when every hop was observed that day).
+    pub fn rate_with_age(&self, from: &str, to: &str, date: NaiveDate) -> Option<(Decimal, i64)> {
         if from == to {
-            return Some(Decimal::ONE);
+            return Some((Decimal::ONE, 0));
         }
         if !valid_code(from) || !valid_code(to) {
             return None;
@@ -156,10 +167,10 @@ impl FxResolver<'_> {
             Decimal::ONE / to_factor
         };
         if major_from == major_to {
-            return arith::mul(source_multiplier, target_multiplier);
+            return arith::mul(source_multiplier, target_multiplier).map(|rate| (rate, 0));
         }
-        let base_rate = self.surface.path_rate(major_from, major_to, date)?;
-        arith::product(&[source_multiplier, base_rate, target_multiplier])
+        let (base_rate, age) = self.surface.path_rate(major_from, major_to, date)?;
+        arith::product(&[source_multiplier, base_rate, target_multiplier]).map(|rate| (rate, age))
     }
 
     pub fn convert(
