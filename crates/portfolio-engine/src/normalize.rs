@@ -503,12 +503,12 @@ fn canonical_activity(
 }
 
 /// UTC instant → user-local business date, exactly once (architecture §4.7).
-pub fn local_date(instant: DateTime<Utc>, policy: &Policy) -> NaiveDate {
+pub(crate) fn local_date(instant: DateTime<Utc>, policy: &Policy) -> NaiveDate {
     instant.with_timezone(&policy.timezone).date_naive()
 }
 
 /// `$CASH-USD`, `CASH_USD`, `CASH:USD` placeholders (case-insensitive).
-pub fn is_cash_symbol(symbol: &str) -> bool {
+pub(crate) fn is_cash_symbol(symbol: &str) -> bool {
     let upper = symbol.trim().to_ascii_uppercase();
     let stripped = upper.strip_prefix('$').unwrap_or(&upper);
     let Some(rest) = stripped.strip_prefix("CASH") else {

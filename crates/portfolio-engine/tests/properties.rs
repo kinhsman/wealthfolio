@@ -9,10 +9,8 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde_json::Value;
 use support::*;
-use wealthfolio_portfolio_engine::diagnostics::DiagnosticCode;
 use wealthfolio_portfolio_engine::model::*;
-use wealthfolio_portfolio_engine::value::{ValueInputs, Window};
-use wealthfolio_portfolio_engine::{aggregate_scope, project};
+use wealthfolio_portfolio_engine::{aggregate_scope, project, DiagnosticCode, ValueInputs, Window};
 
 const DUST: Decimal = Decimal::from_parts(1, 0, 0, false, 8);
 
@@ -99,12 +97,12 @@ fn p_det_input_order_is_irrelevant() {
 fn p_chunk_partitions_are_equivalent() {
     for scenario in corpus() {
         let one_shot = Pipeline::from_scenario(&scenario);
-        let range = one_shot.range;
+        let range = one_shot.range();
         if range.start == range.end {
             continue;
         }
         let mut boundaries: BTreeSet<NaiveDate> = one_shot
-            .ledger
+            .ledger()
             .events
             .iter()
             .map(|e| e.date)
@@ -136,16 +134,16 @@ fn project_chunked(pipeline: &Pipeline, cuts: &[NaiveDate]) -> ProjectionBundle 
     let fx = pipeline.fx();
     let mut state: Option<ProjectionState> = None;
     let mut merged: Option<ProjectionBundle> = None;
-    let mut start = pipeline.range.start;
+    let mut start = pipeline.range().start;
     let mut ends: Vec<NaiveDate> = cuts.to_vec();
-    ends.push(pipeline.range.end);
+    ends.push(pipeline.range().end);
     for end in ends {
         if end < start {
             continue;
         }
         let bundle = project(
-            &pipeline.ledger,
-            &pipeline.facts,
+            pipeline.ledger(),
+            pipeline.facts(),
             &fx,
             state.take(),
             DateRange { start, end },
@@ -204,15 +202,15 @@ fn p_cash_conservation() {
             .map(|d| d.source.as_str())
             .collect();
         let mut expected: BTreeMap<&AccountId, BTreeMap<String, Decimal>> = BTreeMap::new();
-        for event in &pipeline.ledger.events {
-            let Some(account) = pipeline.facts.accounts.get(&event.account) else {
+        for event in &pipeline.ledger().events {
+            let Some(account) = pipeline.facts().accounts().get(&event.account) else {
                 continue;
             };
             if account.archived
                 || account.tracking == TrackingMode::Holdings
                 || rejected.contains(event.id.as_str())
-                || event.date < pipeline.range.start
-                || event.date > pipeline.range.end
+                || event.date < pipeline.range().start
+                || event.date > pipeline.range().end
             {
                 continue;
             }
@@ -260,9 +258,9 @@ fn p_cash_conservation() {
 fn p_lots_reconcile_to_positions() {
     for scenario in corpus() {
         let pipeline = Pipeline::from_scenario(&scenario);
-        let range = pipeline.range;
+        let range = pipeline.range();
         let days: BTreeSet<NaiveDate> = pipeline
-            .ledger
+            .ledger()
             .events
             .iter()
             .map(|e| e.date)
@@ -273,8 +271,8 @@ fn p_lots_reconcile_to_positions() {
         let mut start = range.start;
         for day in days {
             let bundle = project(
-                &pipeline.ledger,
-                &pipeline.facts,
+                pipeline.ledger(),
+                pipeline.facts(),
                 &fx,
                 state.take(),
                 DateRange { start, end: day },
@@ -313,7 +311,7 @@ fn p_split_is_basis_and_cash_neutral() {
         let pipeline = Pipeline::from_scenario(&scenario);
         let mut by_account_day: BTreeMap<(&AccountId, NaiveDate), Vec<&EconomicEvent>> =
             BTreeMap::new();
-        for event in &pipeline.ledger.events {
+        for event in &pipeline.ledger().events {
             by_account_day
                 .entry((&event.account, event.date))
                 .or_default()
@@ -392,7 +390,7 @@ fn p_txf_internal_pairs_cancel_at_portfolio_scope() {
         };
         let mut by_day: BTreeMap<NaiveDate, Vec<&EconomicEvent>> = BTreeMap::new();
         for event in pipeline
-            .ledger
+            .ledger()
             .events
             .iter()
             .filter(|e| scope.contains(&e.account))
@@ -402,8 +400,8 @@ fn p_txf_internal_pairs_cancel_at_portfolio_scope() {
         for (day, events) in &by_day {
             let unlinked_conversion = |e: &&EconomicEvent| {
                 pipeline
-                    .facts
-                    .transfer_pairs
+                    .facts()
+                    .transfer_pairs()
                     .pair_for(&e.source)
                     .is_some_and(|p| p.in_account == p.out_account && !p.contribution_neutral)
             };
@@ -441,15 +439,19 @@ fn p_recon_complete_days_rederive_from_keyframes_and_surfaces() {
     let mut checked = 0usize;
     for scenario in corpus() {
         let pipeline = Pipeline::from_scenario(&scenario);
-        let policy = &pipeline.facts.policy;
+        let policy = pipeline.facts().policy();
         let fx = pipeline.fx();
-        let split_assets: BTreeSet<&AssetId> =
-            pipeline.surfaces.splits.iter().map(|s| &s.asset).collect();
+        let split_assets: BTreeSet<&AssetId> = pipeline
+            .surfaces()
+            .splits
+            .iter()
+            .map(|s| &s.asset)
+            .collect();
         for (account, series) in &pipeline.series {
             let Some(keyframes) = pipeline.bundle.keyframes.get(account) else {
                 continue; // holdings-tracked: valued from observed snapshots
             };
-            let account_currency = pipeline.facts.accounts[account].currency.as_str();
+            let account_currency = pipeline.facts().accounts()[account].currency.as_str();
             for day in &series.days {
                 if day.value_status != ValueStatus::Complete {
                     continue;
@@ -471,7 +473,7 @@ fn p_recon_complete_days_rederive_from_keyframes_and_surfaces() {
                         continue;
                     }
                     let quote = pipeline
-                        .surfaces
+                        .surfaces()
                         .quotes
                         .latest_on_or_before(asset, day.date)
                         .expect("a COMPLETE day prices every held position");
@@ -480,8 +482,8 @@ fn p_recon_complete_days_rederive_from_keyframes_and_surfaces() {
                         .rate(quote_major, account_currency, day.date)
                         .expect("a COMPLETE day converts every quote currency");
                     let multiplier = pipeline
-                        .facts
-                        .assets
+                        .facts()
+                        .assets()
                         .get(asset)
                         .map(|a| a.contract_multiplier)
                         .unwrap_or(Decimal::ONE);
@@ -571,17 +573,16 @@ fn p_agg_scope_aggregation_is_exact() {
         };
         let activity_date = |id: &ActivityId| {
             pipeline
-                .facts
-                .activities
+                .facts()
+                .activities()
                 .iter()
                 .find(|a| &a.id == id)
                 .map(|a| a.date)
         };
         let internal_days: BTreeSet<NaiveDate> = pipeline
-            .facts
-            .transfer_pairs
-            .by_group
-            .values()
+            .facts()
+            .transfer_pairs()
+            .iter()
             .filter(|pair| scope.contains(&pair.out_account) && scope.contains(&pair.in_account))
             .flat_map(|pair| {
                 [
@@ -684,7 +685,7 @@ fn p_diag_degradation_is_reported() {
             {
                 assert!(
                     pipeline
-                        .ledger
+                        .ledger()
                         .diagnostics
                         .iter()
                         .any(|d| d.code == DiagnosticCode::UnknownTransferBoundary),
@@ -700,7 +701,7 @@ fn p_diag_degradation_is_reported() {
             .filter(|a| a.currency.trim().is_empty() && a.status == "POSTED")
         {
             assert!(
-                pipeline.normalize_diagnostics.iter().any(|d| {
+                pipeline.normalize_diagnostics().iter().any(|d| {
                     d.code == DiagnosticCode::MissingCurrency && d.source == activity.id
                 }),
                 "{}: empty currency on {} not reported",

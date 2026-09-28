@@ -2273,15 +2273,6 @@ fn reduce_fifo(
     })
 }
 
-/// The activity an event derives from (`None` for an unknown event id).
-pub fn source_activity(ledger: &CompiledLedger, event: &EventId) -> Option<ActivityId> {
-    ledger
-        .events
-        .iter()
-        .find(|e| &e.id == event)
-        .map(|e| e.source.clone())
-}
-
 /// Lots in storage shape: open lots from the final state plus closed lots,
 /// a closure replacing the open row with the same id. Base amounts use the
 /// lot's stored rate, else the acquisition-date rate.
@@ -2292,8 +2283,8 @@ pub fn lot_records(
 ) -> Vec<LotRecord> {
     let base = facts.policy.base_currency.as_str();
     // Legacy parity: lots opened by composite legs (`{activity}:buy`) carry
-    // no open activity; `source_activity` maps such ids for stores that need
-    // a real activity id.
+    // no open activity; `CompiledLedger::source_of` maps such ids for stores
+    // that need a real activity id.
     let activity_ids: BTreeSet<&str> = facts.activities.iter().map(|a| a.id.as_str()).collect();
     let open_activity = |event: Option<&EventId>| -> Option<ActivityId> {
         event

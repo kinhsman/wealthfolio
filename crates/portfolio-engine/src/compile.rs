@@ -15,6 +15,17 @@ pub struct CompiledLedger {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+impl CompiledLedger {
+    /// The activity an event derives from (`None` for an unknown event id):
+    /// a composite leg (`{activity}:buy`) maps back to its stored row.
+    pub fn source_of(&self, event: &EventId) -> Option<&ActivityId> {
+        self.events
+            .iter()
+            .find(|e| &e.id == event)
+            .map(|e| &e.source)
+    }
+}
+
 pub fn compile(facts: &CanonicalFacts) -> CompiledLedger {
     let mut events = Vec::with_capacity(facts.activities.len());
     let mut diagnostics = Vec::new();

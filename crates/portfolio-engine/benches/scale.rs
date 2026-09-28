@@ -8,10 +8,7 @@ use chrono::{NaiveDate, TimeZone, Utc};
 use criterion::{criterion_group, criterion_main, Criterion};
 use rust_decimal::Decimal;
 use wealthfolio_portfolio_engine::model::*;
-use wealthfolio_portfolio_engine::{
-    compile, lot_records, measure_scope, normalize, project, resolve_surfaces, value, FxResolver,
-    MeasureInputs, MeasureProfile, Resolved, ValueInputs, Window,
-};
+use wealthfolio_portfolio_engine::{measure_scope, Engine, MeasureProfile, Window};
 
 const ACCOUNTS: usize = 10;
 const ASSETS: usize = 40;
@@ -152,39 +149,14 @@ fn generated_facts() -> RawFacts {
 }
 
 fn run_pipeline(raw: RawFacts) -> usize {
-    let normalized = normalize(raw).expect("normalize");
-    let facts = normalized.facts;
-    let ledger = compile(&facts);
-    let range = DateRange {
-        start: facts.activities.iter().map(|a| a.date).min().unwrap(),
-        end: facts.policy.as_of,
-    };
-    let surfaces = resolve_surfaces(&facts, range);
-    let fx = FxResolver {
-        surface: &surfaces.fx,
-        policy: &facts.policy,
-    };
-    let bundle = project(&ledger, &facts, &fx, None, range).expect("project");
-    let resolved = Resolved {
-        facts: &facts,
-        ledger: &ledger,
-        surfaces: &surfaces,
-        range,
-    };
-    let series = value(&ValueInputs {
-        resolved,
-        bundle: &bundle,
-    });
-    let lots = lot_records(&bundle, &facts, &fx);
-    let measure_inputs = MeasureInputs {
-        resolved,
-        series: &series,
-        lots: &lots,
-        disposals: &bundle.disposals,
-    };
-    let scope: Vec<AccountId> = facts.accounts.keys().cloned().collect();
+    let engine = Engine::new(raw).expect("engine");
+    let bundle = engine.project().expect("project");
+    let series = engine.value(&bundle);
+    let lots = engine.lots(&bundle);
+    let inputs = engine.measure_inputs(&series, &lots, &bundle.disposals);
+    let scope: Vec<AccountId> = engine.facts().accounts().keys().cloned().collect();
     let result = measure_scope(
-        &measure_inputs,
+        &inputs,
         "portfolio",
         &scope,
         Window::default(),

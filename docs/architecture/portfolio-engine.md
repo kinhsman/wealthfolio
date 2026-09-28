@@ -185,7 +185,8 @@ stay visible to pairing so a transfer to or from them classifies correctly.
 crates/portfolio-engine/
 ├── Cargo.toml            # runtime deps: the closed list below
 ├── src/
-│   ├── lib.rs            # public API: the six stages + facts_needed
+│   ├── lib.rs            # public API: Engine, the six stages, facts_needed
+│   ├── engine.rs         # Engine: normalise, compile, resolve once; derive on request
 │   ├── model/            # scalars, Policy, facts, events, states, reports
 │   ├── normalize.rs      # stage 1: parsing, ordering, transfer pairing
 │   ├── compile.rs        # stage 2: the single economics authority
@@ -338,6 +339,14 @@ is, which FX pair was missing, which fallback fired — travels in diagnostics
 rather than multiplying status values.
 
 ### 4.3 Stage contracts
+
+`Engine::new(raw)` normalises, compiles and resolves the facts once over the
+range every stage must cover (the first activity's business date to `as_of`);
+`project`, `value`, `lots` and `measure_inputs` then derive the rest. The stage
+functions below stay public for what an engine does not cover alone: chunked
+folds and resumes from a checkpoint, revaluing stored keyframes and measuring
+stored rows. Everything else in the crate is private, and `CanonicalFacts` can
+only come from `normalize`.
 
 ```rust
 /// 1. Strings and instants become types, once. Applies the total order
