@@ -464,13 +464,17 @@ done and thrown away.
 
 ### 4.4 Errors and diagnostics
 
-Two channels, deliberately distinct:
+Three typed channels, deliberately distinct:
 
 - **`EngineError`** — the _request_ is unusable: an inverted range, an invalid
   policy, an account row without a currency, a prior state that does not meet
   the range start, a measured scope that names an archived account or whose
   valuation histories are incomplete. The caller made a mistake and there is no
   result. Every variant is typed; no stage returns a string error.
+- **`QualityNote`** — why a performance figure is partial or unavailable,
+  carried on `PerformanceResult.data_quality`: a stable code with its data
+  (dates, accounts, amounts), rendered to today's English by `Display` so a host
+  can show it or localise it. No stage builds UI copy as strings.
 - **`Diagnostic`** — the _data_ is imperfect: an unparseable decimal, a missing
   currency, an unknown subtype, a missing quote, an unresolvable pair, an
   unpaired transfer, a negative balance. It is attached to the event or day it
