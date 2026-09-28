@@ -324,6 +324,7 @@ pub struct ProjectionState { /* positions, FIFO lot book, cash by currency,
                                 cache — the state at one date, and the persisted
                                 checkpoint that makes a resume possible */ }
 pub struct ProjectionBundle{ keyframes, final_state, disposals, closures, diagnostics }
+                            // keyframes carry totals only; lots live in final_state
 pub struct ValuationSeries { /* dense daily values, statuses and final flows */ }
 pub struct PerformanceResult{ /* TWR, IRR, value return, attribution, risk,
                                  summary, series, data quality */ }

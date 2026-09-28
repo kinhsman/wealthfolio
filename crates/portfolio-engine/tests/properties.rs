@@ -252,34 +252,55 @@ fn p_cash_conservation() {
     }
 }
 
-/// P-LOTS (I5): at every keyframe, open-lot effective quantities sum to the
-/// position quantity and lots of one position share a sign.
+/// P-LOTS (I5): at the end of every event day, open-lot effective quantities
+/// sum to the position quantity and lots of one position share a sign.
+/// Keyframes carry totals only, so the law folds one chunk per event day and
+/// checks each chunk's checkpoint, which carries the lots.
 #[test]
 fn p_lots_reconcile_to_positions() {
     for scenario in corpus() {
         let pipeline = Pipeline::from_scenario(&scenario);
-        for (account, frames) in &pipeline.bundle.keyframes {
-            for frame in frames {
-                for (asset, position) in &frame.state.positions {
+        let range = pipeline.range;
+        let days: BTreeSet<NaiveDate> = pipeline
+            .ledger
+            .events
+            .iter()
+            .map(|e| e.date)
+            .filter(|d| *d >= range.start && *d <= range.end)
+            .collect();
+        let fx = pipeline.fx();
+        let mut state: Option<ProjectionState> = None;
+        let mut start = range.start;
+        for day in days {
+            let bundle = project(
+                &pipeline.ledger,
+                &pipeline.facts,
+                &fx,
+                state.take(),
+                DateRange { start, end: day },
+            )
+            .expect("chunk projects");
+            for (account, account_state) in &bundle.final_state.accounts {
+                for (asset, position) in &account_state.positions {
                     let effective: Decimal =
                         position.lots.iter().map(Lot::effective_quantity).sum();
                     assert!(
                         (effective - position.quantity).abs() <= DUST,
-                        "{}: P-LOTS violated for {account}/{asset} on {}: lots {effective} vs position {}",
+                        "{}: P-LOTS violated for {account}/{asset} on {day}: lots {effective} vs position {}",
                         scenario.id,
-                        frame.date,
                         position.quantity
                     );
                     let positive = position.lots.iter().any(|l| l.quantity > Decimal::ZERO);
                     let negative = position.lots.iter().any(|l| l.quantity < Decimal::ZERO);
                     assert!(
                         !(positive && negative),
-                        "{}: P-LOTS violated for {account}/{asset} on {}: mixed-sign lots",
-                        scenario.id,
-                        frame.date
+                        "{}: P-LOTS violated for {account}/{asset} on {day}: mixed-sign lots",
+                        scenario.id
                     );
                 }
             }
+            state = Some(bundle.final_state);
+            start = day.succ_opt().expect("next day");
         }
     }
 }

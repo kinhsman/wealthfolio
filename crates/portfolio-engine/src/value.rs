@@ -71,7 +71,6 @@ struct PricedPosition {
     currency: Currency,
     alternative: bool,
     contract_multiplier: Decimal,
-    lots: Vec<Lot>,
     cost_basis_account: Option<Decimal>,
     cost_basis_base: Option<Decimal>,
 }
@@ -358,7 +357,6 @@ fn keyframes_for(
                             contract_multiplier: facts
                                 .map(|a| a.contract_multiplier)
                                 .unwrap_or(Decimal::ONE),
-                            lots: Vec::new(),
                             cost_basis_account: position.cost_basis_account,
                             cost_basis_base: position.cost_basis_base,
                         },
@@ -387,7 +385,7 @@ fn keyframes_for(
                 Some(state) => {
                     synthetic = [Keyframe {
                         date: resolved.range.end,
-                        state: state.clone(),
+                        state: state.without_lots(),
                     }];
                     &synthetic
                 }
@@ -408,7 +406,6 @@ fn keyframes_for(
                             currency: position.currency.clone(),
                             alternative: position.alternative,
                             contract_multiplier: position.contract_multiplier,
-                            lots: position.lots.clone(),
                             cost_basis_account: position.cost_basis_account,
                             cost_basis_base: position.cost_basis_base,
                         },
@@ -746,8 +743,9 @@ impl<'a> Valuer<'a> {
         }
     }
 
-    /// Legacy `calculate_cost_basis_in_currency`: precomputed acquisition-FX
-    /// scalar first, else lot walk at acquisition-date FX, else today's FX.
+    /// Book cost in `target`: the precomputed acquisition-FX scalar, else the
+    /// total at the day's FX. Keyframes carry no lots, so a full run and a
+    /// revalue from stored rows convert the same way.
     fn cost_basis_in(
         &mut self,
         keyframe: &ValuationKeyframe,
@@ -768,50 +766,22 @@ impl<'a> Valuer<'a> {
             let position_currency = policy
                 .major_currency(position.currency.as_str())
                 .to_string();
-            if position.lots.is_empty() {
-                match self.fx.rate(&position_currency, target, day) {
-                    Some(rate) => match arith::mul(position.total_cost_basis, rate) {
-                        Some(converted) => total += converted,
-                        None => self.report(
-                            DiagnosticCode::ValueOutOfRange,
-                            format!("{}:basis:{asset}", self.account),
-                            format!("the book cost of {asset} in {target} is outside the kernel range; omitted from the converted basis"),
-                        ),
-                    },
+            // No acquisition-FX scalar (a lot lacked its rate): the book cost
+            // converts at the day's rate, as a revalue from stored rows does.
+            match self.fx.rate(&position_currency, target, day) {
+                Some(rate) => match arith::mul(position.total_cost_basis, rate) {
+                    Some(converted) => total += converted,
                     None => self.report(
-                        DiagnosticCode::FxUnavailable,
+                        DiagnosticCode::ValueOutOfRange,
                         format!("{}:basis:{asset}", self.account),
-                        format!("no {position_currency}->{target} rate on {day}; book cost of {asset} omitted from the converted basis"),
+                        format!("the book cost of {asset} in {target} is outside the kernel range; omitted from the converted basis"),
                     ),
-                }
-                continue;
-            }
-            for lot in &position.lots {
-                if lot.cost_basis.is_zero() {
-                    continue;
-                }
-                if let Some(converted) = lot
-                    .stored_fx_rate_to(target)
-                    .and_then(|rate| arith::mul(lot.cost_basis, rate))
-                {
-                    total += converted;
-                    continue;
-                }
-                match self.fx.rate(&position_currency, target, lot.acquisition_date) {
-                    Some(rate) => match arith::mul(lot.cost_basis, rate) {
-                        Some(converted) => total += converted,
-                        None => self.report(
-                            DiagnosticCode::ValueOutOfRange,
-                            format!("{}:basis:{asset}:{}", self.account, lot.id),
-                            format!("the basis of lot {} in {target} is outside the kernel range; omitted from the converted basis", lot.id),
-                        ),
-                    },
-                    None => self.report(
-                        DiagnosticCode::FxUnavailable,
-                        format!("{}:basis:{asset}:{}", self.account, lot.id),
-                        format!("no {position_currency}->{target} rate on {}; lot basis omitted from the converted basis", lot.acquisition_date),
-                    ),
-                }
+                },
+                None => self.report(
+                    DiagnosticCode::FxUnavailable,
+                    format!("{}:basis:{asset}", self.account),
+                    format!("no {position_currency}->{target} rate on {day}; book cost of {asset} omitted from the converted basis"),
+                ),
             }
         }
         total

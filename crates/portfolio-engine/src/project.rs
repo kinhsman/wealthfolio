@@ -145,7 +145,7 @@ pub fn project(
                 .or_default()
                 .push(Keyframe {
                     date: day,
-                    state: next.clone(),
+                    state: next.without_lots(),
                 });
             state.accounts.insert(account_id.clone(), next);
         }
