@@ -60,9 +60,9 @@ baseline:
           attribution:
             contributions: "500"
             distributions: "300"
-            fees: "10"
+            fees: "35"
             fx_effect: "0"
-            income: "25"
+            income: "0"
             realized_pnl: "0"
             residual: "0"
             taxes: "0"
@@ -73,7 +73,7 @@ baseline:
           method: timeWeighted
           period_end: 2025-01-10
           period_start: 2025-01-02
-          quality: partial
+          quality: ok
           returns:
             annualized_irr: "-0.99936765"
             annualized_twr: ~
@@ -108,14 +108,14 @@ baseline:
             - date: 2025-01-10
               value: "-0.175"
           summary:
-            amount: "15"
+            amount: "-35"
             amount_status: complete
             basis: marketValue
             basis_status: notApplicable
             method: timeWeighted
             percent: "-0.175"
             percent_status: complete
-            quality: partial
+            quality: ok
       tracking_mode: TRANSACTIONS
       valuations:
         - basis_status: notApplicable
@@ -304,9 +304,9 @@ baseline:
       attribution:
         contributions: "500"
         distributions: "300"
-        fees: "10"
+        fees: "35"
         fx_effect: "0"
-        income: "25"
+        income: "0"
         realized_pnl: "0"
         residual: "0"
         taxes: "0"
@@ -317,7 +317,7 @@ baseline:
       method: timeWeighted
       period_end: 2025-01-10
       period_start: 2025-01-02
-      quality: partial
+      quality: ok
       returns:
         annualized_irr: "-0.99936765"
         annualized_twr: ~
@@ -352,14 +352,14 @@ baseline:
         - date: 2025-01-10
           value: "-0.175"
       summary:
-        amount: "15"
+        amount: "-35"
         amount_status: complete
         basis: marketValue
         basis_status: notApplicable
         method: timeWeighted
         percent: "-0.175"
         percent_status: complete
-        quality: partial
+        quality: ok
   portfolio_flows:
     - date: 2025-01-03
       inflow_base: "0"

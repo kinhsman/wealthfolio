@@ -53,6 +53,12 @@ pub enum DiagnosticCode {
     InvalidQuote,
     /// FX observation with a non-positive rate; ignored.
     InvalidFxRate,
+    /// A magnitude outside the kernel range (`MAX_MAGNITUDE`): the input row
+    /// was ignored, or the value it would produce was declined.
+    ValueOutOfRange,
+    /// Sell, transfer-out or expiry of more units than held: the held units
+    /// were disposed and the excess has no lot.
+    InsufficientQuantity,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

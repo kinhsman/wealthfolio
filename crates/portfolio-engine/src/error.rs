@@ -18,6 +18,8 @@ pub enum EngineError {
         start: chrono::NaiveDate,
         end: chrono::NaiveDate,
     },
+    #[error("account {0:?} is archived; archived accounts are neither projected nor valued")]
+    ArchivedAccountInScope(String),
     #[error("prior state is dated {state} but the range starts {start}")]
     StateRangeMismatch {
         state: chrono::NaiveDate,

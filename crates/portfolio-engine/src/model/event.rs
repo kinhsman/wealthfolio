@@ -30,7 +30,23 @@ pub struct EconomicEvent {
     pub action: Action,
     pub contribution: Contribution,
     pub flow: Flow,
+    /// What performance attribution counts for this event.
+    #[serde(default)]
+    pub attribution: Attributed,
     pub diagnostics: Vec<Diagnostic>,
+}
+
+/// Income, fees and taxes an event contributes to performance attribution,
+/// as magnitudes in the activity currency (Appendix A, cross-cutting rules).
+/// Decided once here so no later stage re-reads the raw activity.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+pub struct Attributed {
+    #[serde(with = "crate::model::decimal_serde")]
+    pub income: Decimal,
+    #[serde(with = "crate::model::decimal_serde")]
+    pub fee: Decimal,
+    #[serde(with = "crate::model::decimal_serde")]
+    pub tax: Decimal,
 }
 
 /// Signed cash movement resolved from the stored final amount.

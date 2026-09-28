@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 
+use crate::arith;
 use crate::model::{FxObservation, Policy};
 
 type Pair = (String, String);
@@ -21,33 +22,45 @@ pub struct FxSurface {
 }
 
 impl FxSurface {
-    /// Builds the surface; every observation also registers its inverse.
+    /// Builds the surface; every observation also registers its inverse,
+    /// which fills only the days the opposite pair has no direct
+    /// observation of its own: a quoted rate is never replaced by the
+    /// inverse of another row.
     pub fn from_observations(observations: &[FxObservation]) -> Self {
         let mut surface = Self::default();
-        for observation in observations {
-            let from = observation.from.as_str().to_string();
-            let to = observation.to.as_str().to_string();
-            if from == to {
-                continue;
-            }
+        let pairs = || {
+            observations
+                .iter()
+                .map(|o| (o.from.as_str(), o.to.as_str(), o))
+                .filter(|(from, to, _)| from != to)
+        };
+        for (from, to, observation) in pairs() {
             surface
                 .series
-                .entry((from.clone(), to.clone()))
+                .entry((from.to_string(), to.to_string()))
                 .or_default()
                 .insert(observation.day, observation.rate);
             surface
                 .adjacency
-                .entry(from.clone())
+                .entry(from.to_string())
                 .or_default()
-                .insert(to.clone());
-            if !observation.rate.is_zero() {
-                surface
-                    .series
-                    .entry((to.clone(), from.clone()))
-                    .or_default()
-                    .insert(observation.day, Decimal::ONE / observation.rate);
-                surface.adjacency.entry(to).or_default().insert(from);
-            }
+                .insert(to.to_string());
+        }
+        for (from, to, observation) in pairs() {
+            let Some(inverse) = arith::div(Decimal::ONE, observation.rate) else {
+                continue;
+            };
+            surface
+                .series
+                .entry((to.to_string(), from.to_string()))
+                .or_default()
+                .entry(observation.day)
+                .or_insert(inverse);
+            surface
+                .adjacency
+                .entry(to.to_string())
+                .or_default()
+                .insert(from.to_string());
         }
         surface
     }
@@ -98,9 +111,12 @@ impl FxSurface {
                 if visited.contains(neighbor) {
                     continue;
                 }
-                if let Some(rate) = self.direct_rate(&current, neighbor, date) {
+                if let Some(rate) = self
+                    .direct_rate(&current, neighbor, date)
+                    .and_then(|rate| arith::mul(accumulated, rate))
+                {
                     visited.insert(neighbor.clone());
-                    queue.push_back((neighbor.clone(), accumulated * rate));
+                    queue.push_back((neighbor.clone(), rate));
                 }
             }
         }
@@ -116,7 +132,8 @@ pub struct FxResolver<'a> {
 }
 
 impl FxResolver<'_> {
-    /// Units of `to` per unit of `from` on `date`, or `None` when unresolvable.
+    /// Units of `to` per unit of `from` on `date`, or `None` when unresolvable
+    /// (no observation path, or a rate outside the kernel range).
     pub fn rate(&self, from: &str, to: &str, date: NaiveDate) -> Option<Decimal> {
         if from == to {
             return Some(Decimal::ONE);
@@ -139,10 +156,10 @@ impl FxResolver<'_> {
             Decimal::ONE / to_factor
         };
         if major_from == major_to {
-            return Some(source_multiplier * target_multiplier);
+            return arith::mul(source_multiplier, target_multiplier);
         }
         let base_rate = self.surface.path_rate(major_from, major_to, date)?;
-        Some(source_multiplier * base_rate * target_multiplier)
+        arith::product(&[source_multiplier, base_rate, target_multiplier])
     }
 
     pub fn convert(
@@ -155,7 +172,8 @@ impl FxResolver<'_> {
         if from == to {
             return Some(amount);
         }
-        self.rate(from, to, date).map(|rate| amount * rate)
+        self.rate(from, to, date)
+            .and_then(|rate| arith::mul(amount, rate))
     }
 }
 
@@ -206,6 +224,24 @@ mod tests {
     }
 
     #[test]
+    fn a_direct_observation_beats_the_inverse_of_the_opposite_pair() {
+        let surface = FxSurface::from_observations(&[
+            observation("CAD", "USD", 2, dec!(0.70)),
+            observation("USD", "CAD", 2, dec!(1.30)),
+            observation("USD", "CAD", 3, dec!(1.25)),
+        ]);
+        let policy = policy();
+        let fx = FxResolver {
+            surface: &surface,
+            policy: &policy,
+        };
+        assert_eq!(fx.rate("CAD", "USD", day(2)), Some(dec!(0.70)));
+        assert_eq!(fx.rate("USD", "CAD", day(2)), Some(dec!(1.30)));
+        // No direct CAD->USD row on day 3: the inverse fills it.
+        assert_eq!(fx.rate("CAD", "USD", day(3)), Some(dec!(1) / dec!(1.25)));
+    }
+
+    #[test]
     fn multi_hop_and_minor_units() {
         let surface = FxSurface::from_observations(&[
             observation("EUR", "CHF", 2, dec!(0.95)),
@@ -228,8 +264,8 @@ mod tests {
 
 use crate::model::{ActivityKind, AssetId, CanonicalFacts, DateRange, QuoteObservation};
 
-/// Quote observations per asset, sorted by day (the last observation of a
-/// day wins).
+/// Quote observations per asset, sorted by day (`normalize` keeps one per
+/// asset and day).
 #[derive(Debug, Clone, Default)]
 pub struct QuoteSurface {
     by_asset: BTreeMap<AssetId, Vec<QuoteObservation>>,
@@ -301,12 +337,15 @@ pub struct ResolvedSurfaces {
 }
 
 impl ResolvedSurfaces {
-    /// Product of the ratios of adjusted splits strictly after `date`.
-    pub fn split_price_factor(&self, asset: &AssetId, date: NaiveDate) -> Decimal {
+    /// Product of the ratios of adjusted splits strictly after `date`;
+    /// `None` when the product leaves the kernel range.
+    pub fn split_price_factor(&self, asset: &AssetId, date: NaiveDate) -> Option<Decimal> {
         self.splits
             .iter()
             .filter(|event| event.asset == *asset && date < event.split_date)
-            .fold(Decimal::ONE, |factor, event| factor * event.ratio)
+            .try_fold(Decimal::ONE, |factor, event| {
+                arith::mul(factor, event.ratio)
+            })
     }
 }
 
@@ -431,6 +470,8 @@ fn quotes_appear_split_adjusted(
     if *previous <= Decimal::ZERO || *next <= Decimal::ZERO {
         return false;
     }
-    let observed = *previous / *next;
+    let Some(observed) = arith::div(*previous, *next) else {
+        return false;
+    };
     relative_distance(observed, Decimal::ONE) < relative_distance(observed, ratio)
 }

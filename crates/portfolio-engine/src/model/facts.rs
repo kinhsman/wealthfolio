@@ -91,6 +91,9 @@ pub struct RawFxRate {
     pub to: String,
     pub day: NaiveDate,
     pub rate: Decimal,
+    /// Provider of the observation; ranks same-day rows like quotes.
+    #[serde(default)]
+    pub source: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

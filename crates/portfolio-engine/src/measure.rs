@@ -13,6 +13,7 @@ use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal::{Decimal, MathematicalOps};
 use rust_decimal_macros::dec;
 
+use crate::arith;
 use crate::error::EngineError;
 use crate::model::*;
 use crate::resolve::FxResolver;
@@ -193,6 +194,24 @@ fn check_window(window: Window) -> Result<(), EngineError> {
     }
 }
 
+/// Archived accounts are neither projected nor valued (architecture §4.5),
+/// so a scope naming one has no complete answer: refused, not guessed.
+fn check_not_archived(inputs: &MeasureInputs<'_>, scope: &[AccountId]) -> Result<(), EngineError> {
+    match scope.iter().find(|id| {
+        inputs
+            .resolved
+            .facts
+            .accounts
+            .get(*id)
+            .is_some_and(|account| account.archived)
+    }) {
+        Some(archived) => Err(EngineError::ArchivedAccountInScope(
+            archived.as_str().to_string(),
+        )),
+        None => Ok(()),
+    }
+}
+
 /// Performance of one account (legacy `calculate_account_performance`).
 pub fn measure_account(
     inputs: &MeasureInputs<'_>,
@@ -201,6 +220,7 @@ pub fn measure_account(
     profile: MeasureProfile,
 ) -> Result<PerformanceResult, EngineError> {
     check_window(window)?;
+    check_not_archived(inputs, std::slice::from_ref(account))?;
     let history = inputs.history(account, window);
     if history.len() < 2 {
         return Ok(empty_response(
@@ -249,6 +269,7 @@ pub fn measure_scope(
     profile: MeasureProfile,
 ) -> Result<PerformanceResult, EngineError> {
     check_window(window)?;
+    check_not_archived(inputs, scope)?;
     let base = inputs.base();
     if scope.is_empty() {
         return Ok(empty_response(
@@ -423,6 +444,7 @@ fn performance_core(
     }
 
     let mut holdings_chained: Option<Decimal> = None;
+    let mut holdings_out_of_range = false;
     if holdings && !holdings_flows_unavailable {
         let mut factor = Decimal::ONE;
         let mut has_base = false;
@@ -438,8 +460,14 @@ fn performance_core(
             let day_gain = curr_value + outflow - prev_value - inflow;
             if prev_value > Decimal::ZERO {
                 has_base = true;
-                let daily_return = day_gain / prev_value;
-                factor *= Decimal::ONE + daily_return;
+                let step = arith::div(day_gain, prev_value).and_then(|daily_return| {
+                    arith::mul(factor, Decimal::ONE + daily_return).map(|next| (daily_return, next))
+                });
+                let Some((daily_return, next)) = step else {
+                    holdings_out_of_range = true;
+                    break;
+                };
+                factor = next;
                 if full {
                     risk_samples.push(RiskSample {
                         date: pair[1].date,
@@ -459,7 +487,7 @@ fn performance_core(
                 });
             }
         }
-        if has_base {
+        if has_base && !holdings_out_of_range {
             holdings_chained = Some(factor - Decimal::ONE);
         }
     } else if !holdings {
@@ -503,7 +531,9 @@ fn performance_core(
             holdings_chained
         };
         let reason = ret.is_none().then(|| {
-            if holdings_flows_unavailable {
+            if holdings_out_of_range && start_opt.is_some() {
+                "Value return unavailable for holdings-only scope because the compounded return is outside the supported range.".to_string()
+            } else if holdings_flows_unavailable {
                 "Value return unavailable for holdings-only scope because external cash flows could not be inferred from snapshots.".to_string()
             } else if start_opt.is_none() {
                 holdings_all_time_unavailable_reason(end_point, "Value return", "holdings-only scope")
@@ -792,14 +822,24 @@ fn time_weighted_returns(history: &[DailyValuation], flows: &[PeriodFlow]) -> Tw
 
         // A near-zero positive denominator is a dormant/dust day: pause
         // compounding without nulling the headline.
-        let twr = if benign_low_base {
-            Decimal::ZERO
+        let step = if benign_low_base {
+            Some((Decimal::ZERO, factor))
         } else {
-            (curr_value + flow.outflow - prev_value - flow.inflow) / denominator
+            arith::div(
+                curr_value + flow.outflow - prev_value - flow.inflow,
+                denominator,
+            )
+            .and_then(|twr| arith::mul(factor, Decimal::ONE + twr).map(|next| (twr, next)))
         };
-        if !benign_low_base {
-            factor *= Decimal::ONE + twr;
-        }
+        let Some((twr, next_factor)) = step else {
+            reasons.push(format!(
+                "TWR unavailable for {} because the compounded return is outside the supported range.",
+                curr.date
+            ));
+            samples.push((curr.date, excluded(factor)));
+            continue;
+        };
+        factor = next_factor;
         samples.push((
             curr.date,
             ReturnSample {
@@ -1041,7 +1081,11 @@ fn risk_from_samples(samples: &[RiskSample], opening_date: Option<NaiveDate>) ->
     let mut recovery_date = None;
     let mut in_max_drawdown = false;
     for sample in samples {
-        cumulative *= Decimal::ONE + sample.simple_return;
+        // A path outside the kernel range has no drawdown to report.
+        let Some(next) = arith::mul(cumulative, Decimal::ONE + sample.simple_return) else {
+            return risk;
+        };
+        cumulative = next;
         if cumulative >= peak_value {
             peak_value = cumulative;
             peak_date = sample.date;
@@ -1089,7 +1133,8 @@ fn simple_value_return(history: &[DailyValuation], flows: &[PeriodFlow]) -> Opti
     if start_value <= Decimal::ZERO {
         return None;
     }
-    simple_value_return_amount(scoped, scoped_flows).map(|amount| amount / start_value)
+    simple_value_return_amount(scoped, scoped_flows)
+        .and_then(|amount| arith::div(amount, start_value))
 }
 
 fn simple_value_return_amount(history: &[DailyValuation], flows: &[PeriodFlow]) -> Option<Decimal> {
@@ -1222,7 +1267,10 @@ fn unrealized_components(
         start.investment_market_value - start.cost_basis
     };
     let local_change = (end.investment_market_value - end.cost_basis) - start_local;
-    let local_at_end_fx = local_change * end.fx_rate_to_base;
+    let Some(local_at_end_fx) = arith::mul(local_change, end.fx_rate_to_base) else {
+        // Not separable into local movement and FX: all of it is movement.
+        return (base_change, Decimal::ZERO);
+    };
     (
         local_at_end_fx.round_dp(STORED_PRECISION),
         (base_change - local_at_end_fx).round_dp(STORED_PRECISION),
@@ -1244,9 +1292,10 @@ fn cash_only_fx_effect(history: &[DailyValuation], enabled: bool) -> Decimal {
         .map(|pair| {
             let (prev, curr) = (&pair[0], &pair[1]);
             let delta_base = curr.cash_balance_base - prev.cash_balance_base;
-            let delta_at_current_fx =
-                (curr.cash_balance - prev.cash_balance) * curr.fx_rate_to_base;
-            (delta_base - delta_at_current_fx).round_dp(STORED_PRECISION)
+            arith::mul(curr.cash_balance - prev.cash_balance, curr.fx_rate_to_base)
+                .map_or(Decimal::ZERO, |delta_at_current_fx| {
+                    (delta_base - delta_at_current_fx).round_dp(STORED_PRECISION)
+                })
         })
         .sum::<Decimal>()
         .round_dp(STORED_PRECISION)
@@ -1291,7 +1340,7 @@ fn holdings_return(
             return (None, None);
         }
         let gain = end.total_value_base - end_book;
-        return (Some(gain), Some(gain / end_book));
+        return (Some(gain), arith::div(gain, end_book));
     }
     let start_value = start.total_value_base;
     let net_explicit: Decimal = flows
@@ -1300,7 +1349,9 @@ fn holdings_return(
         .map(|f| f.net())
         .sum();
     let change = end.total_value_base - start_value - net_explicit;
-    let value_return = (start_value > Decimal::ZERO).then(|| change / start_value);
+    let value_return = (start_value > Decimal::ZERO)
+        .then(|| arith::div(change, start_value))
+        .flatten();
     (Some(change), value_return)
 }
 
@@ -1669,39 +1720,8 @@ fn convert_for_attribution(
     inputs.fx().convert(amount, currency, base, date)
 }
 
-/// Legacy `activity_attribution_components`: income, fees and taxes an
-/// activity contributes, in its own currency.
-fn activity_components(activity: &Activity) -> (Decimal, Decimal, Decimal) {
-    use ActivityKind::*;
-    let magnitude = activity.amount.map(|a| a.abs());
-    match activity.kind {
-        Dividend | Interest => {
-            let gross = magnitude
-                .map(|a| a + activity.fee + activity.tax)
-                .unwrap_or(Decimal::ZERO);
-            (gross, activity.fee, activity.tax)
-        }
-        Fee => (
-            Decimal::ZERO,
-            magnitude.unwrap_or(Decimal::ZERO),
-            Decimal::ZERO,
-        ),
-        Tax => (
-            Decimal::ZERO,
-            Decimal::ZERO,
-            magnitude.unwrap_or(Decimal::ZERO),
-        ),
-        Buy | Sell => (Decimal::ZERO, activity.fee, activity.tax),
-        // Fees on cash flows are booked but knowingly not attributed.
-        Credit | Deposit | Withdrawal => (Decimal::ZERO, Decimal::ZERO, activity.tax),
-        // Cash transfers book tax to cash; asset transfers book only the fee.
-        TransferIn | TransferOut if activity.asset.is_none() => {
-            (Decimal::ZERO, Decimal::ZERO, activity.tax)
-        }
-        _ => (Decimal::ZERO, Decimal::ZERO, Decimal::ZERO),
-    }
-}
-
+/// Income, fees and taxes of the period's events, as `compile` decided them
+/// (`EconomicEvent::attribution`), converted to base on the event date.
 fn activity_effects(
     inputs: &MeasureInputs<'_>,
     result: &PerformanceResult,
@@ -1711,32 +1731,32 @@ fn activity_effects(
         return EffectSet::default();
     };
     let mut set = EffectSet::default();
-    for activity in inputs
+    for event in inputs
         .resolved
-        .facts
-        .activities
+        .ledger
+        .events
         .iter()
-        .filter(|a| scope.contains(&a.account) && in_period(a.date, start, end))
+        .filter(|e| scope.contains(&e.account) && in_period(e.date, start, end))
     {
-        let (income, fees, taxes) = activity_components(activity);
+        let attributed = event.attribution;
         let mut effect = Effect::default();
         let mut has_effect = false;
         for (label, raw, slot) in [
-            ("Income", income, &mut effect.income),
-            ("Fee", fees, &mut effect.fee),
-            ("Tax", taxes, &mut effect.tax),
+            ("Income", attributed.income, &mut effect.income),
+            ("Fee", attributed.fee, &mut effect.fee),
+            ("Tax", attributed.tax, &mut effect.tax),
         ] {
             if raw.is_zero() {
                 continue;
             }
-            match convert_for_attribution(inputs, raw, activity.currency.as_str(), activity.date) {
+            match convert_for_attribution(inputs, raw, event.currency.as_str(), event.date) {
                 Some(amount) => {
                     *slot = amount;
                     has_effect = true;
                 }
                 None => set.warnings.push(format!(
                     "{label} attribution skipped for activity {} because FX conversion failed.",
-                    activity.id
+                    event.source
                 )),
             }
         }
@@ -1901,10 +1921,17 @@ fn trade_charge_effects(
             continue;
         }
         let original_quantity = lot.original_quantity.abs();
+        // A share outside the kernel range attributes nothing.
         let remaining_charge = if original_quantity > Decimal::ZERO {
-            full_charge * lot.remaining_quantity.abs() / original_quantity
+            arith::proportional(full_charge, lot.remaining_quantity.abs(), original_quantity)
+                .unwrap_or(Decimal::ZERO)
         } else if lot.original_cost_basis_base.abs() > Decimal::ZERO {
-            full_charge * lot.remaining_cost_basis_base.abs() / lot.original_cost_basis_base.abs()
+            arith::proportional(
+                full_charge,
+                lot.remaining_cost_basis_base.abs(),
+                lot.original_cost_basis_base.abs(),
+            )
+            .unwrap_or(Decimal::ZERO)
         } else {
             full_charge
         };
@@ -1939,10 +1966,15 @@ fn trade_charge_effects(
         let disposed_quantity = disposal.quantity.abs();
         if original_quantity > Decimal::ZERO {
             acquisition_charges_disposed +=
-                charge_allocated * disposed_quantity / original_quantity;
+                arith::proportional(charge_allocated, disposed_quantity, original_quantity)
+                    .unwrap_or(Decimal::ZERO);
         } else if lot.original_cost_basis_base.abs() > Decimal::ZERO {
-            acquisition_charges_disposed += disposal.cost_basis_base.abs() * charge_allocated
-                / lot.original_cost_basis_base.abs();
+            acquisition_charges_disposed += arith::proportional(
+                charge_allocated,
+                disposal.cost_basis_base.abs(),
+                lot.original_cost_basis_base.abs(),
+            )
+            .unwrap_or(Decimal::ZERO);
         }
     }
 
@@ -1960,7 +1992,8 @@ fn trade_charge_effects(
         .filter_map(|(id, disposed)| {
             let input = charge_by_activity.get(id)?;
             Some(if input.quantity > Decimal::ZERO {
-                (input.charge * *disposed / input.quantity).min(input.charge)
+                arith::proportional(input.charge, *disposed, input.quantity)
+                    .map_or(input.charge, |charge| charge.min(input.charge))
             } else {
                 input.charge
             })
@@ -2037,7 +2070,13 @@ fn scoped_unrealized_effects(
         let base = |d: &DailyValuation| d.investment_market_value_base - d.cost_basis_base;
         let local_change = local(end_point) - start_point.map_or(Decimal::ZERO, local);
         let base_change = base(end_point) - start_point.map_or(Decimal::ZERO, base);
-        let local_at_end_fx = local_change * end_fx;
+        let Some(local_at_end_fx) = arith::mul(local_change, end_fx) else {
+            complete = false;
+            warnings.push(format!(
+                "Scoped FX attribution skipped for account {account} because its converted movement is outside the supported range."
+            ));
+            continue;
+        };
         unrealized += local_at_end_fx;
         fx_effect += base_change - local_at_end_fx;
         saw_account = true;
@@ -2441,7 +2480,13 @@ fn build_mixed_result(
         );
         None
     } else if denominator > Decimal::ZERO {
-        Some(summary_amount / denominator)
+        let value_return = arith::div(summary_amount, denominator);
+        if value_return.is_none() {
+            reasons.push(
+                "Value return unavailable for mixed scope because it is outside the supported range.".to_string(),
+            );
+        }
+        value_return
     } else {
         reasons.push(
             "Value return unavailable for mixed scope because all account-level denominators are zero or negative.".to_string(),
@@ -2590,10 +2635,13 @@ fn mixed_bounded_series(
                 }
             }
         }
-        if denominator > Decimal::ZERO {
+        if let Some(value) = (denominator > Decimal::ZERO)
+            .then(|| arith::div(amount, denominator))
+            .flatten()
+        {
             series.push(SeriesPoint {
                 date,
-                value: (amount / denominator).round_dp(STORED_PRECISION),
+                value: value.round_dp(STORED_PRECISION),
             });
         }
     }
@@ -2639,24 +2687,41 @@ pub fn measure_price_series(
         date: start_date,
         value: Decimal::ZERO,
     });
+    let out_of_range = || {
+        empty_response(
+            scope,
+            currency,
+            Some(start_date),
+            Some(end_date),
+            "Performance unavailable: the price series is outside the supported range.",
+        )
+    };
     for (date, price) in points.iter().copied().skip(1) {
         if price <= Decimal::ZERO || previous <= Decimal::ZERO {
             previous = price;
             continue;
         }
-        let daily_return = price / previous - Decimal::ONE;
+        let Some(ratio) = arith::div(price, previous) else {
+            return out_of_range();
+        };
+        let daily_return = ratio - Decimal::ONE;
         risk_samples.push(RiskSample {
             date,
             simple_return: daily_return,
         });
-        cumulative *= Decimal::ONE + daily_return;
+        let Some(next) = arith::mul(cumulative, ratio) else {
+            return out_of_range();
+        };
+        cumulative = next;
         series.push(SeriesPoint {
             date,
             value: (cumulative - Decimal::ONE).round_dp(STORED_PRECISION),
         });
         previous = price;
     }
-    let total_return = end_price / start_price - Decimal::ONE;
+    let Some(total_return) = arith::div(end_price, start_price).map(|r| r - Decimal::ONE) else {
+        return out_of_range();
+    };
     build_result(
         scope.to_string(),
         currency.clone(),

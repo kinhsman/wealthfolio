@@ -51,6 +51,44 @@ fn p_det_input_order_is_irrelevant() {
         raw.observed_snapshots.reverse();
         let shuffled = body(&Pipeline::run(raw).expect("pipeline"), &scenario);
         assert_same(&scenario.id, "P-DET", &shuffled, &reference);
+
+        // Stores are unique per (key, day, source), so a day can carry the
+        // same price or rate from several sources: which one wins must not
+        // depend on the order the rows arrive in.
+        let mut duplicated = scenario.raw_facts();
+        let echoes: Vec<RawQuote> = duplicated
+            .quotes
+            .iter()
+            .map(|q| RawQuote {
+                close: q.close * Decimal::new(101, 2),
+                source: "BROKER".into(),
+                ..q.clone()
+            })
+            .collect();
+        duplicated.quotes.extend(echoes);
+        let echoes: Vec<RawFxRate> = duplicated
+            .fx_rates
+            .iter()
+            .map(|r| RawFxRate {
+                rate: r.rate * Decimal::new(101, 2),
+                source: "YAHOO".into(),
+                ..r.clone()
+            })
+            .collect();
+        duplicated.fx_rates.extend(echoes);
+        let forward = body(
+            &Pipeline::run(duplicated.clone()).expect("pipeline"),
+            &scenario,
+        );
+        duplicated.quotes.reverse();
+        duplicated.fx_rates.reverse();
+        let reversed = body(&Pipeline::run(duplicated).expect("pipeline"), &scenario);
+        assert_same(
+            &scenario.id,
+            "P-DET (same-day duplicates)",
+            &reversed,
+            &forward,
+        );
     }
 }
 
@@ -598,7 +636,9 @@ fn p_diag_degradation_is_reported() {
                     series.diagnostics.iter().any(|d| {
                         matches!(
                             d.code,
-                            DiagnosticCode::MissingQuote | DiagnosticCode::FxUnavailable
+                            DiagnosticCode::MissingQuote
+                                | DiagnosticCode::FxUnavailable
+                                | DiagnosticCode::ValueOutOfRange
                         )
                     }),
                     "{}: {account} has degraded days without a diagnostic",
@@ -678,28 +718,72 @@ fn p_effective_type_overrides_are_transparent() {
 /// activity, blank every currency, zero every quantity.
 #[test]
 fn p_total_no_panics_on_mutated_inputs() {
+    // Every stage, `measure` included, runs on the mutated facts.
+    let run = |raw: RawFacts, scenario: &Scenario| {
+        if let Ok(pipeline) = Pipeline::run(raw) {
+            body(&pipeline, scenario);
+        }
+    };
     for scenario in load_all_scenarios() {
         let raw = scenario.raw_facts();
-        let _ = Pipeline::run(raw.clone());
+        run(raw.clone(), &scenario);
         for index in 0..raw.activities.len() {
             let mut mutated = raw.clone();
             mutated.activities.remove(index);
-            let _ = Pipeline::run(mutated);
+            run(mutated, &scenario);
         }
         let mut blank = raw.clone();
         for activity in &mut blank.activities {
             activity.currency.clear();
         }
-        let _ = Pipeline::run(blank);
+        run(blank, &scenario);
         let mut zero = raw.clone();
         for activity in &mut zero.activities {
             activity.quantity = Some(Decimal::ZERO);
             activity.unit_price = Some(Decimal::ZERO);
         }
-        let _ = Pipeline::run(zero);
-        let mut no_surfaces = raw;
+        run(zero, &scenario);
+        let mut no_surfaces = raw.clone();
         no_surfaces.quotes.clear();
         no_surfaces.fx_rates.clear();
-        let _ = Pipeline::run(no_surfaces);
+        run(no_surfaces, &scenario);
+
+        // Magnitudes at and beyond the kernel range (architecture §4.3):
+        // accepted inputs whose products overflow, rejected inputs, and
+        // tiny divisors. Declined, diagnosed, never a panic.
+        for (magnitude, tiny) in [
+            (MAX_MAGNITUDE, MIN_RATE),
+            (Decimal::MAX, Decimal::new(1, 28)),
+        ] {
+            let mut extreme = raw.clone();
+            for activity in &mut extreme.activities {
+                activity.quantity = activity.quantity.map(|_| magnitude);
+                activity.unit_price = activity.unit_price.map(|_| magnitude);
+                activity.amount = activity.amount.map(|_| magnitude);
+                activity.fee = activity.fee.map(|_| magnitude);
+                activity.fx_rate = activity.fx_rate.map(|_| magnitude);
+            }
+            run(extreme.clone(), &scenario);
+            for quote in &mut extreme.quotes {
+                quote.close = magnitude;
+            }
+            for rate in &mut extreme.fx_rates {
+                rate.rate = magnitude;
+            }
+            run(extreme, &scenario);
+
+            let mut tiny_divisors = raw.clone();
+            for activity in &mut tiny_divisors.activities {
+                activity.quantity = activity.quantity.map(|_| tiny);
+                activity.fx_rate = activity.fx_rate.map(|_| tiny);
+            }
+            for quote in &mut tiny_divisors.quotes {
+                quote.close = tiny;
+            }
+            for rate in &mut tiny_divisors.fx_rates {
+                rate.rate = tiny;
+            }
+            run(tiny_divisors, &scenario);
+        }
     }
 }

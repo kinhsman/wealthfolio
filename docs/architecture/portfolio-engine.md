@@ -291,6 +291,7 @@ pub struct EconomicEvent {
     pub action: Action,              // trade | security transfer | split | option expiry
     pub contribution: Contribution,  // net-contribution effect
     pub flow: Flow,                  // external-flow classification and provenance
+    pub attribution: Attributed,     // income, fees and taxes performance counts
     pub diagnostics: Vec<Diagnostic>,
 }
 ```
@@ -430,6 +431,12 @@ done and thrown away.
   of their arguments.
 - No stage panics on user data. Panics are reserved for internal invariant
   violations, which the property suite hunts.
+- Magnitudes are bounded. `normalize` rejects any input above `MAX_MAGNITUDE`
+  (1e20), and any rate outside [1e-20, 1e20], with a `ValueOutOfRange`
+  diagnostic. A product or quotient that would leave the range is declined: the
+  event is rejected, the day is `Unavailable` or the metric is unavailable, with
+  a diagnostic. Kernel values therefore stay far enough below `Decimal::MAX`
+  that summing them cannot overflow either.
 - Inputs are data-complete. An unresolvable rate is a typed degradation and a
   diagnostic, never a fetch, a silent `rate = 1`, or an unconverted addition.
 - Chunking is the caller's right: `project` and `value` may run over sub-ranges
@@ -442,8 +449,9 @@ done and thrown away.
 Two channels, deliberately distinct:
 
 - **`EngineError`** — the _request_ is unusable: an inverted range, an invalid
-  policy, a prior state that does not meet the range start. The caller made a
-  mistake and there is no result.
+  policy, a prior state that does not meet the range start, a measured scope
+  that names an archived account. The caller made a mistake and there is no
+  result.
 - **`Diagnostic`** — the _data_ is imperfect: an unparseable decimal, a missing
   currency, an unknown subtype, a missing quote, an unresolvable pair, an
   unpaired transfer, a negative balance. It is attached to the event or day it
@@ -477,11 +485,20 @@ product shows when the inputs are imperfect.
   currency stays unknown: its positions take the currency of the activity that
   opens them and its quotes need an explicit currency, never a default.
 - **Archiving is a scope boundary.** An archived account is outside the tracked
-  portfolio, so transfers to it are external outflows and transfers from it are
-  external inflows, priced like any other flow. Pairing still resolves, so the
-  amount is known rather than an unknown boundary. A scope that explicitly
-  includes the archived account nets both legs to zero, as for any internal
-  transfer.
+  portfolio and is neither projected nor valued, so transfers to it are external
+  outflows and transfers from it are external inflows, priced like any other
+  flow. Pairing still resolves, so the amount is known rather than an unknown
+  boundary. Measuring a scope that names an archived account is refused with
+  `ArchivedAccountInScope`: a total without one of its accounts would be
+  silently wrong.
+- **Units beyond a position have no lot.** A sell, transfer-out or expiry of
+  more units than held disposes the held units; a sell realises only their share
+  of the proceeds, books its stored cash in full, and reports the shortfall
+  (`InsufficientQuantity`, or `NoPositionToReduce` when nothing is held).
+- **An unrepresentable magnitude is declined, not wrapped.** See §4.3: a row
+  above the range is dropped at normalise, and a computation that would leave it
+  rejects the event or makes the day or metric unavailable, with a
+  `ValueOutOfRange` diagnostic.
 - **An unpriceable holding is not a total loss.** A position whose asset has no
   quote makes the day unavailable rather than valuing it at zero, which would
   otherwise report a complete −100 % return for an asset the system simply could
@@ -529,9 +546,11 @@ Testable contract; the property suite (§5) encodes each one.
 - Composite legs preserve their order: the income leg precedes the buy leg.
 - Every ordering, pairing, expansion and detection rule keys on the
   **effective** activity type, so an override is honoured everywhere or nowhere.
-- One quote per asset and day: when several sources quote the same day, the
-  manual price wins, then a provider's, then a broker's, then the source name,
-  so the input order of rows never decides a valuation.
+- One quote per asset and day, and one FX observation per pair and day: when
+  several sources report the same day, the manual row wins, then a provider's,
+  then a broker's, then the source name, then the value, so the input order of
+  rows never decides a valuation. An observed rate always beats the inverse of
+  the opposite pair; an inverse only fills days that pair has no row for.
 - Iteration in any output-affecting path uses ordered maps. FX paths are chosen
   by fewest hops, then lexicographic currency codes, so equal-length
   triangulations never resolve by hash order.
@@ -598,22 +617,22 @@ transfers (non-empty asset) book only their fee as cash, and a transfer in
 additionally capitalises that fee into the lot basis. A split has no cash
 effect.
 
-| Type         | Cash sign × amount                                                                                                              | Position and lots                                                                                                                                    | Net contribution                                         | Flow (portfolio scope)                                                                                                         |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| BUY          | − amount; gross = amount − charges                                                                                              | + qty; opens a lot (basis = gross + charges); a short cover uses POSITION_CLOSE intent with cash prorated to the covered quantity                    | —                                                        | Internal                                                                                                                       |
-| SELL         | + amount; − amount when charges exceed proceeds and the derivation reproduces the stored amount within tolerance (NOM-TRADE-05) | − qty; FIFO close with realised P&L; a short open uses POSITION_OPEN intent (negative lot); a sell with no position is cash only + warning           | —                                                        | Internal                                                                                                                       |
-| DIVIDEND     | + amount                                                                                                                        | — (DRIP and dividend-in-kind expand into two legs first)                                                                                             | —                                                        | Internal                                                                                                                       |
-| INTEREST     | + amount; on credit-card accounts − amount (EDGE-CC-01)                                                                         | — (staking rewards expand)                                                                                                                           | —                                                        | Internal                                                                                                                       |
-| DEPOSIT      | + amount                                                                                                                        | —                                                                                                                                                    | **+ amount**                                             | **External**                                                                                                                   |
-| WITHDRAWAL   | − amount; gross = amount − charges                                                                                              | —                                                                                                                                                    | **− amount**                                             | **External**                                                                                                                   |
-| TRANSFER_IN  | cash variant: + amount · security variant: − fee only                                                                           | security: paired lots via the transfer cache (dates and basis preserved, opposite-sign residents netted first), else the book-basis fallback ladder  | cash: + amount · security: + lot basis at acquisition FX | External when marked; pair resolved **and both accounts in scope** → Internal; unpaired and unmarked → Unknown (gates returns) |
-| TRANSFER_OUT | cash variant: − amount · security variant: − fee only                                                                           | security: FIFO removal on the net-sign leg; disposal proceeds = basis (P&L 0); removed lots staged for the pair                                      | cash: − amount · security: − removed basis               | as TRANSFER_IN                                                                                                                 |
-| FEE          | − amount                                                                                                                        | —                                                                                                                                                    | —                                                        | Internal                                                                                                                       |
-| TAX          | − amount                                                                                                                        | —                                                                                                                                                    | —                                                        | Internal                                                                                                                       |
-| SPLIT        | **none**                                                                                                                        | multiplies the split ratio of lots acquired before the split's local date; ratio from amount, else quantity; a fractional cashout is a separate sell | —                                                        | Internal                                                                                                                       |
-| CREDIT       | + amount                                                                                                                        | —                                                                                                                                                    | **+ amount only for subtype BONUS**                      | External for BONUS, else Internal                                                                                              |
-| ADJUSTMENT   | none                                                                                                                            | OPTION_EXPIRY: FIFO removal at zero proceeds (basis becomes a realised loss); other subtypes are no-ops                                              | —                                                        | Internal                                                                                                                       |
-| UNKNOWN      | none                                                                                                                            | none (warn and skip)                                                                                                                                 | —                                                        | Internal                                                                                                                       |
+| Type         | Cash sign × amount                                                                                                              | Position and lots                                                                                                                                                                                   | Net contribution                                         | Flow (portfolio scope)                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| BUY          | − amount; gross = amount − charges                                                                                              | + qty; opens a lot (basis = gross + charges); a short cover uses POSITION_CLOSE intent with cash prorated to the covered quantity                                                                   | —                                                        | Internal                                                                                                                       |
+| SELL         | + amount; − amount when charges exceed proceeds and the derivation reproduces the stored amount within tolerance (NOM-TRADE-05) | − qty; FIFO close with realised P&L; a short open uses POSITION_OPEN intent (negative lot); a sell with no position is cash only + warning; units beyond the position realise no proceeds + warning | —                                                        | Internal                                                                                                                       |
+| DIVIDEND     | + amount                                                                                                                        | — (DRIP and dividend-in-kind expand into two legs first)                                                                                                                                            | —                                                        | Internal                                                                                                                       |
+| INTEREST     | + amount; on credit-card accounts − amount (EDGE-CC-01)                                                                         | — (staking rewards expand)                                                                                                                                                                          | —                                                        | Internal                                                                                                                       |
+| DEPOSIT      | + amount                                                                                                                        | —                                                                                                                                                                                                   | **+ amount**                                             | **External**                                                                                                                   |
+| WITHDRAWAL   | − amount; gross = amount − charges                                                                                              | —                                                                                                                                                                                                   | **− amount**                                             | **External**                                                                                                                   |
+| TRANSFER_IN  | cash variant: + amount · security variant: − fee only                                                                           | security: paired lots via the transfer cache (dates and basis preserved, opposite-sign residents netted first, fee capitalised), else the book-basis fallback ladder                                | cash: + amount · security: + lot basis at acquisition FX | External when marked; pair resolved **and both accounts in scope** → Internal; unpaired and unmarked → Unknown (gates returns) |
+| TRANSFER_OUT | cash variant: − amount · security variant: − fee only                                                                           | security: FIFO removal on the net-sign leg; disposal proceeds = basis (P&L 0); removed lots staged for the pair                                                                                     | cash: − amount · security: − removed basis               | as TRANSFER_IN                                                                                                                 |
+| FEE          | − amount                                                                                                                        | —                                                                                                                                                                                                   | —                                                        | Internal                                                                                                                       |
+| TAX          | − amount                                                                                                                        | —                                                                                                                                                                                                   | —                                                        | Internal                                                                                                                       |
+| SPLIT        | **none**                                                                                                                        | multiplies the split ratio of lots acquired before the split's local date; ratio from amount, else quantity; a fractional cashout is a separate sell                                                | —                                                        | Internal                                                                                                                       |
+| CREDIT       | + amount                                                                                                                        | —                                                                                                                                                                                                   | **+ amount only for subtype BONUS**                      | External for BONUS, else Internal                                                                                              |
+| ADJUSTMENT   | none                                                                                                                            | OPTION_EXPIRY: FIFO removal at zero proceeds (basis becomes a realised loss); other subtypes are no-ops                                                                                             | —                                                        | Internal                                                                                                                       |
+| UNKNOWN      | none                                                                                                                            | none (warn and skip)                                                                                                                                                                                | —                                                        | Internal                                                                                                                       |
 
 **Subtypes.** `DRIP` (dividend into two legs), `STAKING_REWARD` (interest into
 two legs), `DIVIDEND_IN_KIND` (two legs), `BONUS`, `REBATE`, `REFUND` and
@@ -624,14 +643,17 @@ buy leg carries the income as its amount, so net cash is about zero, with price
 precedence: explicit positive unit price, then amount over quantity, then the
 raw unit price.
 
-**Cross-cutting rules.** Income attribution is gross. Fees and taxes are
-attributed for trades, income and standalone charge rows; fees on deposits,
-withdrawals and transfers are booked to cash but knowingly not attributed.
-Shortability: options may go negative implicitly, equities require explicit
-intent, everything else rejects a negative lot. Cash books into the account
-currency at the supplied rate when the activity carries one and the currencies
-differ, otherwise into the activity-currency bucket; an empty currency is a
-diagnostic, never a bucket key.
+**Cross-cutting rules.** `compile` decides what attribution counts and records
+it on the event (`EconomicEvent::attribution`); `measure` never re-reads the
+activity. Income attribution is gross. Fees and taxes are attributed for trades,
+income and standalone charge rows; fees on deposits, withdrawals and transfers
+are booked to cash but knowingly not attributed. Credit-card interest is a
+charge on a liability, so its amount is attributed as a fee, never as income
+(EDGE-CC-01). Shortability: options may go negative implicitly, equities require
+explicit intent, everything else rejects a negative lot. Cash books into the
+account currency at the supplied rate when the activity carries one and the
+currencies differ, otherwise into the activity-currency bucket; an empty
+currency is a diagnostic, never a bucket key.
 
 ## Glossary
 

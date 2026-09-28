@@ -208,6 +208,8 @@ pub struct FxRateSpec {
     pub to: String,
     pub day: NaiveDate,
     pub rate: Dec,
+    #[serde(default = "manual")]
+    pub source: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -340,6 +342,7 @@ impl Scenario {
                     to: r.to.clone(),
                     day: r.day,
                     rate: r.rate.0,
+                    source: r.source.clone(),
                 })
                 .collect(),
             observed_snapshots: self
@@ -757,9 +760,11 @@ pub fn capture_account_performance(
             end: window.end,
         },
         MeasureProfile::Full,
-    )
-    .expect("account performance");
-    performance_value(&result)
+    );
+    match result {
+        Ok(result) => performance_value(&result),
+        Err(error) => serde_json::json!({ "error": error.to_string() }),
+    }
 }
 
 pub fn capture_scope_performance(
@@ -776,9 +781,11 @@ pub fn capture_scope_performance(
             end: window.end,
         },
         MeasureProfile::Full,
-    )
-    .expect("scope performance");
-    performance_value(&result)
+    );
+    match result {
+        Ok(result) => performance_value(&result),
+        Err(error) => serde_json::json!({ "error": error.to_string() }),
+    }
 }
 
 /// The legacy `PerformanceCapture` shape.

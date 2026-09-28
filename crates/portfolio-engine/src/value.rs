@@ -14,15 +14,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 
+use crate::arith;
 use crate::compile::CompiledLedger;
 use crate::diagnostics::{Diagnostic, DiagnosticCode};
 use crate::model::*;
 use crate::resolve::{FxResolver, ResolvedSurfaces};
 
-/// Decimal places legacy storage keeps; flow fallbacks diff at this scale.
 /// A quote carried at least this many days is reported once per asset.
 const CARRIED_QUOTE_INFO_DAYS: i64 = 7;
 
+/// Decimal places legacy storage keeps; flow fallbacks diff at this scale.
 const STORAGE_PRECISION: u32 = 8;
 
 /// Facts after the pure stages that need no projection: canonical facts,
@@ -149,6 +150,14 @@ pub fn aggregate_scope(
     window: Window,
 ) -> Result<ValuationSeries, String> {
     let base = resolved.facts.policy.base_currency.clone();
+    if let Some(archived) = scope
+        .iter()
+        .find(|id| resolved.facts.accounts.get(*id).is_some_and(|a| a.archived))
+    {
+        return Err(format!(
+            "account '{archived}' is archived; archived accounts are neither projected nor valued"
+        ));
+    }
     // Stored rows inside the window, as the persisted read returns them.
     let histories: Vec<ValuationSeries> = scope
         .iter()
@@ -538,7 +547,6 @@ impl<'a> Valuer<'a> {
                 }
             }
             let (quote_major, factor) = policy.normalize_currency(quote.currency.as_str());
-            let price = quote.close * factor;
             let rate = if quote_major == account_currency {
                 Some(Decimal::ONE)
             } else {
@@ -554,9 +562,28 @@ impl<'a> Valuer<'a> {
                 );
                 continue;
             };
-            let split_factor = surfaces.split_price_factor(asset, factor_date.unwrap_or(day));
-            let market_value =
-                position.quantity * price * split_factor * position.contract_multiplier * rate;
+            let market_value = surfaces
+                .split_price_factor(asset, factor_date.unwrap_or(day))
+                .and_then(|split_factor| {
+                    arith::product(&[
+                        position.quantity,
+                        quote.close,
+                        factor,
+                        split_factor,
+                        position.contract_multiplier,
+                        rate,
+                    ])
+                });
+            let Some(market_value) = market_value else {
+                unpriced += 1;
+                unavailable = true;
+                self.report(
+                    DiagnosticCode::ValueOutOfRange,
+                    format!("{}:value:{asset}", self.account),
+                    format!("the value of {asset} on {day} is outside the kernel range; position unpriced"),
+                );
+                continue;
+            };
             investment += market_value;
             priced += 1;
             if position.basis_status() == BasisStatus::Complete {
@@ -568,14 +595,23 @@ impl<'a> Valuer<'a> {
         let mut cash = Decimal::ZERO;
         for (currency, amount) in &keyframe.cash {
             let (major, factor) = policy.normalize_currency(currency.as_str());
-            let normalized = *amount * factor;
             let rate = if major == account_currency {
                 Some(Decimal::ONE)
             } else {
                 self.fx.rate(major, &account_currency, day)
             };
             match rate {
-                Some(rate) => cash += normalized * rate,
+                Some(rate) => match arith::product(&[*amount, factor, rate]) {
+                    Some(converted) => cash += converted,
+                    None => {
+                        unavailable = true;
+                        self.report(
+                            DiagnosticCode::ValueOutOfRange,
+                            format!("{}:cash:{major}", self.account),
+                            format!("cash {amount} {major} on {day} is outside the kernel range once converted; cash bucket excluded"),
+                        );
+                    }
+                },
                 None => {
                     unavailable = true;
                     self.report(
@@ -596,12 +632,29 @@ impl<'a> Valuer<'a> {
         } else {
             self.fx.rate(&account_currency, &base, day)
         };
-        let Some(fx_rate_to_base) = fx_rate_to_base else {
-            self.report(
-                DiagnosticCode::FxUnavailable,
-                format!("{}:{account_currency}->{base}", self.account),
-                format!("no {account_currency}->{base} rate on {day}; base values unavailable"),
-            );
+        let base_values = fx_rate_to_base.map(|rate| {
+            Some((
+                rate,
+                arith::mul(cash, rate)?,
+                arith::mul(investment, rate)?,
+                arith::mul(eligible + cash, rate)?,
+            ))
+        });
+        let Some(Some((fx_rate_to_base, cash_base, investment_base, eligible_base))) = base_values
+        else {
+            if base_values.is_some() {
+                self.report(
+                    DiagnosticCode::ValueOutOfRange,
+                    format!("{}:base", self.account),
+                    format!("the {day} value in {base} is outside the kernel range; base values unavailable"),
+                );
+            } else {
+                self.report(
+                    DiagnosticCode::FxUnavailable,
+                    format!("{}:{account_currency}->{base}", self.account),
+                    format!("no {account_currency}->{base} rate on {day}; base values unavailable"),
+                );
+            }
             return DailyValuation {
                 date: day,
                 fx_rate_to_base: Decimal::ZERO,
@@ -624,8 +677,6 @@ impl<'a> Valuer<'a> {
             };
         };
         let cost_basis_base = self.cost_basis_in(keyframe, day, &base, |p| p.cost_basis_base);
-        let cash_base = cash * fx_rate_to_base;
-        let investment_base = investment * fx_rate_to_base;
         let value_status = if unavailable {
             ValueStatus::Unavailable
         } else if unpriced == 0 {
@@ -650,7 +701,7 @@ impl<'a> Valuer<'a> {
             cost_basis_base,
             book_basis_base: cost_basis_base + cash_base,
             net_contribution_base: keyframe.net_contribution_base,
-            performance_eligible_value_base: (eligible + cash) * fx_rate_to_base,
+            performance_eligible_value_base: eligible_base,
             value_status,
             basis_status,
             flow: DailyFlow::default(),
@@ -681,7 +732,14 @@ impl<'a> Valuer<'a> {
                 .to_string();
             if position.lots.is_empty() {
                 match self.fx.rate(&position_currency, target, day) {
-                    Some(rate) => total += position.total_cost_basis * rate,
+                    Some(rate) => match arith::mul(position.total_cost_basis, rate) {
+                        Some(converted) => total += converted,
+                        None => self.report(
+                            DiagnosticCode::ValueOutOfRange,
+                            format!("{}:basis:{asset}", self.account),
+                            format!("the book cost of {asset} in {target} is outside the kernel range; omitted from the converted basis"),
+                        ),
+                    },
                     None => self.report(
                         DiagnosticCode::FxUnavailable,
                         format!("{}:basis:{asset}", self.account),
@@ -694,12 +752,22 @@ impl<'a> Valuer<'a> {
                 if lot.cost_basis.is_zero() {
                     continue;
                 }
-                if let Some(rate) = lot.stored_fx_rate_to(target) {
-                    total += lot.cost_basis * rate;
+                if let Some(converted) = lot
+                    .stored_fx_rate_to(target)
+                    .and_then(|rate| arith::mul(lot.cost_basis, rate))
+                {
+                    total += converted;
                     continue;
                 }
                 match self.fx.rate(&position_currency, target, lot.acquisition_date) {
-                    Some(rate) => total += lot.cost_basis * rate,
+                    Some(rate) => match arith::mul(lot.cost_basis, rate) {
+                        Some(converted) => total += converted,
+                        None => self.report(
+                            DiagnosticCode::ValueOutOfRange,
+                            format!("{}:basis:{asset}:{}", self.account, lot.id),
+                            format!("the basis of lot {} in {target} is outside the kernel range; omitted from the converted basis", lot.id),
+                        ),
+                    },
                     None => self.report(
                         DiagnosticCode::FxUnavailable,
                         format!("{}:basis:{asset}:{}", self.account, lot.id),
@@ -823,7 +891,40 @@ impl<'a> Valuer<'a> {
                     .latest_on_or_before(asset, event.date)
                 {
                     let (quote_major, factor) = policy.normalize_currency(quote.currency.as_str());
-                    let market_value = *quantity * quote.close * factor * multiplier;
+                    // The transferred units are the units held on the day, so
+                    // they are priced like the position (`value_day`): with
+                    // the factor of every provider-adjusted split after it.
+                    let market_value = self
+                        .resolved
+                        .surfaces
+                        .split_price_factor(asset, event.date)
+                        .and_then(|split_factor| {
+                            arith::product(&[
+                                *quantity,
+                                quote.close,
+                                factor,
+                                split_factor,
+                                multiplier,
+                            ])
+                        });
+                    let Some(market_value) = market_value else {
+                        self.report(
+                            DiagnosticCode::ValueOutOfRange,
+                            format!("flow:{}", event.source),
+                            format!(
+                                "the market value of {} is outside the kernel range; flow unpriced",
+                                event.source
+                            ),
+                        );
+                        return (
+                            Decimal::ZERO,
+                            if unknown {
+                                FlowSource::UnknownBoundaryTransfer
+                            } else {
+                                FlowSource::Unknown
+                            },
+                        );
+                    };
                     if !market_value.is_zero() {
                         let source = if unknown {
                             FlowSource::UnknownBoundaryTransfer

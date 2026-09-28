@@ -66,9 +66,10 @@ quotes:
   - { asset: aapl, day: 2025-01-12, close: 52 }
 expected_notes: >
   01-08 per account: acc-a external outflow 5000 (market), acc-b external
-  inflow 5000 and cash 100 -> 75 (fee 25). Portfolio scope row for 01-08:
-  inflow 0, outflow 0, source MIXED; the scope's net contribution is
-  unchanged by the transfer and the 25 fee shows up as a fee in attribution,
-  not as a phantom contribution. Before the direction fix the scope row
-  read inflow 5000 / outflow 0 because the receiving leg's negative cash
-  (the fee) classified it as an outflow.
+  inflow 5000 and cash 100 -> 75 (fee 25). The 25 fee is capitalised into
+  acc-b's carried lot (cost basis 5025, fee_allocated 25), so acc-b reports
+  unrealized 175 rather than 200 plus an unexplained -25, and its quality is
+  ok. Portfolio scope row for 01-08: inflow 0, outflow 0, source MIXED; the
+  scope's net contribution is unchanged by the transfer. Before the
+  direction fix the scope row read inflow 5000 / outflow 0 because the
+  receiving leg's negative cash (the fee) classified it as an outflow.

@@ -74,7 +74,8 @@ quotes:
   - { asset: aapl, day: 2025-01-02, close: 100, currency: USD, source: MANUAL }
                             # same day, several sources: MANUAL wins, then providers, then BROKER
 fx_rates:
-  - { from: USD, to: CAD, day: 2025-01-02, rate: 1.35 }
+  - { from: USD, to: CAD, day: 2025-01-02, rate: 1.35, source: MANUAL }
+                            # source optional (default MANUAL); ranks same-day rows like quotes
 observed_snapshots:         # holdings-mode facts (never rebuilt)
   - account: acc-h
     date: 2025-01-31

@@ -134,6 +134,7 @@ fn generated_facts() -> RawFacts {
             to: "CAD".to_string(),
             day: start + chrono::Duration::days(d),
             rate: Decimal::new(130 + (d % 20), 2),
+            source: "GENERATED".to_string(),
         })
         .collect();
 

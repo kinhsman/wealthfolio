@@ -5,6 +5,7 @@
 
 use rust_decimal::Decimal;
 
+use crate::arith;
 use crate::diagnostics::{Diagnostic, DiagnosticCode};
 use crate::model::*;
 
@@ -63,10 +64,9 @@ fn expand(activity: &Activity) -> Vec<Leg> {
     let acquisition_price = Some(activity.unit_price)
         .filter(|price| *price > Decimal::ZERO)
         .or_else(|| {
-            income_amount.and_then(|amount| {
-                (!activity.quantity.is_zero() && amount > Decimal::ZERO)
-                    .then(|| amount / activity.quantity)
-            })
+            income_amount
+                .filter(|amount| *amount > Decimal::ZERO)
+                .and_then(|amount| arith::div(amount, activity.quantity))
         })
         .unwrap_or(activity.unit_price);
 
@@ -115,6 +115,7 @@ fn compile_leg(leg: &Leg, facts: &CanonicalFacts) -> EconomicEvent {
     let action = action_for(activity, &mut diagnostics);
     let contribution = contribution_for(activity);
     let flow = flow_for(activity, facts, cash.as_ref(), &mut diagnostics);
+    let attribution = attribution_for(activity, account);
 
     EconomicEvent {
         id: leg.event_id.clone(),
@@ -129,6 +130,7 @@ fn compile_leg(leg: &Leg, facts: &CanonicalFacts) -> EconomicEvent {
         action,
         contribution,
         flow,
+        attribution,
         diagnostics,
     }
 }
@@ -215,7 +217,11 @@ fn sell_is_proven_negative(
     multiplier: Decimal,
     final_amount: Decimal,
 ) -> bool {
-    let gross = activity.quantity * activity.unit_price * multiplier;
+    // Economics that cannot be computed cannot prove anything: the stored
+    // amount keeps its type-directed sign.
+    let Some(gross) = arith::product(&[activity.quantity, activity.unit_price, multiplier]) else {
+        return false;
+    };
     if gross <= Decimal::ZERO {
         return false;
     }
@@ -329,6 +335,54 @@ fn action_for(activity: &Activity, diagnostics: &mut Vec<Diagnostic>) -> Action 
     }
 }
 
+/// Appendix A, cross-cutting rules: income is attributed gross; fees and
+/// taxes are attributed for trades, income and standalone charge rows; fees
+/// on deposits, withdrawals and transfers are booked but knowingly not
+/// attributed. Credit-card interest is a charge on a liability (its cash is
+/// negative), so its amount is attributed as a fee, never as income.
+fn attribution_for(activity: &Activity, account: &AccountFacts) -> Attributed {
+    use ActivityKind::*;
+    let amount = activity.amount.unwrap_or(Decimal::ZERO);
+    let (fee, tax) = (activity.fee, activity.tax);
+    match activity.kind {
+        Interest if account.kind == AccountKind::CreditCard => Attributed {
+            fee: amount,
+            ..Attributed::default()
+        },
+        Dividend | Interest => Attributed {
+            income: activity
+                .amount
+                .map(|amount| amount + fee + tax)
+                .unwrap_or(Decimal::ZERO),
+            fee,
+            tax,
+        },
+        Fee => Attributed {
+            fee: amount,
+            ..Attributed::default()
+        },
+        Tax => Attributed {
+            tax: amount,
+            ..Attributed::default()
+        },
+        Buy | Sell => Attributed {
+            fee,
+            tax,
+            ..Attributed::default()
+        },
+        // Cash transfers book tax to cash; asset transfers book only the fee.
+        Credit | Deposit | Withdrawal => Attributed {
+            tax,
+            ..Attributed::default()
+        },
+        TransferIn | TransferOut if !activity.is_security_transfer => Attributed {
+            tax,
+            ..Attributed::default()
+        },
+        _ => Attributed::default(),
+    }
+}
+
 fn contribution_for(activity: &Activity) -> Contribution {
     use ActivityKind::*;
     match activity.kind {
@@ -380,7 +434,7 @@ fn flow_for(
                 }
             };
             let value = if activity.is_security_transfer {
-                let book_basis = Some(activity.quantity * activity.unit_price)
+                let book_basis = arith::mul(activity.quantity, activity.unit_price)
                     .filter(|basis| !basis.is_zero())
                     .or_else(|| {
                         (activity.kind == TransferIn && !activity.quantity.is_zero())

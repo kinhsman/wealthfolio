@@ -8,6 +8,7 @@
 //! Every stage is a total function of its arguments; imperfect data becomes
 //! [`Diagnostic`]s, an unusable request becomes an [`EngineError`].
 
+mod arith;
 pub mod compile;
 pub mod diagnostics;
 pub mod error;
