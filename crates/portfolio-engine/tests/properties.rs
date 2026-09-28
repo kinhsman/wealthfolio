@@ -351,7 +351,10 @@ fn p_split_is_basis_and_cash_neutral() {
 }
 
 /// P-TXF (I7): a day whose only scoped events are the two legs of matched
-/// internal transfers has zero external flow at portfolio scope.
+/// internal transfers has zero external flow at portfolio scope. The one
+/// deliberate exception is a same-account FX conversion the import linker
+/// did not record: it keeps the legacy per-leg contribution (#1655), which
+/// surfaces as a net-contribution fallback flow.
 #[test]
 fn p_txf_internal_pairs_cancel_at_portfolio_scope() {
     for scenario in corpus() {
@@ -376,7 +379,15 @@ fn p_txf_internal_pairs_cancel_at_portfolio_scope() {
             by_day.entry(event.date).or_default().push(event);
         }
         for (day, events) in &by_day {
+            let unlinked_conversion = |e: &&EconomicEvent| {
+                pipeline
+                    .facts
+                    .transfer_pairs
+                    .pair_for(&e.source)
+                    .is_some_and(|p| p.in_account == p.out_account && !p.contribution_neutral)
+            };
             let only_internal_pairs = !events.is_empty()
+                && !events.iter().any(unlinked_conversion)
                 && events.iter().all(|e| {
                     matches!(&e.flow.boundary, Boundary::Internal { counterparty } if scope.contains(counterparty))
                 });

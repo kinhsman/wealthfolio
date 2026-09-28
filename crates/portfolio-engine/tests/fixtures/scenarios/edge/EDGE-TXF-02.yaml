@@ -6,7 +6,7 @@ intent: >
   regardless of where the transfer fee is charged. The receiving leg books
   only its fee as cash (a negative cash effect), which must not classify the
   incoming securities as an outflow: the scope row on the transfer day is
-  0 in / 0 out (MIXED), not 5,000 in / 0 out. Per account the legs stay
+  0 in / 0 out, not 5,000 in / 0 out. Per account the legs stay
   external (acc-a outflow 5,000, acc-b inflow 5,000 at market). Marked [K].
 markers: [K]
 policy:
@@ -69,7 +69,9 @@ expected_notes: >
   inflow 5000 and cash 100 -> 75 (fee 25). The 25 fee is capitalised into
   acc-b's carried lot (cost basis 5025, fee_allocated 25), so acc-b reports
   unrealized 175 rather than 200 plus an unexplained -25, and its quality is
-  ok. Portfolio scope row for 01-08: inflow 0, outflow 0, source MIXED; the
-  scope's net contribution is unchanged by the transfer. Before the
+  ok. Portfolio scope row for 01-08: inflow 0, outflow 0, keeping the legs'
+  QUOTE_DERIVED_MARKET_VALUE provenance (netting adds no source), so the
+  portfolio quality is ok; the scope's net contribution is unchanged by the
+  transfer. Before the
   direction fix the scope row read inflow 5000 / outflow 0 because the
   receiving leg's negative cash (the fee) classified it as an outflow.

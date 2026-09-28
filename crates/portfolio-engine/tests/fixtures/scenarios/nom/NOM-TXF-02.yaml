@@ -70,7 +70,7 @@ expected_notes: >
   open_activity_id in-1; keyframe 01-08 position 10 aapl average 100.5;
   net_contribution 100 -> 1105. Account flows 01-08: acc-a outflow 1100,
   acc-b inflow 1100, both QUOTE_DERIVED_MARKET_VALUE (10 x 110). Portfolio:
-  the 01-08 row nets to zero (source MIXED); portfolio net_contribution 2100
+  the 01-08 row nets to zero and keeps QUOTE_DERIVED_MARKET_VALUE; portfolio net_contribution 2100
   throughout; portfolio total value 2095 (01-03) -> 2195 (01-08) -> 2245
   (01-12). LEGACY BEHAVIOR (attribution): account scopes value the transfer
   at market (1100) while the lot carries basis 1005, so acc-a reports

@@ -43,7 +43,7 @@ expected_notes: >
   2000 (1350 / 1.35 = 1000 CAD->USD). net_contribution 2000 -> 2000 - 1000 +
   1350/1.35 = 2000 (each leg converted separately; exact only because the
   booked rate equals the day's FX rate). Valuations: total value 2000 every
-  day; persisted rows keep NO_FLOW on 01-06; the scoped `flows` read lists a
-  01-06 row with inflow 0 / outflow 0 and source CASH_AMOUNT at both scopes
-  (the internal-pair adjustment marker), i.e. no external flow. TWR 0%,
+  day; persisted rows keep NO_FLOW on 01-06; the scoped `flows` read lists no
+  row at either scope: the internal pair nets to nothing and netting stamps
+  no provenance of its own. TWR 0%,
   contributions 2000, no attribution warnings.

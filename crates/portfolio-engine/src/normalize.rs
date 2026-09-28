@@ -480,6 +480,7 @@ fn canonical_activity(
             .map(|g| g.trim().to_string())
             .filter(|g| !g.is_empty()),
         external_transfer: raw.external_transfer,
+        fx_conversion: raw.fx_conversion,
         is_security_transfer,
         source_system: raw
             .source_system
@@ -665,6 +666,38 @@ fn build_pair(group: &str, legs: &[&Activity]) -> Result<TransferPair, String> {
         out_account: transfer_out.account.clone(),
         in_account: transfer_in.account.clone(),
         security,
+        contribution_neutral: is_recorded_fx_conversion(transfer_in, transfer_out),
+    })
+}
+
+/// A same-account cash FX conversion whose legs both carry the import
+/// linker's record of it (internal flow, `implied_from_import`, matching
+/// currencies and amounts). Structural pairing alone is deliberately not
+/// enough to make a conversion contribution-neutral.
+fn is_recorded_fx_conversion(transfer_in: &Activity, transfer_out: &Activity) -> bool {
+    if transfer_in.account != transfer_out.account
+        || transfer_in.is_security_transfer
+        || transfer_out.is_security_transfer
+    {
+        return false;
+    }
+    let (Some(source_amount), Some(destination_amount)) = (transfer_out.amount, transfer_in.amount)
+    else {
+        return false;
+    };
+    [transfer_in, transfer_out].iter().all(|leg| {
+        leg.external_transfer == Some(false)
+            && leg.fx_conversion.as_ref().is_some_and(|fx| {
+                fx.rate_source == "implied_from_import"
+                    && fx
+                        .source_currency
+                        .eq_ignore_ascii_case(transfer_out.currency.as_str())
+                    && fx
+                        .destination_currency
+                        .eq_ignore_ascii_case(transfer_in.currency.as_str())
+                    && fx.source_amount.map(|a| a.abs()) == Some(source_amount)
+                    && fx.destination_amount.map(|a| a.abs()) == Some(destination_amount)
+            })
     })
 }
 
@@ -735,6 +768,7 @@ mod tests {
             fx_rate: None,
             source_group_id: None,
             external_transfer: None,
+            fx_conversion: None,
             source_system: None,
             is_user_modified: false,
             created_at: Utc.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),

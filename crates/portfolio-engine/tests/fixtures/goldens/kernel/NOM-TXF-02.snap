@@ -806,5 +806,5 @@ baseline:
     - date: 2025-01-08
       inflow_base: "0"
       outflow_base: "0"
-      source: MIXED
+      source: QUOTE_DERIVED_MARKET_VALUE
 scenario: NOM-TXF-02

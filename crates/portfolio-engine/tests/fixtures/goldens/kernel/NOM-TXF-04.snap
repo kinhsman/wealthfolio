@@ -811,7 +811,7 @@ baseline:
       method: timeWeighted
       period_end: 2025-01-12
       period_start: 2025-01-02
-      quality: partial
+      quality: ok
       returns:
         annualized_irr: "0.47779083"
         annualized_twr: ~
@@ -857,10 +857,10 @@ baseline:
         method: timeWeighted
         percent: "0.01075"
         percent_status: complete
-        quality: partial
+        quality: ok
   portfolio_flows:
     - date: 2025-01-08
       inflow_base: "0"
       outflow_base: "0"
-      source: MIXED
+      source: QUOTE_DERIVED_MARKET_VALUE
 scenario: NOM-TXF-04

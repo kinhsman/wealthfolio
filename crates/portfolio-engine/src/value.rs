@@ -236,7 +236,8 @@ pub fn aggregate_scope(
         };
         day.flow.inflow_base = (day.flow.inflow_base - inflow).max(Decimal::ZERO);
         day.flow.outflow_base = (day.flow.outflow_base - outflow).max(Decimal::ZERO);
-        day.flow.source = day.flow.source.combine(FlowSource::CashAmount);
+        // Netting removes scope-internal legs; it adds no differently valued
+        // flow, so the day keeps the provenance of the flows that survive.
     }
 
     Ok(ValuationSeries {
@@ -1068,7 +1069,10 @@ impl<'a> Valuer<'a> {
     }
 
     /// Legacy `internal_transfer_adjustments_from_scoped_inputs`: both legs of
-    /// pairs fully inside the scope, priced as external flows.
+    /// pairs fully inside the scope, priced as external flows. A same-account
+    /// pair (a cash FX conversion) is internal at every scope, so its legs
+    /// never reached any account's flows and there is nothing to net: netting
+    /// them would erase an unrelated flow on the same day.
     fn internal_adjustments(
         &mut self,
         scope: &[AccountId],
@@ -1081,7 +1085,11 @@ impl<'a> Valuer<'a> {
             .transfer_pairs
             .by_group
             .values()
-            .filter(|pair| scope.contains(&pair.in_account) && scope.contains(&pair.out_account))
+            .filter(|pair| {
+                pair.in_account != pair.out_account
+                    && scope.contains(&pair.in_account)
+                    && scope.contains(&pair.out_account)
+            })
             .collect();
         for pair in pairs {
             for leg in [&pair.transfer_in, &pair.transfer_out] {

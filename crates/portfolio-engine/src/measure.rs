@@ -20,7 +20,6 @@ use crate::resolve::FxResolver;
 use crate::value::{aggregate_scope, external_flow_base, Resolved, Window};
 
 const DAYS_PER_YEAR: Decimal = dec!(365.25);
-const SQRT_DAYS_PER_YEAR_APPROX: Decimal = dec!(19.111514854);
 const MIN_ANNUALIZATION_DAYS: i64 = 30;
 const MIN_RETURN_BASE: Decimal = Decimal::ONE;
 const RESIDUAL_TOLERANCE_RATE: Decimal = dec!(0.002);
@@ -129,6 +128,11 @@ struct ReturnSample {
 struct RiskSample {
     date: NaiveDate,
     simple_return: Decimal,
+    /// Calendar days this return covers, from the observation before it.
+    /// Carried per sample because the series is not evenly spaced: an
+    /// excluded day leaves a gap without lengthening the next return, and a
+    /// quote series only has trading days.
+    period_days: i64,
 }
 
 struct TwrComputation {
@@ -472,6 +476,7 @@ fn performance_core(
                     risk_samples.push(RiskSample {
                         date: pair[1].date,
                         simple_return: daily_return,
+                        period_days: (pair[1].date - pair[0].date).num_days(),
                     });
                 }
                 if include_series {
@@ -491,13 +496,18 @@ fn performance_core(
             holdings_chained = Some(factor - Decimal::ONE);
         }
     } else if !holdings {
+        // Each sample covers one window step: the previous sample's date (or
+        // the first row's) opens its period.
+        let mut period_start = actual_start;
         for (date, sample) in &twr.samples {
             if full && !sample.excluded {
                 risk_samples.push(RiskSample {
                     date: *date,
                     simple_return: sample.twr,
+                    period_days: (*date - period_start).num_days(),
                 });
             }
+            period_start = *date;
             if include_series {
                 series.push(SeriesPoint {
                     date: *date,
@@ -1028,20 +1038,39 @@ fn period_return_from_annualized(
     base.checked_powd(years).map(|p| p - Decimal::ONE)
 }
 
-fn volatility(daily_returns: &[Decimal]) -> Option<Decimal> {
-    if daily_returns.len() < 2 {
+/// Observations a year implied by the periods the samples actually cover:
+/// 365.25 for a calendar-daily series, about 252 for trading days, correct
+/// for gapped and weekly series too.
+fn periods_per_year(samples: &[RiskSample]) -> Option<Decimal> {
+    let covered_days = samples
+        .iter()
+        .try_fold(0i64, |total, sample| total.checked_add(sample.period_days))?;
+    if samples.is_empty() || covered_days <= 0 {
         return None;
     }
-    let log_returns: Vec<Decimal> = daily_returns
+    arith::div(
+        Decimal::from(samples.len()) * DAYS_PER_YEAR,
+        Decimal::from(covered_days),
+    )
+}
+
+/// Annualised standard deviation of log returns, scaled by the frequency of
+/// the samples the variance is taken over.
+fn volatility(samples: &[RiskSample]) -> Option<Decimal> {
+    if samples.len() < 2 {
+        return None;
+    }
+    let (usable, log_returns): (Vec<RiskSample>, Vec<Decimal>) = samples
         .iter()
-        .filter_map(|r| {
-            let factor = Decimal::ONE + *r;
+        .filter_map(|sample| {
+            let factor = Decimal::ONE + sample.simple_return;
             if factor <= Decimal::ZERO {
                 return None;
             }
-            factor.to_f64().and_then(|f| Decimal::from_f64(f.ln()))
+            let log_return = factor.to_f64().and_then(|f| Decimal::from_f64(f.ln()))?;
+            Some((*sample, log_return))
         })
-        .collect();
+        .unzip();
     if log_returns.len() < 2 {
         return None;
     }
@@ -1058,15 +1087,14 @@ fn volatility(daily_returns: &[Decimal]) -> Option<Decimal> {
     if variance.is_sign_negative() {
         return None;
     }
-    let daily = variance.sqrt().unwrap_or(Decimal::ZERO);
-    let factor = DAYS_PER_YEAR.sqrt().unwrap_or(SQRT_DAYS_PER_YEAR_APPROX);
-    Some((daily * factor).round_dp(STORED_PRECISION))
+    let period = variance.sqrt().unwrap_or(Decimal::ZERO);
+    let factor = periods_per_year(&usable)?.sqrt()?;
+    Some((period * factor).round_dp(STORED_PRECISION))
 }
 
 fn risk_from_samples(samples: &[RiskSample], opening_date: Option<NaiveDate>) -> Risk {
-    let returns: Vec<Decimal> = samples.iter().map(|s| s.simple_return).collect();
     let mut risk = Risk {
-        volatility: volatility(&returns),
+        volatility: volatility(samples),
         ..Risk::default()
     };
     if samples.is_empty() {
@@ -2725,9 +2753,11 @@ pub fn measure_price_series(
             "Performance unavailable: the price series is outside the supported range.",
         )
     };
+    let mut previous_date = start_date;
     for (date, price) in points.iter().copied().skip(1) {
         if price <= Decimal::ZERO || previous <= Decimal::ZERO {
             previous = price;
+            previous_date = date;
             continue;
         }
         let Some(ratio) = arith::div(price, previous) else {
@@ -2737,6 +2767,7 @@ pub fn measure_price_series(
         risk_samples.push(RiskSample {
             date,
             simple_return: daily_return,
+            period_days: (date - previous_date).num_days(),
         });
         let Some(next) = arith::mul(cumulative, ratio) else {
             return out_of_range();
@@ -2747,6 +2778,7 @@ pub fn measure_price_series(
             value: (cumulative - Decimal::ONE).round_dp(STORED_PRECISION),
         });
         previous = price;
+        previous_date = date;
     }
     let Some(total_return) = arith::div(end_price, start_price).map(|r| r - Decimal::ONE) else {
         return out_of_range();
@@ -2783,6 +2815,38 @@ pub fn measure_price_series(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn samples(periods: &[i64]) -> Vec<RiskSample> {
+        let start = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        periods
+            .iter()
+            .enumerate()
+            .map(|(index, days)| RiskSample {
+                date: start + chrono::Days::new(index as u64),
+                simple_return: if index % 2 == 0 {
+                    dec!(0.01)
+                } else {
+                    dec!(-0.01)
+                },
+                period_days: *days,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn frequency_follows_the_periods_the_samples_cover() {
+        // Calendar-daily rows: 365.25 a year.
+        assert_eq!(periods_per_year(&samples(&[1; 10])), Some(DAYS_PER_YEAR));
+        // Trading days (a weekend every five returns): about 261 a year.
+        let trading: Vec<i64> = (0..20).map(|i| if i % 5 == 4 { 3 } else { 1 }).collect();
+        let per_year = periods_per_year(&samples(&trading)).unwrap();
+        assert!(per_year > dec!(260) && per_year < dec!(262), "{per_year}");
+        // The same returns annualise less on a trading-day series than on a
+        // calendar-daily one.
+        let calendar = volatility(&samples(&[1; 20])).unwrap();
+        let weekdays = volatility(&samples(&trading)).unwrap();
+        assert!(weekdays < calendar, "{weekdays} vs {calendar}");
+    }
 
     #[test]
     fn annualisation_overflow_is_not_applicable_instead_of_a_panic() {

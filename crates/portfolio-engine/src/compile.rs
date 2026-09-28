@@ -113,7 +113,7 @@ fn compile_leg(leg: &Leg, facts: &CanonicalFacts) -> EconomicEvent {
         tax: activity.tax,
     };
     let action = action_for(activity, &mut diagnostics);
-    let contribution = contribution_for(activity);
+    let contribution = contribution_for(activity, facts);
     let flow = flow_for(activity, facts, cash.as_ref(), &mut diagnostics);
     let attribution = attribution_for(activity, account);
 
@@ -384,8 +384,15 @@ fn attribution_for(activity: &Activity, account: &AccountFacts) -> Attributed {
     }
 }
 
-fn contribution_for(activity: &Activity) -> Contribution {
+fn contribution_for(activity: &Activity, facts: &CanonicalFacts) -> Contribution {
     use ActivityKind::*;
+    if facts
+        .transfer_pairs
+        .pair_for(&activity.id)
+        .is_some_and(|pair| pair.contribution_neutral)
+    {
+        return Contribution::None;
+    }
     match activity.kind {
         Deposit | Withdrawal => Contribution::CashGross,
         Credit if activity.subtype == Some(Subtype::Bonus) => Contribution::CashGross,
@@ -484,6 +491,7 @@ mod tests {
             fx_rate: None,
             source_group_id: None,
             external_transfer: None,
+            fx_conversion: None,
             source_system: None,
             is_user_modified: false,
             created_at: Utc.with_ymd_and_hms(2025, 1, 1, 0, 0, 0).unwrap(),
