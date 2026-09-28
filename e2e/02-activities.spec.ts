@@ -506,13 +506,13 @@ test.describe("Activity Creation Tests", () => {
     const targetRow = row.first();
     await expect(targetRow).toBeVisible({ timeout: 10000 });
     const dialog = page.getByRole("dialog", { name: "Update Activity" });
-    await expect(async () => {
-      await targetRow.getByRole("button", { name: "Open", exact: true }).press("Enter");
-      await page
-        .getByRole("menuitem", { name: "Edit", exact: true })
-        .evaluate((element: HTMLElement) => element.click());
-      await expect(dialog).toBeVisible({ timeout: 1000 });
-    }).toPass({ timeout: 10000 });
+    await targetRow.getByRole("button", { name: "Open", exact: true }).press("Enter");
+    const editItem = page.getByRole("menuitem", { name: "Edit", exact: true });
+    await expect(editItem).toBeVisible();
+    await page.keyboard.press("ArrowDown");
+    await expect(editItem).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeVisible();
     return dialog;
   }
 
@@ -1215,19 +1215,21 @@ test.describe("Activity Creation Tests", () => {
   test("21. Verify activity count in activities page", async () => {
     await gotoActivities(page);
 
-    // Wait for activities to load
-    await page.waitForTimeout(1000);
-
-    // Count activity rows - we created activities:
+    // Count activities - we created activities:
     // deposit, withdrawal, 2 buys, sell, 2 dividends,
     // internal cash transfer (creates 2), external cash transfer out (1), external cash transfer in (1),
     // internal securities transfer (creates 2), external securities transfer in (1),
     // 1 fee, credit, cash adjustment, option-expiry adjustment, interest, 1 tax, split, custom buy
     // Total: 19 existing activities + 3 new-form activities = 22
-    const activityRows = page.locator("tbody tr");
-    const rowCount = await activityRows.count();
-
-    // We should have at least 22 activities
-    expect(rowCount).toBeGreaterThanOrEqual(22);
+    // The table is virtualized, so mounted rows do not represent the total.
+    const activityCount = page.getByRole("main").getByRole("status");
+    await expect
+      .poll(async () => {
+        const match = (await activityCount.textContent())?.match(
+          /^\s*\d+\s*\/\s*(\d+)\s+activities\s*$/,
+        );
+        return match ? Number(match[1]) : 0;
+      })
+      .toBeGreaterThanOrEqual(22);
   });
 });

@@ -35,6 +35,7 @@ type OnboardingSettingsSchema = ReturnType<typeof createOnboardingSettingsSchema
 function detectDefaultCurrency(locale?: string): string | undefined {
   if (!locale && typeof navigator === "undefined") return undefined;
   const lang = locale || navigator.language || navigator.languages[0];
+  const localeTag = lang.replaceAll("_", "-").toLowerCase();
   if (lang.startsWith("en-GB")) return "GBP";
   if (lang.startsWith("en-US")) return "USD";
   if (lang.startsWith("en-CA")) return "CAD";
@@ -46,7 +47,14 @@ function detectDefaultCurrency(locale?: string): string | undefined {
   if (lang.startsWith("es")) return "EUR";
   if (lang.startsWith("it")) return "EUR";
   if (lang.startsWith("ja")) return "JPY";
-  if (lang.startsWith("zh")) return "CNY";
+  if (localeTag.startsWith("zh")) {
+    // The region decides the currency, not the script: `zh-Hant-HK` is HKD, not TWD.
+    const parts = localeTag.split("-");
+    if (parts.includes("hk")) return "HKD";
+    if (parts.includes("mo")) return "MOP";
+    if (parts.includes("tw") || parts.includes("hant")) return "TWD";
+    return "CNY";
+  }
   if (lang.startsWith("ko")) return "KRW";
   if (lang.startsWith("ru")) return "RUB";
   if (lang.startsWith("nl")) return "EUR";
@@ -74,11 +82,13 @@ const formattingRegions = [
   ["GB", "unitedKingdom"],
   ["FR", "france"],
   ["DE", "germany"],
+  ["CH", "switzerland"],
   ["ES", "spain"],
   ["MX", "mexico"],
   ["BR", "brazil"],
   ["PT", "portugal"],
   ["CN", "china"],
+  ["TW", "taiwan"],
   ["JP", "japan"],
   ["KR", "southKorea"],
   ["IT", "italy"],

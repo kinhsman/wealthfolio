@@ -37,6 +37,11 @@
     "transactionCount_many": "{{count}} transactions",
     "editCategoryTitle": "Modifier la catégorie",
     "deleteCategoryTitle": "Supprimer la catégorie",
+    "excludeLabel": "Exclure des dépenses",
+    "excludeDescription": "Masquée des totaux, graphiques, analyses et budgets",
+    "excludeDisabledParent": "Exclue car sa catégorie parente est exclue",
+    "excludedTooltip": "Exclue des dépenses",
+    "excludedWithParent": "Exclue avec {{name}}",
     "categoryActions": "Actions de catégorie",
     "deleteTitle": "Supprimer la catégorie",
     "deleteConfirm": "Voulez-vous vraiment supprimer « {{name}} » ?",
@@ -203,10 +208,10 @@
     "statusNeedsReview": "À vérifier",
     "statusUncategorized": "Non catégorisé",
     "statusCategorized": "Catégorisé",
-    "countLabel": "{{visible}} / {{total}} transactions",
-    "countLabel_one": "{{visible}} / {{total}} transaction",
-    "countLabel_other": "{{visible}} / {{total}} transactions",
-    "countLabel_many": "{{visible}} / {{total}} transactions",
+    "countLabel": "{{visible}}/{{total}} transactions",
+    "countLabel_one": "{{visible}}/{{total}} transaction",
+    "countLabel_other": "{{visible}}/{{total}} transactions",
+    "countLabel_many": "{{visible}}/{{total}} transactions",
     "countZero": "0 transaction",
     "category": "Catégorie",
     "subcategory": "Sous-catégorie",
@@ -214,7 +219,9 @@
     "filterTransactions": "Filtrer les transactions",
     "clearAll": "Tout effacer",
     "done": "Terminé",
-    "refreshing": "Actualisation"
+    "refreshing": "Actualisation",
+    "selectedNet": "Net sélectionné",
+    "filteredNet": "Net filtré"
   },
   "period": {
     "thisMonth": "Ce mois-ci",
@@ -224,7 +231,13 @@
     "viewingMonth": "Affichage de {{label}}, cliquez pour modifier",
     "pickMonth": "Choisir un mois précis",
     "selectMonth": "Sélectionner un mois",
-    "clearMonth": "Effacer la sélection du mois"
+    "clearMonth": "Effacer la sélection du mois",
+    "chooseMonth": "Choisir un mois",
+    "selectDates": "Sélectionner les dates",
+    "startDate": "Date de début",
+    "chooseCustomDates": "Choisir des dates personnalisées",
+    "invalidRange": "La date de fin doit être égale ou postérieure à la date de début",
+    "endDate": "Date de fin"
   },
   "presets": {
     "loading": "Chargement des préréglages…",
@@ -380,9 +393,8 @@
     "spent": "Dépensé",
     "allSubcategories": "Toutes les sous-catégories",
     "tx": "Tx",
-    "outflowsCount": "{{count}} sorties",
     "avgPerTx": "Moy. / tx",
-    "outflowsOnly": "Sorties uniquement",
+    "acrossAllTx": "Sur toutes les transactions",
     "dailyPace": "Rythme quotidien",
     "inThisPeriod": "Sur cette période",
     "subcategoryMix": "Répartition des sous-catégories",
@@ -394,9 +406,6 @@
     "noTransactions": "Aucune transaction sur cette période.",
     "loadMore": "Charger {{count}} de plus",
     "openInTransactions": "Ouvrir dans Transactions",
-    "outflowsCount_one": "{{count}} sortie",
-    "outflowsCount_other": "{{count}} sorties",
-    "outflowsCount_many": "{{count}} sorties",
     "totalCount_one": "{{count}} au total",
     "totalCount_other": "{{count}} au total",
     "totalCount_many": "{{count}} au total",
@@ -415,7 +424,8 @@
     "largest": "Plus élevée",
     "noSpending": "Aucune dépense sur ce créneau.",
     "outlier": "Anomalie",
-    "weekOf": "Semaine du {{date}}"
+    "weekOf": "Semaine du {{date}}",
+    "customSubtitle": "Transactions sur la période sélectionnée"
   },
   "split": {
     "title": "Ventiler la transaction",
@@ -572,7 +582,11 @@
     "brighter": "Plus clair",
     "moreSpend": "= plus de dépenses.",
     "less": "moins",
-    "more": "plus"
+    "more": "plus",
+    "customSubtitleShort": "Période sélectionnée",
+    "customNoActivity": "Aucun mouvement de trésorerie sur la période sélectionnée.",
+    "customLegendIntro": "Chaque cellule représente une heure d’un jour de la semaine sur la période sélectionnée.",
+    "customSubtitle": "Période sélectionnée · intensité des dépenses par jour de la semaine et par heure."
   },
   "eventDetail": {
     "previousEvent": "Événement précédent",
@@ -756,10 +770,14 @@
     "categoriesShown_one": "{{shown}} sur {{total}} catégorie affichée",
     "categoriesShown_other": "{{shown}} sur {{total}} catégories affichées",
     "categoriesShown_many": "{{shown}} sur {{total}} catégories affichées",
+    "excludedInSettings_one": "{{count}} exclue dans les paramètres",
+    "excludedInSettings_other": "{{count}} exclues dans les paramètres",
+    "excludedInSettings_many": "{{count}} exclues dans les paramètres",
     "openTransactions": "Ouvrir les transactions →",
     "moreCount_one": "+{{count}} de plus",
     "moreCount_other": "+{{count}} de plus",
-    "moreCount_many": "+{{count}} de plus"
+    "moreCount_many": "+{{count}} de plus",
+    "vsRange": "par rapport à {{from}} – {{to}}"
   },
   "budgetChart": {
     "overBudget": "Budget dépassé",
@@ -871,7 +889,14 @@
     "addTransaction": "Ajouter une transaction",
     "deselectAllVisible": "Désélectionner toutes les transactions visibles",
     "selectAllVisible": "Sélectionner toutes les transactions visibles",
-    "nameNotes": "Nom / Notes"
+    "nameNotes": "Nom / Notes",
+    "time": "Heure",
+    "net": "Net",
+    "dayCount_one": "{{count}} transaction",
+    "dayCount_other": "{{count}} transactions",
+    "dayCount_many": "{{count}} transactions",
+    "selectDay": "Sélectionner toutes les transactions du {{date}}",
+    "deselectDay": "Désélectionner toutes les transactions du {{date}}"
   },
   "tabContent": {
     "stageWhereLabel": "Où j'en suis",
@@ -896,6 +921,9 @@
     "automateMatching": "Automatiser la correspondance pour les marchands récurrents",
     "loadError": "Impossible de charger les données de dépenses.",
     "spentLabel": "Dépensé",
+    "excludedCategoriesHint_one": "{{count}} catégorie exclue",
+    "excludedCategoriesHint_other": "{{count}} catégories exclues",
+    "excludedCategoriesHint_many": "{{count}} catégories exclues",
     "noSpendingInPeriod": "Aucune dépense sur cette période",
     "whereItWent": "Où est passé l'argent",
     "whereItWentView": "Vue de la répartition",

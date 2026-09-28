@@ -293,7 +293,7 @@
   "import_help_docs_activity_ref": "documentación de referencia de actividades",
   "import_help_how_to_title": "¿Cómo importar un CSV?",
   "import_help_how_to_mobile": "Cómo importar un CSV",
-  "pagination_count": "{{fetched}} / {{total}} actividades",
+  "pagination_count": "{{fetched}}/{{total}} actividades",
   "manager": {
     "add_to_account": "Añadir una nueva transacción a {{account}}",
     "create_transaction": "Crea una nueva transacción o actividad para tu cuenta",
@@ -347,7 +347,8 @@
     "status_all": "Todas las actividades",
     "status_pending": "Pendientes de revisión",
     "status_validated": "Validadas",
-    "instrument": "Instrumento"
+    "instrument": "Instrumento",
+    "instrument_all": "Todos los instrumentos"
   },
   "detail": {
     "status_posted": "Contabilizada",
@@ -634,6 +635,7 @@
     "err_underlying_required": "El símbolo subyacente es obligatorio.",
     "err_strike_required": "El precio de ejercicio es obligatorio.",
     "err_expiration_required": "La fecha de vencimiento es obligatoria.",
+    "err_expiration_invalid": "Introduce una fecha de vencimiento válida.",
     "err_option_type_required": "El tipo de opción es obligatorio.",
     "err_enter_split_ratio": "Introduce un ratio de división.",
     "err_split_ratio_number": "El ratio de división debe ser un número.",
@@ -1254,7 +1256,9 @@
       "positionsCount_many": "{{count}} posiciones",
       "readyRows_one": "{{count}} fila",
       "readyRows_other": "{{count}} filas",
-      "readyRows_many": "{{count}} filas"
+      "readyRows_many": "{{count}} filas",
+      "ambiguousDateTitle": "El orden de la fecha es ambiguo",
+      "ambiguousDateHint": "Fechas como {{example}} pueden interpretarse como día/mes o mes/día, y nada en este archivo lo aclara. Vuelve atrás y elige un formato de fecha en lugar de la detección automática."
     },
     "symbolPanel": {
       "unrecognized_one": "{{count}} símbolo no reconocido",

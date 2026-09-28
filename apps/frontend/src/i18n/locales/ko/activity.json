@@ -291,7 +291,7 @@
   "import_help_docs_activity_ref": "활동 참조 문서",
   "import_help_how_to_title": "CSV를 가져오는 방법은?",
   "import_help_how_to_mobile": "CSV 가져오는 방법",
-  "pagination_count": "활동 {{fetched}} / {{total}}건",
+  "pagination_count": "활동 {{fetched}}/{{total}}건",
   "manager": {
     "add_to_account": "{{account}}에 새 거래 추가",
     "create_transaction": "계좌에 새 거래 또는 활동을 만듭니다",
@@ -343,7 +343,8 @@
     "status_all": "모든 활동",
     "status_pending": "검토 대기 중",
     "status_validated": "검증됨",
-    "instrument": "상품"
+    "instrument": "상품",
+    "instrument_all": "모든 상품"
   },
   "detail": {
     "status_posted": "반영됨",
@@ -626,6 +627,7 @@
     "err_underlying_required": "기초자산 종목 코드는 필수입니다.",
     "err_strike_required": "행사가는 필수입니다.",
     "err_expiration_required": "만기일은 필수입니다.",
+    "err_expiration_invalid": "유효한 만기일을 입력하세요.",
     "err_option_type_required": "옵션 유형은 필수입니다.",
     "err_enter_split_ratio": "분할 비율을 입력해 주세요.",
     "err_split_ratio_number": "분할 비율은 숫자여야 합니다.",
@@ -1195,7 +1197,9 @@
       "importSnapshots_other": "스냅샷 {{count}}개 가져오기",
       "failedToPrepareAssets": "가져오기용 자산 준비에 실패했습니다.",
       "positionsCount_other": "보유 종목 {{count}}개",
-      "readyRows_other": "{{count}}행"
+      "readyRows_other": "{{count}}행",
+      "ambiguousDateTitle": "날짜 순서가 모호합니다",
+      "ambiguousDateHint": "{{example}} 같은 날짜는 일/월 또는 월/일로 해석할 수 있으며, 이 파일만으로는 구분할 수 없습니다. 돌아가서 자동 감지 대신 날짜 형식을 선택해 주세요."
     },
     "symbolPanel": {
       "unrecognized_one": "인식되지 않은 종목 코드 {{count}}개",

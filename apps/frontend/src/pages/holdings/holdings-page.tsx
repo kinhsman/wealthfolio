@@ -9,6 +9,7 @@ import { SwipablePage, SwipablePageView } from "@/components/page";
 import { AccountScopeSelector } from "@/components/account-filter-selector";
 import { ActionPalette, type ActionPaletteGroup } from "@/components/action-palette";
 import { useAccounts } from "@/hooks/use-accounts";
+import { useAccountScopeStore } from "@/lib/account-scope-store";
 import { useHoldingsWithClosedProbe } from "@/hooks/use-holdings";
 import { usePortfolios } from "@/hooks/use-portfolios";
 import {
@@ -24,8 +25,8 @@ import {
   apiKindToAlternativeAssetKind,
 } from "@/lib/constants";
 import {
-  Account,
   AccountScope,
+  Holding,
   HoldingType,
   AlternativeAssetHolding,
   AlternativeAssetKind,
@@ -84,10 +85,21 @@ export const HoldingsPage = () => {
     [...DEFAULT_HOLDINGS_VISIBILITY],
   );
 
-  const [accountFilter, setAccountScope] = useState<AccountScope>({ type: "all" });
+  const accountFilter = useAccountScopeStore((state) => state.scope);
+  const setAccountScope = useAccountScopeStore((state) => state.setScope);
+  const { accounts, isLoading: isAccountsLoading } = useAccounts({
+    accountPurpose: AccountPurpose.HOLDINGS,
+  });
 
   // Keep selectedAccount for edit/add functionality when a specific account is selected.
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  // Derived rather than stored so a scope picked on another page applies on mount.
+  const selectedAccount = useMemo(
+    () =>
+      accountFilter.type === "account"
+        ? (accounts.find((account) => account.id === accountFilter.accountId) ?? null)
+        : null,
+    [accountFilter, accounts],
+  );
 
   const showClosedPositions = selectedAccount?.trackingMode !== "HOLDINGS";
   const effectiveVisibilityFilters = useMemo(
@@ -109,9 +121,6 @@ export const HoldingsPage = () => {
       probeClosedWhenEmpty: showClosedPositions,
     },
   );
-  const { accounts, isLoading: isAccountsLoading } = useAccounts({
-    accountPurpose: AccountPurpose.HOLDINGS,
-  });
   const { data: portfolios = [] } = usePortfolios();
   const { data: alternativeHoldings, isLoading: isAlternativeHoldingsLoading } =
     useAlternativeHoldings();
@@ -151,6 +160,8 @@ export const HoldingsPage = () => {
     id: string;
     symbol: string;
     name?: string;
+    exchangeMic?: string | null;
+    instrumentType?: string | null;
   } | null>(null);
 
   // Edit mode state for HOLDINGS-mode accounts
@@ -167,13 +178,8 @@ export const HoldingsPage = () => {
     (filter: AccountScope) => {
       setAccountScope(filter);
       setIsEditMode(false);
-      setSelectedAccount(
-        filter.type === "account"
-          ? (accounts.find((account) => account.id === filter.accountId) ?? null)
-          : null,
-      );
     },
-    [accounts],
+    [setAccountScope],
   );
 
   const clearHealthContext = useCallback(() => {
@@ -206,6 +212,17 @@ export const HoldingsPage = () => {
       metadata: holding.metadata,
     };
     setEditAsset(assetForSheet);
+  }, []);
+
+  // Stable so HoldingsTable keeps its memoized columns across page re-renders.
+  const handleClassify = useCallback((holding: Holding) => {
+    setClassifyAsset({
+      id: holding.instrument?.id ?? holding.id,
+      symbol: holding.instrument?.symbol ?? holding.id,
+      name: holding.instrument?.name ?? undefined,
+      exchangeMic: holding.instrument?.exchangeMic,
+      instrumentType: holding.instrument?.instrumentType,
+    });
   }, []);
 
   // Handler to save asset details
@@ -523,13 +540,7 @@ export const HoldingsPage = () => {
               visibilityFilters={effectiveVisibilityFilters}
               setVisibilityFilters={handleVisibilityFiltersChange}
               showClosedPositions={showClosedPositions}
-              onClassify={(holding) =>
-                setClassifyAsset({
-                  id: holding.instrument?.id ?? holding.id,
-                  symbol: holding.instrument?.symbol ?? holding.id,
-                  name: holding.instrument?.name ?? undefined,
-                })
-              }
+              onClassify={handleClassify}
             />
           </div>
 
@@ -803,6 +814,8 @@ export const HoldingsPage = () => {
         assetId={classifyAsset?.id ?? ""}
         assetSymbol={classifyAsset?.symbol}
         assetName={classifyAsset?.name}
+        assetExchangeMic={classifyAsset?.exchangeMic}
+        assetInstrumentType={classifyAsset?.instrumentType}
       />
     </>
   );

@@ -291,7 +291,7 @@
   "import_help_docs_activity_ref": "活动参考文档",
   "import_help_how_to_title": "如何导入 CSV？",
   "import_help_how_to_mobile": "如何导入 CSV",
-  "pagination_count": "{{fetched}} / {{total}} 条活动",
+  "pagination_count": "{{fetched}}/{{total}} 条活动",
   "manager": {
     "add_to_account": "向 {{account}} 添加一笔新交易",
     "create_transaction": "为您的账户创建一笔新交易或活动",
@@ -343,7 +343,8 @@
     "status_all": "所有活动",
     "status_pending": "待审核",
     "status_validated": "已校验",
-    "instrument": "金融工具"
+    "instrument": "金融工具",
+    "instrument_all": "所有金融工具"
   },
   "detail": {
     "status_posted": "已入账",
@@ -626,6 +627,7 @@
     "err_underlying_required": "标的代码为必填项。",
     "err_strike_required": "行权价为必填项。",
     "err_expiration_required": "到期日为必填项。",
+    "err_expiration_invalid": "请输入有效的到期日。",
     "err_option_type_required": "期权类型为必填项。",
     "err_enter_split_ratio": "请输入拆股比例。",
     "err_split_ratio_number": "拆股比例必须为数字。",
@@ -1195,7 +1197,9 @@
       "importSnapshots_other": "导入 {{count}} 个快照",
       "failedToPrepareAssets": "为导入准备资产失败。",
       "positionsCount_other": "{{count}} 项持仓",
-      "readyRows_other": "{{count}} 行"
+      "readyRows_other": "{{count}} 行",
+      "ambiguousDateTitle": "日期顺序不明确",
+      "ambiguousDateHint": "{{example}} 这样的日期可以按日/月或月/日解读，而此文件中没有足够的信息来确定。请返回并选择日期格式，而不是使用自动检测。"
     },
     "symbolPanel": {
       "unrecognized_one": "{{count}} 个无法识别的代码",

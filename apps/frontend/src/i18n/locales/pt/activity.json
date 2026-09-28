@@ -293,7 +293,7 @@
   "import_help_docs_activity_ref": "documentação de referência de atividades",
   "import_help_how_to_title": "Como importar um CSV?",
   "import_help_how_to_mobile": "Como importar um CSV",
-  "pagination_count": "{{fetched}} / {{total}} atividades",
+  "pagination_count": "{{fetched}}/{{total}} atividades",
   "manager": {
     "add_to_account": "Adicionar uma nova transação a {{account}}",
     "create_transaction": "Crie uma nova transação ou atividade para sua conta",
@@ -347,7 +347,8 @@
     "status_all": "Todas as atividades",
     "status_pending": "Pendentes de revisão",
     "status_validated": "Validadas",
-    "instrument": "Instrumento"
+    "instrument": "Instrumento",
+    "instrument_all": "Todos os instrumentos"
   },
   "detail": {
     "status_posted": "Lançada",
@@ -634,6 +635,7 @@
     "err_underlying_required": "O símbolo subjacente é obrigatório.",
     "err_strike_required": "O preço de exercício é obrigatório.",
     "err_expiration_required": "A data de vencimento é obrigatória.",
+    "err_expiration_invalid": "Insira uma data de vencimento válida.",
     "err_option_type_required": "O tipo de opção é obrigatório.",
     "err_enter_split_ratio": "Insira uma razão de desdobramento.",
     "err_split_ratio_number": "A razão de desdobramento deve ser um número.",
@@ -1254,7 +1256,9 @@
       "positionsCount_many": "{{count}} posições",
       "readyRows_one": "{{count}} linha",
       "readyRows_other": "{{count}} linhas",
-      "readyRows_many": "{{count}} linhas"
+      "readyRows_many": "{{count}} linhas",
+      "ambiguousDateTitle": "A ordem da data é ambígua",
+      "ambiguousDateHint": "Datas como {{example}} podem ser interpretadas como dia/mês ou mês/dia, e nada neste arquivo esclarece isso. Volte e escolha um formato de data em vez da detecção automática."
     },
     "symbolPanel": {
       "unrecognized_one": "{{count}} símbolo não reconhecido",

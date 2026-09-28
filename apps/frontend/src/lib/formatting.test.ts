@@ -14,6 +14,7 @@ import {
   resolveFormattingLocale,
 } from "@wealthfolio/ui";
 import { format } from "date-fns";
+import { zhTW } from "date-fns/locale";
 import { describe, expect, it, vi } from "vitest";
 import { formatOptionSubtitle } from "./occ-symbol";
 
@@ -28,6 +29,7 @@ describe("locale formatting", () => {
     expect(resolveFormattingLocale("de-DE", "en")).toBe("de-DE");
     expect(resolveFormattingLocale("DE", "en")).toBe("de-DE");
     expect(resolveFormattingLocale("DE", "ja")).toBe("de-DE");
+    expect(resolveFormattingLocale("TW", "en")).toBe("zh-TW");
     expect(resolveFormattingLocale("en-US", "fr")).toBe("en-US");
   });
 
@@ -69,6 +71,19 @@ describe("locale formatting", () => {
     expect(dateFnsLocaleFor("es-MX").options?.weekStartsOn).toBe(0);
     expect(() => dateFnsLocaleFor(undefined)).toThrow("A resolved formatting locale is required");
   });
+
+  it.each(["zh-TW", "zh-Hant", "zh-Hant-TW", "zh-HK", "zh-MO"])(
+    "gives %s Traditional calendar text with a Sunday week start",
+    (tag) => {
+      const locale = dateFnsLocaleFor(tag);
+      // Text comes from date-fns zhTW ...
+      expect(locale.formatDistance).toBe(zhTW.formatDistance);
+      expect(format(new Date(2026, 7, 30), "PPPP", { locale })).toContain("星期日");
+      // ... but the week start comes from CLDR, which says Sunday for all of these.
+      // date-fns ships zhTW with Monday, so returning it verbatim would be wrong.
+      expect(locale.options?.weekStartsOn).toBe(0);
+    },
+  );
 
   it.each(["it-IT", "pt-BR", "nl-NL", "ar-EG", "fa-IR"])(
     "supports the arbitrary system locale %s in date-fns calendars",
@@ -282,6 +297,9 @@ describe("locale formatting", () => {
     expect(fr.formatAmount(1234.56, "EUR")).toMatch(/^1[\u00a0\u202f ]234,56\s*€/);
     expect(us.formatCompactAmount(1_250_000, "USD")).toBe("$1.25M");
     expect(fr.formatCompactAmount(1_250_000, "EUR")).toMatch(/^1,25\s*M\s*€/);
+    const ca = createFormatter("en-CA");
+    expect(ca.formatCompactAmount(47_000, "USD")).toBe("US$47K");
+    expect(ca.formatCompactAmount(47_000, "USD", true, "narrowSymbol")).toBe("$47K");
     expect(us.formatPercent(-0.125)).toBe("-12.50%");
     expect(fr.formatPercent(0.125)).toMatch(/^12,50[\u00a0\u202f ]%$/);
     expect(us.formatQuantity(1234.56789)).toBe("1,234.56789");
@@ -392,5 +410,53 @@ describe("pt-PT formatting", () => {
     expect(locale.code).toBe("pt");
     expect(format(date, "p", { locale })).toBe("15:30");
     expect(format(date, "PPPP", { locale })).toBe("segunda-feira, 9 de março de 2026");
+  });
+});
+
+describe("de-CH formatting", () => {
+  // Switzerland keeps German calendar text but neither German nor French
+  // separators: digits group with an apostrophe and the decimal mark is a dot.
+  const swissDecimal = /^1['’]234\.56$/;
+
+  it("resolves Switzerland to Swiss German, not Germany", () => {
+    expect(resolveFormattingLocale("CH")).toBe("de-CH");
+    expect(resolveFormattingLocale("de-CH")).toBe("de-CH");
+  });
+
+  it("groups with an apostrophe and marks decimals with a dot", () => {
+    const formatter = createFormatter(resolveFormattingLocale("CH"), "UTC");
+
+    expect(formatter.formatDecimal(1234.56)).toMatch(swissDecimal);
+    expect(formatter.formatAmount(1234.56, "CHF")).toMatch(
+      /^CHF\s?1['’]234\.56$|^1['’]234\.56\s?CHF$/,
+    );
+    expect(formatter.formatPercent(0.125, { digits: 1 })).toMatch(/^12\.5\s*%$/);
+    // Germany shares the language and differs on both separators.
+    expect(createFormatter("de-DE", "UTC").formatDecimal(1234.56)).toBe("1.234,56");
+  });
+
+  it("writes dates day-first with dot separators", () => {
+    const formatter = createFormatter(resolveFormattingLocale("CH"), "UTC");
+    const date = new Date(Date.UTC(2026, 6, 10, 14, 30));
+
+    expect(formatter.formatDate(date, { dateStyle: "short" })).toMatch(/^10\.07\.(?:20)?26$/);
+    expect(formatter.formatTime(date, { timeStyle: "short" })).toBe("14:30");
+    expect(parseLocalizedDate("10.07.2026", "de-CH")).toEqual(new Date(2026, 6, 10));
+  });
+
+  it("round-trips Swiss numbers through parsing", () => {
+    const formatter = createFormatter(resolveFormattingLocale("CH"), "UTC");
+    const grouped = formatter.formatDecimal(1234.56);
+
+    expect(parseLocalizedNumber(grouped, "de-CH")).toBe(1234.56);
+    expect(parseLocalizedNumber("1234.56", "de-CH")).toBe(1234.56);
+    expect(parseLocalizedDecimalString(grouped, "de-CH")).toBe("1234.56");
+  });
+
+  it("uses German calendar text with a Monday week start", () => {
+    const locale = dateFnsLocaleFor(resolveFormattingLocale("CH"));
+
+    expect(locale.localize.month(0)).toBe("Januar");
+    expect(locale.options?.weekStartsOn).toBe(1);
   });
 });

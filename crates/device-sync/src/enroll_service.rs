@@ -9,7 +9,7 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
-use wealthfolio_core::secrets::SecretStore;
+use wealthfolio_core::secrets::{SecretStore, SYNC_IDENTITY_KEY};
 
 use crate::{
     crypto, CommitInitializeKeysRequest, DevicePlatform, DeviceSyncClient, EnrollDeviceResponse,
@@ -20,7 +20,6 @@ use crate::{
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SYNC_IDENTITY_KEY: &str = "sync_identity";
 const RESET_REASON_REINITIALIZE: &str = "reinitialize";
 
 static ENROLL_OPERATION_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -241,7 +240,7 @@ impl DeviceEnrollService {
 
         if !has_root_key || !has_key_version {
             // REGISTERED or ORPHANED: local E2EE credentials are incomplete.
-            return Ok(self
+            return self
                 .build_registered_or_orphaned_state(
                     token,
                     &device_id,
@@ -249,11 +248,11 @@ impl DeviceEnrollService {
                     server_key_version,
                     is_trusted,
                 )
-                .await);
+                .await;
         }
 
         if !is_trusted {
-            return Ok(self
+            return self
                 .build_registered_or_orphaned_state(
                     token,
                     &device_id,
@@ -261,7 +260,7 @@ impl DeviceEnrollService {
                     server_key_version,
                     is_trusted,
                 )
-                .await);
+                .await;
         }
 
         // Check key version match
@@ -273,7 +272,7 @@ impl DeviceEnrollService {
                     "[DeviceEnrollService] State: STALE (version mismatch: local={}, server={})",
                     local_version, server_version
                 );
-                let trusted_devices = self.get_trusted_devices(token).await;
+                let trusted_devices = self.get_trusted_devices(token).await?;
                 return Ok(SyncStateResult {
                     state: SyncState::Stale,
                     device_id: Some(device_id),
@@ -477,7 +476,7 @@ impl DeviceEnrollService {
                 // recovery for this client.
                 return Ok(KeyInitializationOutcome::PairingRequired {
                     server_key_version: e2ee_key_version,
-                    trusted_devices: self.get_trusted_devices(token).await,
+                    trusted_devices: self.get_trusted_devices(token).await?,
                 });
             }
         };
@@ -626,11 +625,11 @@ impl DeviceEnrollService {
         device_name: &str,
         server_key_version: Option<i32>,
         is_trusted: bool,
-    ) -> SyncStateResult {
+    ) -> Result<SyncStateResult, EnrollServiceError> {
         let trusted_devices = if is_trusted {
             vec![]
         } else {
-            self.get_trusted_devices(token).await
+            self.get_trusted_devices(token).await?
         };
         let orphaned = self
             .detect_orphaned_without_trusted_devices(
@@ -641,7 +640,7 @@ impl DeviceEnrollService {
                 &trusted_devices,
             )
             .await;
-        SyncStateResult {
+        Ok(SyncStateResult {
             state: if orphaned {
                 SyncState::Orphaned
             } else {
@@ -653,7 +652,7 @@ impl DeviceEnrollService {
             server_key_version,
             is_trusted,
             trusted_devices,
-        }
+        })
     }
 
     async fn reset_team_sync_checked(
@@ -677,20 +676,25 @@ impl DeviceEnrollService {
         Ok(())
     }
 
-    async fn get_trusted_devices(&self, token: &str) -> Vec<TrustedDeviceSummary> {
-        match self.client.list_devices(token, Some("my")).await {
-            Ok(devices) => devices
-                .into_iter()
-                .filter(|d| d.trust_state == TrustState::Trusted)
-                .map(|d| TrustedDeviceSummary {
-                    id: d.id,
-                    name: d.display_name,
-                    platform: d.platform,
-                    last_seen_at: d.last_seen_at,
-                })
-                .collect(),
-            Err(_) => vec![],
-        }
+    async fn get_trusted_devices(
+        &self,
+        token: &str,
+    ) -> Result<Vec<TrustedDeviceSummary>, EnrollServiceError> {
+        let devices = self
+            .client
+            .list_devices(token, Some("my"))
+            .await
+            .map_err(|error| format!("Failed to list trusted devices: {error}"))?;
+        Ok(devices
+            .into_iter()
+            .filter(|d| d.trust_state == TrustState::Trusted)
+            .map(|d| TrustedDeviceSummary {
+                id: d.id,
+                name: d.display_name,
+                platform: d.platform,
+                last_seen_at: d.last_seen_at,
+            })
+            .collect())
     }
 
     async fn detect_orphaned_without_trusted_devices(
@@ -789,5 +793,49 @@ impl DeviceEnrollService {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use wealthfolio_core::secrets::LEGACY_SYNC_DEVICE_ID_KEY;
+
+    #[derive(Default)]
+    struct MemorySecrets(std::sync::Mutex<HashMap<String, String>>);
+
+    impl SecretStore for MemorySecrets {
+        fn get_secret(&self, key: &str) -> wealthfolio_core::errors::Result<Option<String>> {
+            Ok(self.0.lock().unwrap().get(key).cloned())
+        }
+        fn set_secret(&self, key: &str, value: &str) -> wealthfolio_core::errors::Result<()> {
+            self.0.lock().unwrap().insert(key.into(), value.into());
+            Ok(())
+        }
+        fn delete_secret(&self, key: &str) -> wealthfolio_core::errors::Result<()> {
+            self.0.lock().unwrap().remove(key);
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn legacy_only_installations_require_enrollment() {
+        let store = Arc::new(MemorySecrets::default());
+        store
+            .set_secret(LEGACY_SYNC_DEVICE_ID_KEY, "old-device")
+            .unwrap();
+        let service = DeviceEnrollService::new(store, "http://127.0.0.1:1", "test".into(), None);
+        let state = service.get_sync_state("test-token").await.unwrap();
+        assert_eq!(state.state, SyncState::Fresh);
+        assert!(state.device_id.is_none());
+    }
+
+    #[tokio::test]
+    async fn trusted_device_lookup_failure_is_not_an_empty_device_list() {
+        let store = Arc::new(MemorySecrets::default());
+        let service = DeviceEnrollService::new(store, "http://127.0.0.1:1", "test".into(), None);
+        let error = service.get_trusted_devices("test-token").await.unwrap_err();
+        assert!(error.message.contains("Failed to list trusted devices"));
     }
 }

@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from "@wealthfolio/ui/components/ui/select";
 import { Textarea } from "@wealthfolio/ui/components/ui/textarea";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -105,6 +105,7 @@ export function CreateSecurityDialog({
   submitLabel,
 }: CreateSecurityDialogProps) {
   const { t } = useTranslation();
+  const searchId = useId();
   const resolvedTitle = title ?? t("asset:createSecurity.title");
   const resolvedDescription = description ?? t("asset:createSecurity.description");
   const resolvedSubmitLabel = submitLabel ?? t("asset:createSecurity.submit_label");
@@ -148,7 +149,7 @@ export function CreateSecurityDialog({
     () =>
       exchanges.map((e) => ({
         value: normalizeMic(e.mic),
-        label: `${e.longName} (${e.name})`,
+        label: `${e.longName} (${e.mic})`,
       })),
     [exchanges],
   );
@@ -226,6 +227,7 @@ export function CreateSecurityDialog({
         result.quoteType,
         result.providerId,
         provisionalCurrency,
+        result.providerSymbol,
       )
         .then((resolved) => {
           if (requestId !== resolveRequestSeq.current) return;
@@ -301,6 +303,7 @@ export function CreateSecurityDialog({
           selectedResult.quoteType,
           selectedResult.providerId,
           values.quoteCcy,
+          selectedResult.providerSymbol,
         );
         const confirmedCurrency = resolved?.currency?.trim();
         if (confirmedCurrency && !quoteCcyUserEditedAfterSelectionRef.current) {
@@ -356,10 +359,11 @@ export function CreateSecurityDialog({
             {/* Ticker search - auto-populates form fields on selection */}
             {open && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">
+                <label htmlFor={searchId} className="text-sm font-medium">
                   {t("asset:createSecurity.search_label")}
                 </label>
                 <TickerSearchInput
+                  id={searchId}
                   onSelectResult={handleTickerSelect}
                   placeholder={t("asset:createSecurity.search_placeholder")}
                   defaultCurrency={defaultCurrency}
