@@ -44,7 +44,7 @@ activities:
   - id: in-1
     account: acc-b
     type: TRANSFER_IN
-    date: 2025-01-03T10:00:00Z
+    date: 2025-01-03T10:01:00Z
     asset: aapl
     quantity: 10
     fee: 5

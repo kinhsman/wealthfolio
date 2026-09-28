@@ -38,7 +38,7 @@ activities:
   - id: fx-in-linked
     account: acc-linked
     type: TRANSFER_IN
-    date: 2025-01-03T10:00:00Z
+    date: 2025-01-03T10:01:00Z
     amount: 92
     currency: EUR
     source_group_id: fx-linked
@@ -48,19 +48,19 @@ activities:
   - id: dep-plain
     account: acc-plain
     type: DEPOSIT
-    date: 2025-01-02T10:00:00Z
+    date: 2025-01-02T10:01:00Z
     amount: 1000
   - id: fx-out-plain
     account: acc-plain
     type: TRANSFER_OUT
-    date: 2025-01-03T10:00:00Z
+    date: 2025-01-03T10:02:00Z
     amount: 100
     currency: USD
     source_group_id: fx-plain
   - id: fx-in-plain
     account: acc-plain
     type: TRANSFER_IN
-    date: 2025-01-03T10:00:00Z
+    date: 2025-01-03T10:03:00Z
     amount: 92
     currency: EUR
     source_group_id: fx-plain
