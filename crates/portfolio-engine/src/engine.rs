@@ -16,7 +16,7 @@ use crate::model::*;
 use crate::normalize::normalize;
 use crate::project::{lot_records, project};
 use crate::resolve::{resolve_surfaces, FxResolver, ResolvedSurfaces};
-use crate::value::{value, Resolved, ValueInputs};
+use crate::value::{effects, value, Resolved, ValueInputs};
 
 #[derive(Debug, Clone)]
 pub struct Engine {
@@ -116,16 +116,23 @@ impl Engine {
         lot_records(bundle, &self.facts, &self.fx())
     }
 
-    /// The inputs `measure_account` and `measure_scope` read: these facts
-    /// plus valuation series, lots and disposals (computed or stored).
+    /// Every event priced once for scope aggregation and `measure`;
+    /// `disposals` supply the removed-lot basis of unquoted outbound
+    /// transfers (computed or stored).
+    pub fn effects(&self, disposals: &[LotDisposal]) -> Effects {
+        effects(&self.resolved(), disposals)
+    }
+
+    /// The inputs `measure_account` and `measure_scope` read: the priced
+    /// events plus valuation series, lots and disposals (computed or stored).
     pub fn measure_inputs<'a>(
-        &'a self,
+        &self,
         series: &'a BTreeMap<AccountId, ValuationSeries>,
         lots: &'a [LotRecord],
         disposals: &'a [LotDisposal],
     ) -> MeasureInputs<'a> {
         MeasureInputs {
-            resolved: self.resolved(),
+            effects: self.effects(disposals),
             series,
             lots,
             disposals,

@@ -4,6 +4,7 @@
 
 pub mod canonical;
 pub mod decimal_serde;
+pub mod effects;
 pub mod event;
 pub mod facts;
 pub mod performance;
@@ -13,6 +14,7 @@ pub mod state;
 pub mod valuation;
 
 pub use canonical::*;
+pub use effects::*;
 pub use event::*;
 pub use facts::*;
 pub use performance::*;

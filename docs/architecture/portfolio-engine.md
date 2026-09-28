@@ -384,22 +384,27 @@ pub fn project(
 ///    from their observed snapshots instead of the projection.
 pub fn value(inputs: &ValueInputs<'_>) -> BTreeMap<AccountId, ValuationSeries>;
 
+/// Every event priced once, as plain data: its flow in base, its
+/// attribution and trade charges in base, the resolved pairs and each
+/// account's profile. What aggregation and measurement need from the facts.
+pub fn effects(resolved: &Resolved<'_>, disposals: &[LotDisposal]) -> Effects;
+
 /// Scope aggregation: per-day sums in base currency with internal transfers
 /// (both legs in scope) netted out.
 pub fn aggregate_scope(
-    resolved: &Resolved<'_>,
-    disposals: &[LotDisposal],
+    effects: &Effects,
     series: &BTreeMap<AccountId, ValuationSeries>,
     scope: &[AccountId],
     window: Window,
-) -> Result<ValuationSeries, String>;
+) -> Result<ValuationSeries, EngineError>;
 
 /// 6. Returns over the valuation series: TWR (chain-linked, with the
 ///    fatal/benign/pre-chain day taxonomy), IRR (bisection, annualised),
 ///    value return, holdings-mode book-basis returns, attribution with a
 ///    residual term, risk, annualisation behind a minimum-window gate.
-///    The series alone is not sufficient — attribution needs ledger events,
-///    disposals and the FX surface — hence MeasureInputs.
+///    Arithmetic over plain data: MeasureInputs holds the priced events
+///    (Effects), the series, lots and disposals, and no facts, ledger or FX
+///    surface, so measuring stored rows resolves nothing.
 pub fn measure_account(
     inputs: &MeasureInputs<'_>,
     account: &AccountId,

@@ -140,6 +140,7 @@ fn compile_leg(leg: &Leg, account: &AccountFacts, facts: &CanonicalFacts) -> Eco
     EconomicEvent {
         id: leg.event_id.clone(),
         source: activity.id.clone(),
+        kind: activity.kind,
         account: activity.account.clone(),
         date: activity.date,
         timestamp: activity.timestamp,

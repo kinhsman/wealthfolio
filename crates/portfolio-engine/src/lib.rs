@@ -39,4 +39,4 @@ pub use resolve::{
     resolve_surfaces, FxResolver, FxSurface, QuoteSurface, ResolvedSurfaces, SplitEvent,
 };
 pub use scope::{facts_needed, FactsRequest};
-pub use value::{aggregate_scope, value, Resolved, ValueInputs, Window};
+pub use value::{aggregate_scope, effects, value, Resolved, ValueInputs, Window};

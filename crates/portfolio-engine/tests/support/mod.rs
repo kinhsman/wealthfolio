@@ -15,8 +15,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use wealthfolio_portfolio_engine::model::*;
 use wealthfolio_portfolio_engine::{
-    aggregate_scope, lot_records, measure_account, measure_scope, Engine, EngineError, FxResolver,
-    MeasureInputs, MeasureProfile, ValueInputs, Window,
+    aggregate_scope, effects, lot_records, measure_account, measure_scope, Engine, EngineError,
+    FxResolver, MeasureInputs, MeasureProfile, ValueInputs, Window,
 };
 
 pub fn fixtures_dir() -> PathBuf {
@@ -497,8 +497,7 @@ pub fn capture_valuation(
     let flows = if series.contains_key(account) {
         flow_values(
             &aggregate_scope(
-                &inputs.resolved,
-                &inputs.bundle.disposals,
+                &effects(&inputs.resolved, &inputs.bundle.disposals),
                 series,
                 std::slice::from_ref(account),
                 Window::default(),
@@ -547,8 +546,7 @@ pub fn capture_portfolio_flows(
         return Ok(Vec::new());
     }
     aggregate_scope(
-        &inputs.resolved,
-        &inputs.bundle.disposals,
+        &effects(&inputs.resolved, &inputs.bundle.disposals),
         series,
         &scope,
         Window::default(),

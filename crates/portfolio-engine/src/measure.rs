@@ -16,8 +16,7 @@ use rust_decimal_macros::dec;
 use crate::arith;
 use crate::error::EngineError;
 use crate::model::*;
-use crate::resolve::FxResolver;
-use crate::value::{aggregate_scope, external_flow_base, Resolved, Window};
+use crate::value::{aggregate_scope, Window};
 
 const DAYS_PER_YEAR: Decimal = dec!(365.25);
 const MIN_ANNUALIZATION_DAYS: i64 = 30;
@@ -27,9 +26,11 @@ const RESIDUAL_WARNING_PREFIX: &str = "Performance attribution is incomplete";
 const TWO_POINTS_REASON: &str =
     "Performance unavailable: at least two valuation points are required.";
 
-/// Inputs of the read path: resolved facts plus the stored rows.
+/// Inputs of the read path, all plain data: the priced events
+/// (`value::effects`) plus valuation series, lots and disposals, computed or
+/// stored. Measuring reads no raw facts and resolves no rates.
 pub struct MeasureInputs<'a> {
-    pub resolved: Resolved<'a>,
+    pub effects: Effects,
     pub series: &'a BTreeMap<AccountId, ValuationSeries>,
     pub lots: &'a [LotRecord],
     pub disposals: &'a [LotDisposal],
@@ -37,11 +38,7 @@ pub struct MeasureInputs<'a> {
 
 impl MeasureInputs<'_> {
     fn base(&self) -> &Currency {
-        &self.resolved.facts.policy.base_currency
-    }
-
-    fn fx(&self) -> FxResolver<'_> {
-        self.resolved.fx()
+        &self.effects.base_currency
     }
 
     /// Stored rows of one account inside `window`.
@@ -68,19 +65,15 @@ impl MeasureInputs<'_> {
     }
 
     fn tracking(&self, account: &AccountId) -> TrackingMode {
-        self.resolved
-            .facts
-            .accounts
-            .get(account)
+        self.effects
+            .account(account)
             .map(|a| a.tracking)
             .unwrap_or(TrackingMode::Transactions)
     }
 
     fn is_cash_account(&self, account: &AccountId) -> bool {
-        self.resolved
-            .facts
-            .accounts
-            .get(account)
+        self.effects
+            .account(account)
             .is_some_and(|a| a.kind == AccountKind::Cash)
     }
 }
@@ -203,10 +196,8 @@ fn check_window(window: Window) -> Result<(), EngineError> {
 fn check_not_archived(inputs: &MeasureInputs<'_>, scope: &[AccountId]) -> Result<(), EngineError> {
     match scope.iter().find(|id| {
         inputs
-            .resolved
-            .facts
-            .accounts
-            .get(*id)
+            .effects
+            .account(id)
             .is_some_and(|account| account.archived)
     }) {
         Some(archived) => Err(EngineError::ArchivedAccountInScope(
@@ -297,13 +288,7 @@ pub fn measure_scope(
         return Ok(result);
     }
 
-    let history = match aggregate_scope(
-        &inputs.resolved,
-        inputs.disposals,
-        inputs.series,
-        scope,
-        window,
-    ) {
+    let history = match aggregate_scope(&inputs.effects, inputs.series, scope, window) {
         Ok(scoped) => scoped
             .days
             .iter()
@@ -1760,21 +1745,8 @@ impl Period {
     }
 }
 
-fn convert_for_attribution(
-    inputs: &MeasureInputs<'_>,
-    amount: Decimal,
-    currency: &str,
-    date: NaiveDate,
-) -> Option<Decimal> {
-    let base = inputs.base().as_str();
-    if currency.eq_ignore_ascii_case(base) {
-        return Some(amount);
-    }
-    inputs.fx().convert(amount, currency, base, date)
-}
-
 /// Income, fees and taxes of the period's events, as `compile` decided them
-/// (`EconomicEvent::attribution`), converted to base on the event date.
+/// (`EconomicEvent::attribution`), priced in base on the event date.
 fn activity_effects(
     inputs: &MeasureInputs<'_>,
     result: &PerformanceResult,
@@ -1786,24 +1758,22 @@ fn activity_effects(
     };
     let mut set = EffectSet::default();
     for event in inputs
-        .resolved
-        .ledger
+        .effects
         .events
         .iter()
         .filter(|e| scope.contains(&e.account) && period.contains(e.date))
     {
-        let attributed = event.attribution;
         let mut effect = Effect::default();
         let mut has_effect = false;
-        for (label, raw, slot) in [
-            ("Income", attributed.income, &mut effect.income),
-            ("Fee", attributed.fee, &mut effect.fee),
-            ("Tax", attributed.tax, &mut effect.tax),
+        for (label, priced, slot) in [
+            ("Income", event.income, &mut effect.income),
+            ("Fee", event.fee, &mut effect.fee),
+            ("Tax", event.tax, &mut effect.tax),
         ] {
-            if raw.is_zero() {
+            if priced.is_some_and(|amount| amount.is_zero()) {
                 continue;
             }
-            match convert_for_attribution(inputs, raw, event.currency.as_str(), event.date) {
+            match priced {
                 Some(amount) => {
                     *slot = amount;
                     has_effect = true;
@@ -1833,15 +1803,10 @@ fn period_disposals<'a>(
         return Vec::new();
     };
     let trade_ids: HashSet<&str> = inputs
-        .resolved
-        .ledger
+        .effects
         .events
         .iter()
-        .filter(|e| {
-            matches!(e.action, Action::Trade { .. })
-                && scope.contains(&e.account)
-                && period.contains(e.date)
-        })
+        .filter(|e| e.trade && scope.contains(&e.account) && period.contains(e.date))
         .map(|e| e.id.as_str())
         .collect();
     inputs
@@ -1908,34 +1873,21 @@ fn trade_charge_effects(
     }
     let mut charge_by_activity: HashMap<&str, Charge> = HashMap::new();
     let mut fallback_buy_charge: HashMap<&str, Decimal> = HashMap::new();
-    for activity in inputs
-        .resolved
-        .facts
-        .activities
+    for (event, trade) in inputs
+        .effects
+        .events
         .iter()
-        .filter(|a| scope.contains(&a.account) && period.contains(a.date))
-        .filter(|a| matches!(a.kind, ActivityKind::Buy | ActivityKind::Sell))
+        .filter(|e| scope.contains(&e.account) && period.contains(e.date))
+        .filter_map(|e| e.trade_charge.map(|trade| (e, trade)))
     {
-        let raw_charge = activity.fee + activity.tax;
-        if raw_charge.is_zero() {
-            continue;
-        }
-        let Some(charge) = convert_for_attribution(
-            inputs,
-            raw_charge,
-            activity.currency.as_str(),
-            activity.date,
-        ) else {
-            continue;
-        };
-        if activity.kind == ActivityKind::Buy {
-            fallback_buy_charge.insert(activity.id.as_str(), charge);
+        if trade.buy {
+            fallback_buy_charge.insert(event.source.as_str(), trade.charge);
         }
         charge_by_activity.insert(
-            activity.id.as_str(),
+            event.source.as_str(),
             Charge {
-                charge,
-                quantity: activity.quantity.abs(),
+                charge: trade.charge,
+                quantity: trade.quantity,
             },
         );
     }
@@ -2174,30 +2126,22 @@ fn transfer_pair_effects(
     let Some(period) = Period::of(result, baseline) else {
         return EffectSet::default();
     };
-    let facts = inputs.resolved.facts;
-    let event_by_id: HashMap<&str, &EconomicEvent> = inputs
-        .resolved
-        .ledger
+    let by_source: HashMap<&str, &EventEffect> = inputs
+        .effects
         .events
         .iter()
-        .map(|e| (e.id.as_str(), e))
-        .collect();
-    let activity_by_id: HashMap<&str, &Activity> = facts
-        .activities
-        .iter()
-        .map(|a| (a.id.as_str(), a))
+        .map(|e| (e.source.as_str(), e))
         .collect();
     let mut warnings = Vec::new();
     let mut fx_total = Decimal::ZERO;
-    for pair in facts.transfer_pairs.by_group.values() {
+    for pair in &inputs.effects.pairs {
         if !scope.contains(&pair.in_account) || !scope.contains(&pair.out_account) {
             continue;
         }
-        let legs = [
-            activity_by_id.get(pair.transfer_in.as_str()),
-            activity_by_id.get(pair.transfer_out.as_str()),
-        ];
-        let (Some(transfer_in), Some(transfer_out)) = (legs[0], legs[1]) else {
+        let (Some(transfer_in), Some(transfer_out)) = (
+            by_source.get(pair.transfer_in.as_str()),
+            by_source.get(pair.transfer_out.as_str()),
+        ) else {
             continue;
         };
         let touches_period = [transfer_in, transfer_out]
@@ -2206,12 +2150,10 @@ fn transfer_pair_effects(
         if !touches_period {
             continue;
         }
-        if transfer_in.external_transfer == Some(true)
-            || transfer_out.external_transfer == Some(true)
-        {
+        if transfer_in.marked_external || transfer_out.marked_external {
             warnings.push(format!(
                 "Transfer group {} ignored external transfer metadata because the valid pair is internal to the selected scope.",
-                pair.group_id
+                pair.group
             ));
         }
         if transfer_in
@@ -2221,14 +2163,8 @@ fn transfer_pair_effects(
         {
             continue;
         }
-        let (Some(in_event), Some(out_event)) = (
-            event_by_id.get(transfer_in.id.as_str()),
-            event_by_id.get(transfer_out.id.as_str()),
-        ) else {
-            continue;
-        };
-        let in_base = external_flow_base(&inputs.resolved, inputs.disposals, in_event);
-        let out_base = external_flow_base(&inputs.resolved, inputs.disposals, out_event);
+        let priced = |leg: &EventEffect| leg.flow.map_or(Decimal::ZERO, |flow| flow.amount);
+        let (in_base, out_base) = (priced(transfer_in), priced(transfer_out));
         if in_base.is_zero() && out_base.is_zero() {
             continue;
         }

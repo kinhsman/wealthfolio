@@ -380,8 +380,7 @@ fn p_txf_internal_pairs_cancel_at_portfolio_scope() {
         let pipeline = Pipeline::from_scenario(&scenario);
         let scope = pipeline.portfolio_scope();
         let Ok(portfolio) = aggregate_scope(
-            &pipeline.resolved(),
-            &pipeline.bundle.disposals,
+            &pipeline.effects(&pipeline.bundle.disposals),
             &pipeline.series,
             &scope,
             Window::default(),
@@ -522,15 +521,14 @@ fn p_agg_scope_aggregation_is_exact() {
     let mut pair_days = 0usize;
     for scenario in corpus() {
         let pipeline = Pipeline::from_scenario(&scenario);
-        let resolved = pipeline.resolved();
+        let effects = pipeline.effects(&pipeline.bundle.disposals);
         let scope = pipeline.portfolio_scope();
         for account in &scope {
             let Some(own) = pipeline.series.get(account) else {
                 continue;
             };
             let Ok(single) = aggregate_scope(
-                &resolved,
-                &pipeline.bundle.disposals,
+                &effects,
                 &pipeline.series,
                 std::slice::from_ref(account),
                 Window::default(),
@@ -562,13 +560,8 @@ fn p_agg_scope_aggregation_is_exact() {
                 );
             }
         }
-        let Ok(portfolio) = aggregate_scope(
-            &resolved,
-            &pipeline.bundle.disposals,
-            &pipeline.series,
-            &scope,
-            Window::default(),
-        ) else {
+        let Ok(portfolio) = aggregate_scope(&effects, &pipeline.series, &scope, Window::default())
+        else {
             continue;
         };
         let activity_date = |id: &ActivityId| {

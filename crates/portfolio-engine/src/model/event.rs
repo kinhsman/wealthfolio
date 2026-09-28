@@ -10,6 +10,7 @@ use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use super::canonical::ActivityKind;
 use super::scalar::{AccountId, ActivityId, AssetId, Currency, EventId};
 use crate::diagnostics::Diagnostic;
 
@@ -18,6 +19,8 @@ pub struct EconomicEvent {
     /// Synthetic legs keep traceable ids (`{activity}:dividend`, `{activity}:buy`).
     pub id: EventId,
     pub source: ActivityId,
+    /// Effective kind of the leg (a composite's legs have their own kinds).
+    pub kind: ActivityKind,
     pub account: AccountId,
     pub date: NaiveDate,
     pub timestamp: DateTime<Utc>,

@@ -94,6 +94,7 @@ impl PricedPosition {
 /// holdings-mode from observed snapshots), each with finalized flows.
 pub fn value(inputs: &ValueInputs<'_>) -> BTreeMap<AccountId, ValuationSeries> {
     let resolved = &inputs.resolved;
+    let (effects, mut pricing_diagnostics) = priced_events(resolved, &inputs.bundle.disposals);
     let mut series = BTreeMap::new();
     for (account_id, account) in &resolved.facts.accounts {
         if account.archived {
@@ -121,10 +122,16 @@ pub fn value(inputs: &ValueInputs<'_>) -> BTreeMap<AccountId, ValuationSeries> {
 
         // Flows: activity map for this account's scope, then fallbacks, then
         // holdings-transition inference (authoritative on observed rows).
-        let flows = valuer.activity_flows(std::slice::from_ref(account_id), Window::default());
+        let flows = scope_flows(
+            &effects,
+            std::slice::from_ref(account_id),
+            Window::default(),
+        );
         stamp_flows(&mut days, &flows, false);
         valuer.infer_holdings_flows(&mut days, &keyframes);
         valuer.report_carries();
+        let mut diagnostics = valuer.diagnostics;
+        diagnostics.extend(pricing_diagnostics.remove(account_id).unwrap_or_default());
 
         series.insert(
             account_id.clone(),
@@ -132,7 +139,7 @@ pub fn value(inputs: &ValueInputs<'_>) -> BTreeMap<AccountId, ValuationSeries> {
                 account: account_id.clone(),
                 currency: account.currency.clone(),
                 days,
-                diagnostics: valuer.diagnostics,
+                diagnostics,
             },
         );
     }
@@ -144,16 +151,15 @@ pub fn value(inputs: &ValueInputs<'_>) -> BTreeMap<AccountId, ValuationSeries> {
 /// scope-aware activity flows, then internal-transfer netting for pairs whose
 /// accounts are both in scope.
 pub fn aggregate_scope(
-    resolved: &Resolved<'_>,
-    disposals: &[LotDisposal],
+    effects: &Effects,
     series: &BTreeMap<AccountId, ValuationSeries>,
     scope: &[AccountId],
     window: Window,
 ) -> Result<ValuationSeries, EngineError> {
-    let base = resolved.facts.policy.base_currency.clone();
+    let base = effects.base_currency.clone();
     if let Some(archived) = scope
         .iter()
-        .find(|id| resolved.facts.accounts.get(*id).is_some_and(|a| a.archived))
+        .find(|id| effects.account(id).is_some_and(|a| a.archived))
     {
         return Err(EngineError::ArchivedAccountInScope(
             archived.as_str().to_string(),
@@ -222,11 +228,10 @@ pub fn aggregate_scope(
     }
     let mut days: Vec<DailyValuation> = by_date.into_values().collect();
 
-    let mut valuer = Valuer::new(resolved, disposals, &AccountId::new("scope"), &base);
-    let flows = valuer.activity_flows(scope, window);
+    let flows = scope_flows(effects, scope, window);
     let authoritative: BTreeSet<NaiveDate> = flows.keys().copied().collect();
     stamp_flows(&mut days, &flows, true);
-    let adjustments = valuer.internal_adjustments(scope, window);
+    let adjustments = internal_adjustments(effects, scope, window);
     for day in &mut days {
         if authoritative.contains(&day.date) {
             continue;
@@ -250,7 +255,7 @@ pub fn aggregate_scope(
         ),
         currency: base,
         days,
-        diagnostics: valuer.diagnostics,
+        diagnostics: Vec::new(),
     })
 }
 
@@ -265,18 +270,6 @@ impl Window {
     pub fn contains(self, date: NaiveDate) -> bool {
         self.start.is_none_or(|start| date >= start) && self.end.is_none_or(|end| date <= end)
     }
-}
-
-/// Base-currency value of one event's external flow (scope boundary
-/// External), as the transfer-pair FX attribution prices legs.
-pub(crate) fn external_flow_base(
-    resolved: &Resolved<'_>,
-    disposals: &[LotDisposal],
-    event: &EconomicEvent,
-) -> Decimal {
-    let base = resolved.facts.policy.base_currency.clone();
-    let mut valuer = Valuer::new(resolved, disposals, &event.account, &base);
-    valuer.price_flow(event, ScopeBoundary::External).0
 }
 
 /// Legacy `validate_scoped_history_completeness`.
@@ -791,58 +784,6 @@ impl<'a> Valuer<'a> {
         total
     }
 
-    /// Legacy `external_flows_from_scoped_inputs` for `scope`.
-    fn activity_flows(
-        &mut self,
-        scope: &[AccountId],
-        window: Window,
-    ) -> BTreeMap<NaiveDate, DailyFlow> {
-        let mut flows: BTreeMap<NaiveDate, DailyFlow> = BTreeMap::new();
-        let range = self.resolved.range;
-        let events: Vec<&EconomicEvent> = self
-            .resolved
-            .ledger
-            .events
-            .iter()
-            .filter(|event| scope.contains(&event.account))
-            .filter(|event| event.date >= range.start && event.date <= range.end)
-            .filter(|event| window.contains(event.date))
-            .collect();
-        for event in events {
-            let boundary = match &event.flow.boundary {
-                Boundary::None => continue,
-                Boundary::External => ScopeBoundary::External,
-                Boundary::Unknown => ScopeBoundary::Unknown,
-                Boundary::Internal { counterparty } => {
-                    let inside = scope.contains(&event.account);
-                    let pair_inside = scope.contains(counterparty);
-                    if inside == pair_inside {
-                        continue;
-                    }
-                    ScopeBoundary::External
-                }
-            };
-            let is_outflow = match &event.action {
-                Action::SecurityTransfer {
-                    direction: Direction::Out,
-                    ..
-                } => true,
-                _ => {
-                    event
-                        .cash
-                        .as_ref()
-                        .is_some_and(|c| c.amount < Decimal::ZERO)
-                        && matches!(event.flow.value, FlowValue::Cash(_))
-                        && event.contribution == Contribution::CashGross
-                        && !matches!(event.action, Action::Trade { .. })
-                }
-            };
-            let (amount, source) = self.price_flow(event, boundary);
-            add_flow(&mut flows, event.date, amount, is_outflow, source);
-        }
-        flows
-    }
-
     /// Legacy transfer-flow ladder + removed-lot-basis substitution.
     fn price_flow(
         &mut self,
@@ -1042,72 +983,6 @@ impl<'a> Valuer<'a> {
         }
     }
 
-    /// Legacy `internal_transfer_adjustments_from_scoped_inputs`: both legs of
-    /// pairs fully inside the scope, priced as external flows. A same-account
-    /// pair (a cash FX conversion) is internal at every scope, so its legs
-    /// never reached any account's flows and there is nothing to net: netting
-    /// them would erase an unrelated flow on the same day.
-    fn internal_adjustments(
-        &mut self,
-        scope: &[AccountId],
-        window: Window,
-    ) -> BTreeMap<NaiveDate, (Decimal, Decimal)> {
-        let mut adjustments: BTreeMap<NaiveDate, (Decimal, Decimal)> = BTreeMap::new();
-        let pairs: Vec<&TransferPair> = self
-            .resolved
-            .facts
-            .transfer_pairs
-            .by_group
-            .values()
-            .filter(|pair| {
-                pair.in_account != pair.out_account
-                    && scope.contains(&pair.in_account)
-                    && scope.contains(&pair.out_account)
-            })
-            .collect();
-        for pair in pairs {
-            for leg in [&pair.transfer_in, &pair.transfer_out] {
-                let Some(event) = self
-                    .resolved
-                    .ledger
-                    .events
-                    .iter()
-                    .find(|e| e.id.as_str() == leg.as_str())
-                else {
-                    continue;
-                };
-                if event.date < self.resolved.range.start
-                    || event.date > self.resolved.range.end
-                    || !window.contains(event.date)
-                {
-                    continue;
-                }
-                let (amount, _) = self.price_flow(event, ScopeBoundary::External);
-                if amount.is_zero() {
-                    continue;
-                }
-                let entry = adjustments
-                    .entry(event.date)
-                    .or_insert((Decimal::ZERO, Decimal::ZERO));
-                // A security transfer's direction decides the leg; its cash
-                // leg is only the fee, so the cash sign must not classify it.
-                let outflow = match &event.action {
-                    Action::SecurityTransfer { direction, .. } => *direction == Direction::Out,
-                    _ => event
-                        .cash
-                        .as_ref()
-                        .is_some_and(|c| c.amount < Decimal::ZERO),
-                };
-                if outflow {
-                    entry.1 += amount;
-                } else {
-                    entry.0 += amount;
-                }
-            }
-        }
-        adjustments
-    }
-
     /// Legacy `apply_inferred_holdings_external_flows`.
     fn infer_holdings_flows(
         &mut self,
@@ -1153,6 +1028,225 @@ impl<'a> Valuer<'a> {
             };
         }
     }
+}
+
+/// Every event priced once for scope aggregation and `measure`: its flow in
+/// base (as an external flow, or as one of unknown boundary), its attribution
+/// and trade charges in base, the resolved pairs and each account's profile.
+/// `disposals` supply the removed-lot basis of unquoted outbound transfers.
+pub fn effects(resolved: &Resolved<'_>, disposals: &[LotDisposal]) -> Effects {
+    priced_events(resolved, disposals).0
+}
+
+/// [`effects`] plus the pricing diagnostics, by the account of the event.
+fn priced_events(
+    resolved: &Resolved<'_>,
+    disposals: &[LotDisposal],
+) -> (Effects, BTreeMap<AccountId, Vec<Diagnostic>>) {
+    let facts = resolved.facts;
+    let base = facts.policy.base_currency.clone();
+    let range = resolved.range;
+    let fx = resolved.fx();
+    let convert = |amount: Decimal, currency: &Currency, date: NaiveDate| {
+        if amount.is_zero() || currency.as_str().eq_ignore_ascii_case(base.as_str()) {
+            return Some(amount);
+        }
+        fx.convert(amount, currency.as_str(), base.as_str(), date)
+    };
+    let marked_external: BTreeSet<&str> = facts
+        .activities
+        .iter()
+        .filter(|a| a.external_transfer == Some(true))
+        .map(|a| a.id.as_str())
+        .collect();
+    let mut valuer = Valuer::new(resolved, disposals, &AccountId::new("effects"), &base);
+    let mut diagnostics: BTreeMap<AccountId, Vec<Diagnostic>> = BTreeMap::new();
+    let mut events = Vec::with_capacity(resolved.ledger.events.len());
+    for event in &resolved.ledger.events {
+        let in_range = event.date >= range.start && event.date <= range.end;
+        let flow = match &event.flow.boundary {
+            Boundary::None => None,
+            _ if !in_range => None,
+            boundary => {
+                let priced_as = if *boundary == Boundary::Unknown {
+                    ScopeBoundary::Unknown
+                } else {
+                    ScopeBoundary::External
+                };
+                let reported = valuer.diagnostics.len();
+                let (amount, source) = valuer.price_flow(event, priced_as);
+                diagnostics
+                    .entry(event.account.clone())
+                    .or_default()
+                    .extend(valuer.diagnostics.drain(reported..));
+                let negative_cash = event
+                    .cash
+                    .as_ref()
+                    .is_some_and(|c| c.amount < Decimal::ZERO);
+                let security_direction = match &event.action {
+                    Action::SecurityTransfer { direction, .. } => Some(*direction),
+                    _ => None,
+                };
+                Some(PricedFlow {
+                    amount,
+                    source,
+                    outflow: match security_direction {
+                        Some(direction) => direction == Direction::Out,
+                        None => {
+                            negative_cash
+                                && matches!(event.flow.value, FlowValue::Cash(_))
+                                && event.contribution == Contribution::CashGross
+                                && !matches!(event.action, Action::Trade { .. })
+                        }
+                    },
+                    // A security transfer's direction decides the leg; its
+                    // cash leg is only the fee, so the sign must not.
+                    leg_outflow: match security_direction {
+                        Some(direction) => direction == Direction::Out,
+                        None => negative_cash,
+                    },
+                })
+            }
+        };
+        let attributed = event.attribution;
+        let trade_row = matches!(event.kind, ActivityKind::Buy | ActivityKind::Sell)
+            && event.id.as_str() == event.source.as_str();
+        let raw_charge = event.charges.fee + event.charges.tax;
+        let trade_charge = (trade_row && !raw_charge.is_zero())
+            .then(|| convert(raw_charge, &event.currency, event.date))
+            .flatten()
+            .map(|charge| TradeCharge {
+                charge,
+                quantity: match &event.action {
+                    Action::Trade { quantity, .. } => quantity.abs(),
+                    _ => Decimal::ZERO,
+                },
+                buy: event.kind == ActivityKind::Buy,
+            });
+        events.push(EventEffect {
+            id: event.id.clone(),
+            source: event.source.clone(),
+            account: event.account.clone(),
+            date: event.date,
+            currency: event.currency.clone(),
+            boundary: event.flow.boundary.clone(),
+            flow,
+            income: convert(attributed.income, &event.currency, event.date),
+            fee: convert(attributed.fee, &event.currency, event.date),
+            tax: convert(attributed.tax, &event.currency, event.date),
+            trade: matches!(event.action, Action::Trade { .. }),
+            trade_charge,
+            marked_external: marked_external.contains(event.source.as_str()),
+        });
+    }
+    let effects = Effects {
+        base_currency: base.clone(),
+        range,
+        accounts: facts
+            .accounts
+            .iter()
+            .map(|(id, account)| {
+                (
+                    id.clone(),
+                    AccountProfile {
+                        currency: account.currency.clone(),
+                        tracking: account.tracking,
+                        kind: account.kind,
+                        archived: account.archived,
+                    },
+                )
+            })
+            .collect(),
+        events,
+        pairs: facts
+            .transfer_pairs
+            .iter()
+            .map(|pair| PairEffect {
+                group: pair.group_id.clone(),
+                transfer_in: pair.transfer_in.clone(),
+                transfer_out: pair.transfer_out.clone(),
+                in_account: pair.in_account.clone(),
+                out_account: pair.out_account.clone(),
+            })
+            .collect(),
+    };
+    (effects, diagnostics)
+}
+
+/// Legacy `external_flows_from_scoped_inputs` for `scope`: each event's
+/// priced flow where it crosses the scope's boundary.
+fn scope_flows(
+    effects: &Effects,
+    scope: &[AccountId],
+    window: Window,
+) -> BTreeMap<NaiveDate, DailyFlow> {
+    let mut flows: BTreeMap<NaiveDate, DailyFlow> = BTreeMap::new();
+    for event in effects
+        .events
+        .iter()
+        .filter(|event| scope.contains(&event.account) && window.contains(event.date))
+    {
+        let Some(flow) = event.flow else {
+            continue;
+        };
+        if let Boundary::Internal { counterparty } = &event.boundary {
+            if scope.contains(counterparty) {
+                continue;
+            }
+        }
+        add_flow(
+            &mut flows,
+            event.date,
+            flow.amount,
+            flow.outflow,
+            flow.source,
+        );
+    }
+    flows
+}
+
+/// Legacy `internal_transfer_adjustments_from_scoped_inputs`: both legs of
+/// pairs fully inside the scope, priced as external flows. A same-account
+/// pair (a cash FX conversion) is internal at every scope, so its legs never
+/// reached any account's flows and there is nothing to net: netting them
+/// would erase an unrelated flow on the same day.
+fn internal_adjustments(
+    effects: &Effects,
+    scope: &[AccountId],
+    window: Window,
+) -> BTreeMap<NaiveDate, (Decimal, Decimal)> {
+    let by_source: BTreeMap<&str, &EventEffect> = effects
+        .events
+        .iter()
+        .map(|event| (event.source.as_str(), event))
+        .collect();
+    let mut adjustments: BTreeMap<NaiveDate, (Decimal, Decimal)> = BTreeMap::new();
+    for pair in effects.pairs.iter().filter(|pair| {
+        pair.in_account != pair.out_account
+            && scope.contains(&pair.in_account)
+            && scope.contains(&pair.out_account)
+    }) {
+        for leg in [&pair.transfer_in, &pair.transfer_out] {
+            let Some(event) = by_source.get(leg.as_str()) else {
+                continue;
+            };
+            let Some(flow) = event.flow.filter(|_| window.contains(event.date)) else {
+                continue;
+            };
+            if flow.amount.is_zero() {
+                continue;
+            }
+            let entry = adjustments
+                .entry(event.date)
+                .or_insert((Decimal::ZERO, Decimal::ZERO));
+            if flow.leg_outflow {
+                entry.1 += flow.amount;
+            } else {
+                entry.0 += flow.amount;
+            }
+        }
+    }
+    adjustments
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
