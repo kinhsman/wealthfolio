@@ -128,11 +128,12 @@ pub fn project(
             if !is_first_day && events.is_empty() {
                 continue;
             }
+            // Taken out and put back below: a day's fold reads only its own
+            // account, so there is no need to copy it.
             let account = state
                 .accounts
-                .get(account_id)
-                .expect("scoped account has state")
-                .clone();
+                .remove(account_id)
+                .expect("scoped account has state");
             let next = if events.is_empty() {
                 account
             } else {
