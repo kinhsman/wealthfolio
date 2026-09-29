@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { SettingsHeader } from "../settings-header";
 import { BackupRestoreForm } from "./backup-restore-form";
 import { ExportForm } from "./exports-form";
+import { DriveBackupTab } from "./drive-backup-tab";
 
 const ExportSettingsPage = () => {
   const { t } = useTranslation();
@@ -16,8 +17,9 @@ const ExportSettingsPage = () => {
       <Separator />
 
       <Tabs defaultValue="backup" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="backup">{t("settings:export_tab_backup")}</TabsTrigger>
+          <TabsTrigger value="drive">Google Drive</TabsTrigger>
           <TabsTrigger value="export">{t("settings:export_title")}</TabsTrigger>
         </TabsList>
 
@@ -25,6 +27,9 @@ const ExportSettingsPage = () => {
           <BackupRestoreForm />
         </TabsContent>
 
+        <TabsContent value="drive" className="mt-6">
+          <DriveBackupTab />
+        </TabsContent>
         <TabsContent value="export" className="mt-6">
           <div className="space-y-4">
             <div>
