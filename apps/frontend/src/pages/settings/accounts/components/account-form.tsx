@@ -9,6 +9,7 @@ import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
 import { newAccountSchema } from "@/lib/schemas";
 import { AccountType } from "@/lib/constants";
+import { RENTAL_DISPLAY_TYPE, isRentalMeta, setDisplayTypeInMeta } from "@/lib/account-display";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { cn } from "@/lib/utils";
 import {
@@ -122,6 +123,7 @@ export function AccountForm({ defaultValues, onSuccess = () => undefined }: Acco
     () => [
       { label: t("settings:accounts_form_type_securities"), value: "SECURITIES" },
       { label: t("settings:accounts_form_type_cash"), value: "CASH" },
+      { label: t("settings:accounts_form_type_rental"), value: RENTAL_DISPLAY_TYPE },
       { label: t("settings:accounts_form_type_credit_card"), value: "CREDIT_CARD" },
       { label: t("settings:accounts_form_type_crypto"), value: "CRYPTOCURRENCY" },
     ],
@@ -149,6 +151,7 @@ export function AccountForm({ defaultValues, onSuccess = () => undefined }: Acco
   const currentAccountType = form.watch("accountType");
   const isCreditCardAccount = currentAccountType === AccountType.CREDIT_CARD;
   const isCashAccount = currentAccountType === AccountType.CASH;
+  const isRentalAccount = isCashAccount && isRentalMeta(form.watch("meta"));
 
   const { data: assetClassesTaxonomy } = useTaxonomy(isCashAccount ? "asset_classes" : null);
   const fixedIncomeCategoryName = useMemo(() => {
@@ -164,6 +167,13 @@ export function AccountForm({ defaultValues, onSuccess = () => undefined }: Acco
       form.setValue("trackingMode", "TRANSACTIONS", { shouldDirty: true, shouldValidate: true });
     }
   }, [currentTrackingMode, form, isCreditCardAccount]);
+
+  // A rental ledger stays in Holdings tracking so its rent/cost entries never become cash.
+  useEffect(() => {
+    if (isRentalAccount && currentTrackingMode !== "HOLDINGS") {
+      form.setValue("trackingMode", "HOLDINGS", { shouldDirty: true, shouldValidate: true });
+    }
+  }, [currentTrackingMode, form, isRentalAccount]);
 
   // Perform the actual submit (after confirmation if needed)
   // Returns a promise when updating so it can be chained with other operations
@@ -229,7 +239,9 @@ export function AccountForm({ defaultValues, onSuccess = () => undefined }: Acco
   const formDescription = defaultValues?.id
     ? t("settings:accounts_form_update_description")
     : t("settings:accounts_form_add_description");
-  const AccountTypeIcon = accountTypeIcons[currentAccountType] ?? Icons.Wallet;
+  const AccountTypeIcon = isRentalAccount
+    ? Icons.House
+    : (accountTypeIcons[currentAccountType] ?? Icons.Wallet);
 
   return (
     <Form {...form}>
@@ -297,8 +309,16 @@ export function AccountForm({ defaultValues, onSuccess = () => undefined }: Acco
                     <FormLabel>{t("settings:accounts_form_type_label")}</FormLabel>
                     <FormControl>
                       <ResponsiveSelect
-                        value={field.value}
-                        onValueChange={field.onChange}
+                        value={isRentalAccount ? RENTAL_DISPLAY_TYPE : field.value}
+                        onValueChange={(value: string) => {
+                          const rental = value === RENTAL_DISPLAY_TYPE;
+                          field.onChange(rental ? AccountType.CASH : value);
+                          form.setValue(
+                            "meta",
+                            setDisplayTypeInMeta(form.getValues("meta"), rental ? RENTAL_DISPLAY_TYPE : null),
+                            { shouldDirty: true },
+                          );
+                        }}
                         options={accountTypes}
                         placeholder={t("settings:accounts_form_type_placeholder")}
                         sheetTitle={t("settings:accounts_form_type_sheet_title")}

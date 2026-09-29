@@ -1,4 +1,5 @@
 import { Button } from "@wealthfolio/ui/components/ui/button";
+import { displayAccountType } from "@/lib/account-display";
 import { ScrollArea } from "@wealthfolio/ui/components/ui/scroll-area";
 import {
   Sheet,
@@ -33,6 +34,7 @@ type UIAccountType = AccountType | typeof PORTFOLIO_ACCOUNT_TYPE;
 const accountTypeIcons: Record<string, Icon> = {
   SECURITIES: Icons.Briefcase,
   CASH: Icons.DollarSign,
+  RENTAL: Icons.House,
   CREDIT_CARD: Icons.CreditCard,
   CRYPTOCURRENCY: Icons.Bitcoin,
   [PORTFOLIO_ACCOUNT_TYPE]: Icons.Wallet,
@@ -125,7 +127,7 @@ export const AccountSelectorMobile = forwardRef<HTMLButtonElement, AccountSelect
     // Group accounts by type
     const groupedAccounts = allAccounts.reduce(
       (acc, account) => {
-        const type = account.accountType;
+        const type = displayAccountType(account as Account);
         if (!acc[type]) {
           acc[type] = [];
         }
@@ -148,6 +150,8 @@ export const AccountSelectorMobile = forwardRef<HTMLButtonElement, AccountSelect
           return t("common:component.account_type_securities");
         case "CASH":
           return t("common:component.account_type_cash");
+        case "RENTAL":
+          return t("common:component.account_type_rental");
         case "CREDIT_CARD":
           return t("common:component.account_type_credit_card");
         case "CRYPTOCURRENCY":
@@ -224,7 +228,7 @@ export const AccountSelectorMobile = forwardRef<HTMLButtonElement, AccountSelect
                   </h3>
                   <div className="space-y-2">
                     {accountsInGroup.map((account) => {
-                      const IconComponent = accountTypeIcons[account.accountType] ?? Icons.Wallet;
+                      const IconComponent = accountTypeIcons[displayAccountType(account)] ?? Icons.Wallet;
                       return (
                         <button
                           key={account.id}

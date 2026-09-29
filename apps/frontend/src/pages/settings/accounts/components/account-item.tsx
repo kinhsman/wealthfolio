@@ -6,9 +6,10 @@ import type { Account, AccountType, Platform } from "@/lib/types";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AccountOperations } from "./account-operations";
+import { displayAccountType } from "@/lib/account-display";
 
 // Map account types to icons and colors for visual distinction
-const accountTypeConfig: Record<AccountType, { icon: Icon; bgClass: string; iconClass: string }> = {
+const accountTypeConfig: Record<AccountType | "RENTAL", { icon: Icon; bgClass: string; iconClass: string }> = {
   SECURITIES: {
     icon: Icons.Briefcase,
     bgClass: "bg-blue-500/10",
@@ -18,6 +19,11 @@ const accountTypeConfig: Record<AccountType, { icon: Icon; bgClass: string; icon
     icon: Icons.DollarSign,
     bgClass: "bg-green-500/10",
     iconClass: "text-green-500",
+  },
+  RENTAL: {
+    icon: Icons.House,
+    bgClass: "bg-violet-500/10",
+    iconClass: "text-violet-500",
   },
   CREDIT_CARD: {
     icon: Icons.CreditCard,
@@ -51,7 +57,7 @@ export function AccountItem({
   const { t } = useTranslation();
   // Check if account is synced from broker (has provider_account_id set)
   const isSynced = !!account.providerAccountId;
-  const typeConfig = accountTypeConfig[account.accountType] ?? {
+  const typeConfig = accountTypeConfig[displayAccountType(account) as AccountType | "RENTAL"] ?? {
     icon: Icons.Wallet,
     bgClass: "bg-muted",
     iconClass: "text-muted-foreground",

@@ -137,6 +137,7 @@
   "accounts_form_type_sheet_description": "Choose the account type that best matches.",
   "accounts_form_type_securities": "Securities",
   "accounts_form_type_cash": "Cash",
+  "accounts_form_type_rental": "Rental",
   "accounts_form_type_crypto": "Crypto",
   "accounts_form_currency_label": "Currency",
   "accounts_form_default_label": "Default Account",

@@ -140,6 +140,7 @@
     "account_type_portfolio": "Portfolio",
     "account_type_securities": "Securities Accounts",
     "account_type_cash": "Cash Accounts",
+    "account_type_rental": "Rental Accounts",
     "account_type_credit_card": "Credit Card Accounts",
     "account_type_cryptocurrency": "Cryptocurrency Accounts",
     "account_type_other": "Other Accounts",

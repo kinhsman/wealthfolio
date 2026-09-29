@@ -1,4 +1,5 @@
 import { parseLocalDate } from "@/lib/utils";
+import { displayAccountType } from "@/lib/account-display";
 import { formatZonedDateKey } from "@/features/spending/lib/timezone";
 import { getContributionLimit, getSnapshots, searchActivities } from "@/adapters";
 import { HistoryChart } from "@/components/history-chart";
@@ -122,9 +123,10 @@ function parseAccountDetailTab(value: string | null): AccountDetailTab {
 }
 
 // Map account types to icons for visual distinction
-const accountTypeIcons: Record<AccountType, Icon> = {
+const accountTypeIcons: Record<AccountType | "RENTAL", Icon> = {
   SECURITIES: Icons.Briefcase,
   CASH: Icons.DollarSign,
+  RENTAL: Icons.House,
   CREDIT_CARD: Icons.CreditCard,
   CRYPTOCURRENCY: Icons.Bitcoin,
 };
@@ -424,10 +426,11 @@ const AccountPage = () => {
   const accountsByType = useMemo(() => {
     const grouped: Record<string, Account[]> = {};
     accounts.forEach((acc) => {
-      if (!grouped[acc.accountType]) {
-        grouped[acc.accountType] = [];
+      const type = displayAccountType(acc);
+      if (!grouped[type]) {
+        grouped[type] = [];
       }
-      grouped[acc.accountType].push(acc);
+      grouped[type].push(acc);
     });
     return Object.entries(grouped);
   }, [accounts]);
@@ -845,7 +848,9 @@ const AccountPage = () => {
           {/* Tracking mode avatar */}
           {account && (
             <div className="bg-primary/10 dark:bg-primary/20 flex size-9 shrink-0 items-center justify-center rounded-full">
-              {account.trackingMode === "HOLDINGS" ? (
+              {displayAccountType(account) === "RENTAL" ? (
+                <Icons.House className="text-primary h-5 w-5" />
+              ) : account.trackingMode === "HOLDINGS" ? (
                 <Icons.Holdings className="text-primary h-5 w-5" />
               ) : (
                 <Icons.Activity className="text-primary h-5 w-5" />
@@ -890,7 +895,7 @@ const AccountPage = () => {
                           <CommandGroup key={type} heading={type}>
                             {typeAccounts.map((acc) => {
                               const IconComponent =
-                                accountTypeIcons[acc.accountType] ?? Icons.CreditCard;
+                                accountTypeIcons[displayAccountType(acc) as AccountType | "RENTAL"] ?? Icons.CreditCard;
                               return (
                                 <CommandItem
                                   key={acc.id}
@@ -951,7 +956,7 @@ const AccountPage = () => {
                             <div className="space-y-2">
                               {typeAccounts.map((acc) => {
                                 const IconComponent =
-                                  accountTypeIcons[acc.accountType] ?? Icons.CreditCard;
+                                  accountTypeIcons[displayAccountType(acc) as AccountType | "RENTAL"] ?? Icons.CreditCard;
                                 return (
                                   <button
                                     key={acc.id}

@@ -1,4 +1,5 @@
 import { Button } from "@wealthfolio/ui/components/ui/button";
+import { displayAccountType } from "@/lib/account-display";
 import {
   Command,
   CommandEmpty,
@@ -35,6 +36,7 @@ type UIAccountType = AccountType | typeof PORTFOLIO_ACCOUNT_TYPE;
 const accountTypeIcons: Record<string, Icon> = {
   SECURITIES: Icons.Briefcase,
   CASH: Icons.DollarSign,
+  RENTAL: Icons.House,
   CREDIT_CARD: Icons.CreditCard,
   CRYPTOCURRENCY: Icons.Bitcoin,
   [PORTFOLIO_ACCOUNT_TYPE]: Icons.Wallet,
@@ -277,7 +279,7 @@ export const AccountSelector = forwardRef<HTMLButtonElement, AccountSelectorProp
                       <motion.div variants={iconVariants} initial="initial" animate="animate">
                         {(() => {
                           const IconComponent =
-                            accountTypeIcons[selectedAccount.accountType] ?? Icons.CreditCard;
+                            accountTypeIcons[displayAccountType(selectedAccount)] ?? Icons.CreditCard;
                           return (
                             <IconComponent className="h-4 w-4 text-green-600 dark:text-green-400" />
                           );
@@ -357,7 +359,7 @@ export const AccountSelector = forwardRef<HTMLButtonElement, AccountSelectorProp
                   const IconComponent = CustomIcon
                     ? CustomIcon
                     : selectedAccount
-                      ? (accountTypeIcons[selectedAccount.accountType] ?? Icons.CreditCard)
+                      ? (accountTypeIcons[displayAccountType(selectedAccount)] ?? Icons.CreditCard)
                       : Icons.Wallet;
                   return <IconComponent className="h-4 w-4 shrink-0" />;
                 })()
@@ -368,7 +370,7 @@ export const AccountSelector = forwardRef<HTMLButtonElement, AccountSelectorProp
                       <>
                         {(() => {
                           const IconComponent =
-                            accountTypeIcons[selectedAccount.accountType] ?? Icons.CreditCard;
+                            accountTypeIcons[displayAccountType(selectedAccount)] ?? Icons.CreditCard;
                           return <IconComponent className="h-4 w-4 shrink-0 opacity-70" />;
                         })()}
                         <span>{selectedAccount.name}</span>
@@ -402,7 +404,7 @@ export const AccountSelector = forwardRef<HTMLButtonElement, AccountSelectorProp
                   <>
                     {(() => {
                       const IconComponent =
-                        accountTypeIcons[selectedAccount.accountType] ?? Icons.CreditCard;
+                        accountTypeIcons[displayAccountType(selectedAccount)] ?? Icons.CreditCard;
                       return <IconComponent className="h-4 w-4 shrink-0 opacity-70" />;
                     })()}
                     <span className="truncate">{selectedAccount.name}</span>
@@ -504,7 +506,7 @@ export const AccountSelector = forwardRef<HTMLButtonElement, AccountSelectorProp
                             <CommandGroup heading={type}>
                               {typeAccounts.map((account) => {
                                 const IconComponent =
-                                  accountTypeIcons[account.accountType] ?? Icons.CreditCard;
+                                  accountTypeIcons[displayAccountType(account)] ?? Icons.CreditCard;
                                 return (
                                   <CommandItem
                                     key={account.id}
