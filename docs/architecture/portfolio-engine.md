@@ -459,8 +459,12 @@ done and thrown away.
   diagnostic, never a fetch, a silent `rate = 1`, or an unconverted addition.
 - Chunking is the caller's right: `project` and `value` may run over sub-ranges
   with the state folded forward. `resolve_surfaces` is never chunked.
-- Per-activity atomicity: a failing activity contributes a diagnostic and zero
-  state mutation, never a partial application.
+- Per-event atomicity: a rejected event contributes a diagnostic and zero state
+  mutation, never a partial application. The legs of a composite activity are
+  separate events, so a rejected buy leg leaves its income leg standing and the
+  income stays as cash (EDGE-DRIP-01). Valuation and attribution price every
+  ledger event, rejected or not; keeping the income is what keeps them
+  consistent.
 
 ### 4.4 Errors and diagnostics
 

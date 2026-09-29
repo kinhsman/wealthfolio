@@ -128,11 +128,12 @@ pub fn project(
             if !is_first_day && events.is_empty() {
                 continue;
             }
+            // Taken out and put back below: a day's fold reads only its own
+            // account, so there is no need to copy it.
             let account = state
                 .accounts
-                .get(account_id)
-                .expect("scoped account has state")
-                .clone();
+                .remove(account_id)
+                .expect("scoped account has state");
             let next = if events.is_empty() {
                 account
             } else {
@@ -258,6 +259,88 @@ struct Reduction {
     fully_consumed: Vec<Lot>,
 }
 
+/// Everything one event may change: the cash balances, the account totals and
+/// the position of the event's own asset (every handler writes only that
+/// position). Debug builds check the footprint on every event.
+struct Savepoint {
+    cash: BTreeMap<Currency, Decimal>,
+    totals: [Decimal; 5],
+    position: Option<(AssetId, Option<Position>)>,
+}
+
+impl Savepoint {
+    fn take(account: &AccountState, action: &Action) -> Self {
+        // Exhaustive, so a new field has to be placed in or out of the savepoint.
+        let AccountState {
+            account: _,
+            currency: _,
+            positions,
+            cash,
+            cost_basis,
+            net_contribution,
+            net_contribution_base,
+            cash_total_account,
+            cash_total_base,
+        } = account;
+        let asset = match action {
+            Action::None => None,
+            Action::Trade { asset, .. }
+            | Action::SecurityTransfer { asset, .. }
+            | Action::Split { asset, .. }
+            | Action::OptionExpiry { asset, .. } => Some(asset),
+        };
+        Self {
+            cash: cash.clone(),
+            totals: [
+                *cost_basis,
+                *net_contribution,
+                *net_contribution_base,
+                *cash_total_account,
+                *cash_total_base,
+            ],
+            position: asset.map(|asset| (asset.clone(), positions.get(asset).cloned())),
+        }
+    }
+
+    fn restore(self, account: &mut AccountState) {
+        account.cash = self.cash;
+        [
+            account.cost_basis,
+            account.net_contribution,
+            account.net_contribution_base,
+            account.cash_total_account,
+            account.cash_total_base,
+        ] = self.totals;
+        if let Some((asset, position)) = self.position {
+            match position {
+                Some(position) => account.positions.insert(asset, position),
+                None => account.positions.remove(&asset),
+            };
+        }
+    }
+
+    /// Every other position is untouched, whether the event applied or not.
+    #[cfg(debug_assertions)]
+    fn check_footprint(&self, before: &AccountState, after: &AccountState) {
+        let own = self.position.as_ref().map(|(asset, _)| asset);
+        let others = |state: &AccountState| {
+            state
+                .positions
+                .iter()
+                .filter(|(asset, _)| Some(*asset) != own)
+                .map(|(asset, position)| (asset.clone(), position.clone()))
+                .collect::<Vec<_>>()
+        };
+        debug_assert_eq!(before.account, after.account);
+        debug_assert_eq!(before.currency, after.currency);
+        debug_assert_eq!(
+            others(before),
+            others(after),
+            "an event changed another position"
+        );
+    }
+}
+
 impl Projector<'_> {
     fn base(&self) -> &str {
         self.facts.policy.base_currency.as_str()
@@ -280,11 +363,17 @@ impl Projector<'_> {
         run: &mut RunLog,
     ) -> AccountState {
         for event in events {
-            let mut scratch = account.clone();
+            // A rejected event must leave no trace. Save only what an event
+            // can change instead of copying every position's lots.
+            let savepoint = Savepoint::take(&account, &event.action);
+            #[cfg(debug_assertions)]
+            let before = account.clone();
             let mut effects = SideEffects::default();
-            match self.apply(event, &mut scratch, cache, &mut effects, run) {
+            let applied = self.apply(event, &mut account, cache, &mut effects, run);
+            #[cfg(debug_assertions)]
+            savepoint.check_footprint(&before, &account);
+            match applied {
                 Ok(()) => {
-                    account = scratch;
                     run.disposals.extend(effects.disposals);
                     run.closures.extend(effects.closures);
                     for (group, lots) in effects.cache_inserts {
@@ -294,11 +383,16 @@ impl Projector<'_> {
                         cache.remove(&group);
                     }
                 }
-                Err(message) => run.diagnostics.push(Diagnostic::error(
-                    DiagnosticCode::ActivityRejected,
-                    event.id.as_str(),
-                    message,
-                )),
+                Err(message) => {
+                    savepoint.restore(&mut account);
+                    #[cfg(debug_assertions)]
+                    debug_assert_eq!(account, before, "rejected {} left a trace", event.id);
+                    run.diagnostics.push(Diagnostic::error(
+                        DiagnosticCode::ActivityRejected,
+                        event.id.as_str(),
+                        message,
+                    ));
+                }
             }
         }
 

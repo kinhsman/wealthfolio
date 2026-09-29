@@ -434,9 +434,31 @@ pub fn load_all_scenarios() -> Vec<Scenario> {
         .iter()
         .map(|path| {
             let text = std::fs::read_to_string(path).expect("read scenario");
-            serde_yaml::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()))
+            let scenario: Scenario =
+                serde_yaml::from_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+            assert_explicit_fold_order(&scenario, path);
+            scenario
         })
         .collect()
+}
+
+/// Same-instant rows fold by `created_at`, then id. No fixture may rely on
+/// the id alone, so rows sharing an instant need distinct `created_at`
+/// values (the host's scenario loader enforces the same rule).
+fn assert_explicit_fold_order(scenario: &Scenario, path: &Path) {
+    let mut seen = BTreeMap::new();
+    for activity in &scenario.activities {
+        let instant = parse_instant(&activity.date);
+        let created_at = activity.created_at.as_deref().map(parse_instant);
+        if let Some(other) = seen.insert((instant, created_at), &activity.id) {
+            panic!(
+                "{}: activities {other:?} and {:?} share timestamp {instant}; give same-instant \
+                 rows distinct created_at values so their fold order is explicit",
+                path.display(),
+                activity.id
+            );
+        }
+    }
 }
 
 fn collect_yaml(dir: &Path, out: &mut Vec<PathBuf>) {

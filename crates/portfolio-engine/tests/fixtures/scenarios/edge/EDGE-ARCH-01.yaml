@@ -33,7 +33,7 @@ activities:
   - id: in-1
     account: acc-arch
     type: TRANSFER_IN
-    date: 2025-01-03T10:00:00Z
+    date: 2025-01-03T10:01:00Z
     amount: 400
     source_group_id: g1
 performance_windows:
