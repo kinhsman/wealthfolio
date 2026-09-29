@@ -2,6 +2,7 @@ import { isWeb } from "@/adapters";
 import { isAppleDevice } from "@/lib/device-utils";
 import { useAuth } from "@/context/auth-context";
 import { ProfileMenu } from "@/features/profiles/profile-menu";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -27,7 +28,8 @@ const modKey = isAppleDevice() ? "⌘" : "Ctrl";
 
 export function AppSidebar({ navigation }: AppSidebarProps) {
   const { t } = useTranslation();
-  const [collapsed, setCollapsed] = useState(true);
+  // Remember expanded/collapsed per profile; first visit still starts collapsed.
+  const [collapsed, setCollapsed] = usePersistentState("sidebar-collapsed", true);
   const { logout, requiresAuth } = useAuth();
   const addonMenuItems = navigation?.addonMenuItems ?? navigation?.addons ?? [];
 
