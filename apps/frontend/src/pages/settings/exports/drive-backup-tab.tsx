@@ -1,126 +1,57 @@
-// money-hub patch: Google Drive backups, copied from Owly (web/src/components/DriveBackup.jsx
-// and web/src/googlePicker.js) and drawn with Wealthfolio's own components. The work runs in
-// the money-hub backup service at /drive-backup (server/drive-backup in the money-hub repo),
-// which keeps the Google pass; this page only asks it to.
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Alert, AlertDescription } from "@wealthfolio/ui/components/ui/alert";
-import { Badge } from "@wealthfolio/ui/components/ui/badge";
-import { Button } from "@wealthfolio/ui/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@wealthfolio/ui/components/ui/card";
-import { Checkbox } from "@wealthfolio/ui/components/ui/checkbox";
+// money-hub patch: backups to Google Drive and to this device, laid out like WheelTradr's
+// Settings, Data & Backup (DataBackupSettings.tsx, DriveFolderChooser.tsx,
+// RestoreBackupModal.tsx) in Wealthfolio's colours and components. The work runs in the
+// money-hub backup service at /drive-backup (Owly's backup code, server/drive-backup in the
+// money-hub repo), which keeps the Google pass and runs the schedule with the browser shut.
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { Dialog, DialogContent, DialogTitle } from "@wealthfolio/ui/components/ui/dialog";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
-import { Input } from "@wealthfolio/ui/components/ui/input";
-import { Label } from "@wealthfolio/ui/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@wealthfolio/ui/components/ui/select";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@wealthfolio/ui/components/ui/sheet";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
 const BASE = "/drive-backup/api/backup";
-export const DEFAULT_FOLDER_NAME = "Money Backups";
-// Radix Select items cannot have an empty value, so "top level" gets its own token.
-const TOP = "__top__";
-const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const KEEP: [number, string][] = [[7, "Last 7"], [14, "Last 14"], [30, "Last 30"], [60, "Last 60"], [90, "Last 90"], [0, "Keep them all"]];
-const TIMES = Array.from({ length: 96 }, (_, i) => {
-  const h = String(Math.floor(i / 4)).padStart(2, "0");
-  const m = String((i % 4) * 15).padStart(2, "0");
-  return `${h}:${m}`;
-});
+const DEFAULT_FOLDER_NAME = "Money Backups";
 
-interface RunResult {
-  ok: boolean;
-  at: string;
-  file?: string;
-  size?: number;
-  accounts?: number;
-  activities?: number;
-  assets?: number;
-  files?: number;
-  error?: string;
-}
+// ---------- the service (same endpoints as Owly's /api/backup) ----------
+interface RunResult { ok: boolean; at: string; file?: string; size?: number; trimmed?: number; accounts?: number; activities?: number; assets?: number; files?: number; error?: string }
+interface Schedule { auto: boolean; frequency: "daily" | "weekly"; weekday: number; time: string; keep: number }
 interface Status {
-  linked: boolean;
-  email: string | null;
-  linkedAt: string | null;
-  needsRelink: boolean;
-  linkExpiresAt: string | null;
-  folderId: string | null;
-  folderName: string | null;
-  schedule: { auto: boolean; frequency: "daily" | "weekly"; weekday: number; time: string; keep: number };
-  timezone: string;
-  nextRunAt: string | null;
-  lastAuto: RunResult | null;
-  lastManual: RunResult | null;
-  busy: string | null;
+  linked: boolean; email: string | null; linkedAt: string | null; needsRelink: boolean; linkExpiresAt: string | null;
+  folderId: string | null; folderName: string | null; schedule: Schedule; timezone: string; nextRunAt: string | null;
+  lastAuto: RunResult | null; lastManual: RunResult | null; busy: string | null;
 }
 interface DriveFolder { id: string; name: string; parentId?: string | null; atTop?: boolean }
-interface DriveFile { id: string; name: string; createdTime: string; size: number | null; auto: boolean; folderName?: string | null; picked?: boolean }
+interface DriveFile { id: string; name: string; createdTime: string; size: number | null; auto: boolean; folderName?: string | null }
+interface Manifest { createdAt: string; counts: { accounts: number; activities: number; assets: number; quotes: number }; data: { files: number; bytes: number }; env: string[]; helper?: string[] }
+interface RestoreDone { createdAt: string; counts: Manifest["counts"]; mismatched: string[]; files: number; settings: number }
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const isForm = body instanceof FormData;
   const res = await fetch(`${BASE}${path}`, {
     method,
     credentials: "include",
-    headers: body instanceof FormData || body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body),
+    headers: isForm || body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: isForm ? (body as FormData) : body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error || `The backup service said ${res.status}`);
   return data as T;
 }
 const api = {
-  get: <T,>(p: string) => call<T>("GET", p),
-  post: <T,>(p: string, b?: unknown) => call<T>("POST", p, b ?? {}),
-  put: <T,>(p: string, b: unknown) => call<T>("PUT", p, b),
-  del: <T,>(p: string) => call<T>("DELETE", p),
-  upload: <T,>(p: string, fd: FormData) => call<T>("POST", p, fd),
+  status: () => call<Status>("GET", "/status"),
+  saveConfig: (patch: Record<string, unknown>) => call<Status>("PUT", "/config", patch),
+  backupNow: () => call<Status>("POST", "/run", {}),
+  unlink: () => call<Status>("DELETE", "/link"),
+  listFolders: () => call<DriveFolder[]>("GET", "/folders"),
+  createFolder: (name: string, parentId?: string) => call<DriveFolder>("POST", "/folders", { name, parentId }),
+  ensureDefaultFolder: () => call<DriveFolder>("POST", "/folders/default", {}),
+  listBackups: (folderId: string | null) => call<DriveFile[]>("GET", `/files${folderId ? "" : "?all=1"}`),
+  inspect: (fileId: string) => call<Manifest>("POST", "/inspect", { fileId }),
+  restoreDrive: (fileId: string) => call<RestoreDone>("POST", "/restore", { fileId }),
+  restoreFile: (file: File) => { const fd = new FormData(); fd.append("file", file); return call<RestoreDone>("POST", "/restore-file", fd); },
 };
 
-export function GoogleDriveMark({ size = 18 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 87.3 78" aria-hidden="true">
-      <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da" />
-      <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47" />
-      <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335" />
-      <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d" />
-      <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc" />
-      <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00" />
-    </svg>
-  );
-}
-
-const bytes = (n?: number | null) => {
-  if (!n && n !== 0) return "";
-  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-};
-
-/** "Sun 27 Sep, 02:00" on the app's clock, the same clock the schedule runs on. */
-export const when = (iso?: string | null, zone?: string) => {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleString("en-GB", {
-      timeZone: zone || undefined, weekday: "short", day: "numeric", month: "short",
-      year: new Date(iso).getFullYear() === new Date().getFullYear() ? undefined : "numeric",
-      hour: "2-digit", minute: "2-digit",
-    });
-  } catch {
-    return new Date(iso).toLocaleString();
-  }
-};
-
-/** Waits for Wealthfolio to come back on the restored data, then reloads. */
-async function waitForRestart() {
-  const started = Date.now();
-  while (Date.now() - started < 90_000) {
-    await new Promise((r) => setTimeout(r, 1500));
-    const ok = await fetch("/", { cache: "no-store" }).then((r) => r.ok).catch(() => false);
-    if (ok && Date.now() - started > 4000) break;
-  }
-  window.location.assign("/");
-}
-
-/** Google's picker is an iframe that needs Google's cookies: Safari and iPhone block them. */
-export function pickerSupported() {
+/** Google's picker needs Google's cookies: Safari and iPhone block them (WheelTradr, Owly). */
+function pickerSupported() {
   if (typeof navigator === "undefined") return false;
   const ua = navigator.userAgent;
   const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -128,7 +59,7 @@ export function pickerSupported() {
   return !ios && !safari;
 }
 
-/** Google's picker runs in its own window (Wealthfolio's pages do not allow Google's scripts). */
+/** Google's picker runs in its own window: Wealthfolio's pages do not allow Google's scripts. */
 function openPicker(kind: "folder" | "file", parentId?: string): Promise<{ id: string; name: string } | null> {
   const q = new URLSearchParams({ kind, ...(parentId ? { parent: parentId } : {}) });
   const win = window.open(`/drive-backup/picker?${q}`, "money-drive-picker", "width=1000,height=720");
@@ -145,29 +76,18 @@ function openPicker(kind: "folder" | "file", parentId?: string): Promise<{ id: s
     window.addEventListener("message", onMsg);
   });
 }
-const pickFolder = () => openPicker("folder");
-const pickBackupFile = (folderId?: string) => openPicker("file", folderId);
 
-/**
- * Opens Google's consent screen in a small window and waits for the server to
- * say the link landed. Call straight from a click, so no popup blocker fires.
- */
+/** Google's consent in a small window; opened before any await so no pop-up blocker fires. */
 function linkDrive(loginHint: string | undefined, before: string | null): Promise<Status> {
   const win = window.open("about:blank", "money-drive-link", "width=520,height=680");
   if (!win) return Promise.reject(new Error("Your browser blocked the Google window. Allow pop-ups for this site and try again."));
   return new Promise((resolve, reject) => {
     let done = false;
     let closedChecks = 0;
-    const finish = (fn: () => void) => {
-      if (done) return;
-      done = true;
-      clearInterval(timer);
-      window.removeEventListener("message", onMsg);
-      fn();
-    };
+    const finish = (fn: () => void) => { if (done) return; done = true; clearInterval(timer); window.removeEventListener("message", onMsg); fn(); };
     const check = async () => {
       try {
-        const s = await api.get<Status>("/status");
+        const s = await api.status();
         if (s.linked && !s.needsRelink && s.linkedAt !== before) { finish(() => resolve(s)); return true; }
       } catch { /* keep waiting */ }
       return false;
@@ -179,545 +99,752 @@ function linkDrive(loginHint: string | undefined, before: string | null): Promis
       if (win.closed && ++closedChecks > 2) finish(() => reject(new Error("Google Drive was not linked (the Google window was closed).")));
     }, 1500);
     setTimeout(() => finish(() => reject(new Error("Linking took too long. Try again."))), 10 * 60_000);
-    api.post<{ url: string }>("/link", { loginHint })
+    call<{ url: string }>("POST", "/link", { loginHint })
       .then((r) => { win.location.href = r.url; })
       .catch((err) => { try { win.close(); } catch { /* already gone */ } finish(() => reject(err)); });
   });
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
+/** manifest.json out of a local .tar.gz, in the browser, so a file shows what it holds before anything changes. */
+async function readLocalManifest(file: File): Promise<Manifest> {
+  const stream = file.stream().pipeThrough(new DecompressionStream("gzip"));
+  const buf = new Uint8Array(await new Response(stream).arrayBuffer());
+  const dec = new TextDecoder();
+  for (let off = 0; off + 512 <= buf.length;) {
+    const name = dec.decode(buf.subarray(off, off + 100)).replace(/\0.*$/s, "").replace(/^\.\//, "");
+    if (!name) break;
+    const size = parseInt(dec.decode(buf.subarray(off + 124, off + 136)).replace(/\0.*$/s, "").trim() || "0", 8);
+    if (name === "manifest.json") return JSON.parse(dec.decode(buf.subarray(off + 512, off + 512 + size))) as Manifest;
+    off += 512 + Math.ceil(size / 512) * 512;
+  }
+  throw new Error("That file is not a money app backup (no manifest inside).");
+}
+
+// ---------- small pieces (WheelTradr's, in Wealthfolio's colours) ----------
+export function DriveLogo({ size = 20 }: { size?: number }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-5 py-3 sm:px-6">
-      <span className="text-muted-foreground shrink-0 text-sm">{label}</span>
-      <span className="flex min-w-0 items-center gap-3 text-sm font-medium">{children}</span>
+    <svg width={size} height={size} viewBox="0 0 87.3 78" aria-hidden="true">
+      <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da" />
+      <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47" />
+      <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335" />
+      <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d" />
+      <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc" />
+      <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00" />
+    </svg>
+  );
+}
+
+// Green = linked / running; amber only when it needs a look.
+function StatusPill({ on, text, warn }: { on: boolean; text: string; warn?: boolean }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${warn ? "bg-warning/15 text-warning" : on ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${warn ? "bg-warning" : on ? "bg-success" : "bg-muted-foreground"}`} />
+      {text}
+    </span>
+  );
+}
+
+function SectionTitle({ title, hint }: { title: string; hint: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+      <h3 className="text-muted-foreground whitespace-nowrap text-xs font-semibold uppercase tracking-[0.08em]">{title}</h3>
+      <span className="text-muted-foreground text-xs">{hint}</span>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/** "Cloud" / "Local" over each box, so both sections read in the same two columns. */
+function Col({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="text-muted-foreground px-0.5 text-[11px] font-semibold uppercase tracking-[0.06em]">{label}</div>
       {children}
     </div>
   );
 }
 
-function Choice<T extends string | number>({ value, options, disabled, onChange }: {
-  value: T; options: [T, string][]; disabled?: boolean; onChange: (v: T) => void;
-}) {
-  return (
-    <Select value={String(value)} disabled={disabled} onValueChange={(v) => onChange((typeof value === "number" ? Number(v) : v) as T)}>
-      <SelectTrigger><SelectValue /></SelectTrigger>
-      <SelectContent>
-        {options.map(([v, l]) => <SelectItem key={String(v)} value={String(v)}>{l}</SelectItem>)}
-      </SelectContent>
-    </Select>
-  );
-}
+const when = (iso?: string | null, tz?: string) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const thisYear = new Date().getFullYear() === d.getFullYear();
+  return d.toLocaleString(undefined, { timeZone: tz, month: "short", day: "numeric", ...(thisYear ? {} : { year: "numeric" }), hour: "numeric", minute: "2-digit" });
+};
+const mb = (bytes?: number | null) => (bytes == null ? "" : bytes < 1_000_000 ? `${Math.max(1, Math.round(bytes / 1000))} KB` : `${(bytes / 1_000_000).toFixed(1)} MB`);
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]; // server weekday: Monday = 0
+const TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 ? "30" : "00"}`);
+const KEEPS = [7, 14, 30, 60, 90, 0];
+const clock = (hhmm: string) => {
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+};
+const scheduleText = (s: Schedule) => (s.frequency === "weekly" ? `${DAYS[s.weekday]}s at ${clock(s.time)}` : `Every day at ${clock(s.time)}`);
+const zoneShort = (tz?: string) => {
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" }).formatToParts(new Date()).find((p) => p.type === "timeZoneName")?.value ?? tz ?? "";
+  } catch {
+    return tz ?? "";
+  }
+};
+
+type Note = { tone: "ok" | "bad" | "info" | "warn"; text: string };
+type RestoreSource = { kind: "drive"; file: DriveFile | { id: string; name: string; createdTime?: string }; manifest: Manifest } | { kind: "file"; file: File; manifest: Manifest };
+
+const btn = "inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border bg-background px-3 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50";
+const cta = "!border-primary/50 !text-primary";
+const field = "h-9 rounded-md border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-50";
 
 export function DriveBackupTab() {
-  const [st, setSt] = useState<Status | null>(null);
-  const [err, setErr] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState("");
-  const [sheet, setSheet] = useState<"folder" | "restore" | null>(null);
+  const [status, setStatus] = useState<Status | null>(null);
+  const [busy, setBusy] = useState<null | "link" | "backup" | "folder" | "list" | "open" | "pick" | "save">(null);
+  const [note, setNote] = useState<Note | null>(null);
+  const [openDrive, setOpenDrive] = useState(false);
+  const [files, setFiles] = useState<DriveFile[] | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [restore, setRestore] = useState<RestoreSource | null>(null);
+  const [showFolders, setShowFolders] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const load = useCallback(() => api.get<Status>("/status").then(setSt).catch((e: Error) => setErr(e.message)), []);
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => { api.status().then(setStatus).catch(() => setStatus(null)); }, []);
 
+  // Tiles side by side only when each has the room (measured on the box, as WheelTradr does).
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [boxWidth, setBoxWidth] = useState(0);
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setBoxWidth(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const wide = boxWidth >= 2 * 240 + 14;
+  const stack = !wide && boxWidth > 0 && boxWidth < 440;
+
+  const tz = status?.timezone;
+  const signedIn = !!status?.linked && !status.needsRelink;
+  const linked = signedIn && !!status?.folderId;
+  const sched = status?.schedule;
   const canPick = pickerSupported();
+  const fail = (e: unknown) => setNote({ tone: "bad", text: (e as Error)?.message || String(e) });
+  const run = (kind: NonNullable<typeof busy>, work: () => Promise<void>) => {
+    setBusy(kind); setNote(null);
+    work().catch(fail).finally(() => setBusy(null));
+  };
+  const loadFiles = async (folderId: string) => { setFiles(await api.listBackups(folderId)); };
+
   const useFolder = async (folder: { id: string; name: string }) => {
-    setSt(await api.put<Status>("/config", { folderId: folder.id, folderName: folder.name }));
+    setStatus(await api.saveConfig({ folderId: folder.id, folderName: folder.name }));
+    await loadFiles(folder.id).catch(() => setFiles([]));
     return folder;
   };
   /** Right after linking: Google's picker where it works (closing it = "Money Backups");
-   *  on iPhone, iPad and Safari straight to "Money Backups", changeable with Change. */
+   *  on iPhone, iPad and Safari straight to "Money Backups", changeable from the gear. */
   const firstFolder = async () => {
     let folder: { id: string; name: string } | null = null;
-    if (canPick) { try { folder = await pickFolder(); } catch { /* picker failed: default below */ } }
-    return useFolder(folder || await api.post<DriveFolder>("/folders/default"));
+    if (canPick) { try { folder = await openPicker("folder"); } catch { /* picker failed: default below */ } }
+    return useFolder(folder || await api.ensureDefaultFolder());
   };
 
-  const act = (key: string, fn: () => Promise<string | null | void>) => async () => {
-    setBusy(key); setErr(""); setMsg(null);
-    try {
-      const out = await fn();
-      if (typeof out === "string") setMsg(out);
-    } catch (e) {
-      setErr((e as Error).message);
-      void load();
-    } finally {
-      setBusy("");
-    }
+  const link = () => {
+    setBusy("link"); setNote(null);
+    linkDrive(status?.email || undefined, status?.linkedAt || null)
+      .then(async (s) => {
+        setStatus(s);
+        const folder = s.folderId ? { id: s.folderId, name: s.folderName || "" } : await firstFolder();
+        setNote({ tone: "ok", text: `Linked. Backups go to "${folder?.name}". Turn on automatic backups with the gear.` });
+      })
+      .catch(fail)
+      .finally(() => setBusy(null));
   };
 
-  const save = (patch: Record<string, unknown>) => act("save", async () => { setSt(await api.put<Status>("/config", patch)); })();
+  const onFolderChosen = async (folder: { id: string; name: string }) => {
+    await useFolder(folder);
+    setShowFolders(false);
+    setNote({ tone: "ok", text: `Backups will now go to "${folder.name}".` });
+  };
 
-  // Opens Google's window itself, before any await, so it is not blocked.
-  const link = act("link", async () => {
-    const next = await linkDrive(st?.email || undefined, st?.linkedAt || null);
-    setSt(next);
-    const folder = next.folderId ? { id: next.folderId, name: next.folderName || "" } : await firstFolder();
-    return `Linked. Backups go to “${folder.name}”. Turn on automatic backups below.`;
+  const backupNow = () => run("backup", async () => {
+    const next = await api.backupNow();
+    setStatus(next);
+    const r = next.lastManual;
+    if (next.folderId) loadFiles(next.folderId).catch(() => { /* list is optional */ });
+    setNote({ tone: "ok", text: `Backed up ${r?.accounts ?? 0} account${r?.accounts === 1 ? "" : "s"}, ${(r?.activities ?? 0).toLocaleString()} entries and ${r?.assets ?? 0} assets to "${next.folderName}" (${mb(r?.size)}).` });
   });
 
-  const zone = st?.timezone;
-  const s = st?.schedule;
-  const runs = [st?.lastAuto, st?.lastManual].filter(Boolean) as RunResult[];
-  const last = runs.sort((a, b) => (a.at < b.at ? 1 : -1))[0];
-  const lastGood = runs.filter((r) => r.ok).sort((a, b) => (a.at < b.at ? 1 : -1))[0];
-  const running = !!(s?.auto && st?.folderId && !st?.needsRelink);
+  const saveSchedule = (patch: Partial<Schedule>) => {
+    if (!status) return;
+    setStatus({ ...status, schedule: { ...status.schedule, ...patch } }); // feel instant
+    run("save", async () => { setStatus(await api.saveConfig(patch)); });
+  };
+
+  const showDriveBackups = () => run("list", async () => { if (status?.folderId) await loadFiles(status.folderId); });
+
+  const restoreFromDrive = (f: DriveFile | { id: string; name: string }) => {
+    setOpeningId(f.id);
+    run("open", async () => {
+      try {
+        setRestore({ kind: "drive", file: f, manifest: await api.inspect(f.id) });
+      } finally { setOpeningId(null); }
+    });
+  };
+  const pickFromDrive = () => run("pick", async () => {
+    const f = await openPicker("file", status?.folderId || undefined);
+    if (f) setRestore({ kind: "drive", file: f, manifest: await api.inspect(f.id) });
+  });
+
+  const unlink = () => run("save", async () => {
+    if (!window.confirm("Unlink Google Drive? Automatic backups stop. Backups already in your Drive stay there.")) return;
+    setStatus(await api.unlink());
+    setFiles(null); setOpenDrive(false);
+    setNote({ tone: "info", text: "Google Drive unlinked and automatic backups stopped. Backups already in your Drive stay there." });
+  });
+
+  const onFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setNote(null);
+    readLocalManifest(file).then((manifest) => setRestore({ kind: "file", file, manifest })).catch(fail);
+  };
+
+  const driveSub = !status ? "Saved to a folder you choose"
+    : status.needsRelink ? "Google stopped accepting the link. Link it again."
+      : !signedIn ? "Saved to a folder you choose"
+        : !status.folderId ? "Choose a folder to finish"
+          : sched?.auto ? scheduleText(sched)
+            : status.lastManual?.ok ? `Last backup ${when(status.lastManual.at, tz)}` : `Folder: ${status.folderName}`;
+  const pill = status?.needsRelink ? { on: false, text: "Link again", warn: true }
+    : linked && sched?.auto ? { on: true, text: sched.frequency === "weekly" ? "Auto weekly" : "Auto daily" }
+      : linked ? { on: true, text: "Linked" } : { on: false, text: "Not linked" };
+  const lastAuto = status?.lastAuto;
+
+  const tile = (on: boolean) => `min-w-0 rounded-lg border bg-card transition-colors ${wide ? "flex flex-col gap-3.5 p-4" : `flex items-center gap-3 p-3 ${stack || on ? "flex-wrap" : ""}`} ${on ? "border-primary/60 ring-2 ring-primary/20" : ""}`;
+  const actions = wide ? "mt-auto flex gap-2" : stack ? "flex basis-full gap-2" : "flex shrink-0 gap-2";
+  const grow = wide || stack ? "flex-1" : "";
+  const iconBox = "flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px]";
 
   return (
-    <Card className="overflow-hidden shadow-none">
-      <CardHeader className="gap-4 space-y-0 p-5 sm:p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1.5">
-            <CardTitle className="text-lg leading-6">Google Drive</CardTitle>
-            <CardDescription className="leading-relaxed">
-              Everything the money app holds, in one file in your Google Drive: every account, entry, property,
-              the Rental page and its settings, and the app's keys and login. A new server comes back from one of
-              these in about a minute.
-            </CardDescription>
-          </div>
-          {st?.linked && s ? (
-            <Badge variant={running ? "default" : "secondary"} className={running ? "bg-success text-success-foreground" : ""}>
-              {running ? "Automatic" : "Off"}
-            </Badge>
-          ) : null}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-0 p-0">
-        {err ? (
-          <div className="px-5 pb-4 sm:px-6"><Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert></div>
-        ) : null}
-        {msg ? (
-          <div className="px-5 pb-4 sm:px-6"><Alert><AlertDescription>{msg}</AlertDescription></Alert></div>
-        ) : null}
-
-        {!st ? (
-          <div className="text-muted-foreground flex items-center gap-2 px-5 pb-6 text-sm sm:px-6">
-            <Icons.Spinner className="size-4 animate-spin" aria-hidden /> Loading…
-          </div>
-        ) : !st.linked || st.needsRelink ? (
-          <div className="space-y-3 px-5 pb-6 sm:px-6">
-            {st.needsRelink ? (
-              <Alert variant="destructive"><AlertDescription>
-                Google stopped accepting the money app’s access to {st.email || "your Drive"}, so backups have stopped. Link it again.
-              </AlertDescription></Alert>
-            ) : null}
-            <div className="grid gap-2 md:flex md:flex-wrap">
-              <Button className="h-11" disabled={!!busy} onClick={link}>
-                {busy === "link" ? <Icons.Spinner className="mr-2 size-4 animate-spin" aria-hidden /> : <span className="mr-2"><GoogleDriveMark /></span>}
-                {busy === "link" ? "Waiting for Google…" : "Link Google Drive"}
-              </Button>
-              <Button className="h-11" variant="outline" asChild>
-                <a href={`${BASE}/download`}><Icons.Download className="mr-2 size-4" aria-hidden />Download a backup file</a>
-              </Button>
-            </div>
-            <p className="text-muted-foreground text-xs">The money app only sees the folder it makes or you choose, never the rest of your Drive.</p>
-          </div>
-        ) : (
-          <>
-            {st.linkExpiresAt ? (
-              <div className="px-5 pb-4 sm:px-6">
-                <Alert><AlertDescription className="space-y-3">
-                  <span>Google will cut this link on {when(st.linkExpiresAt, zone)}: it was made while the Google Cloud app was still in Testing. Link again to get one that lasts.</span>
-                  <Button size="sm" disabled={!!busy} onClick={link}>{busy === "link" ? "Waiting for Google…" : "Link again"}</Button>
-                </AlertDescription></Alert>
+    <div className="space-y-7">
+      {/* 1. Back up */}
+      <section className="space-y-3.5">
+        <SectionTitle title="1. Back up" hint="Every account, entry, property and setting" />
+        <div ref={gridRef} className={`grid ${wide ? "grid-cols-2 gap-3.5" : "grid-cols-1 gap-2.5"} ${openDrive ? "items-start" : ""}`}>
+          {/* Google Drive */}
+          <Col label="Cloud">
+            <div className={`${tile(openDrive)} flex-1`}>
+              <div className={`flex shrink-0 items-center ${wide ? "justify-between gap-2" : ""}`}>
+                <span className={`${iconBox} bg-background border`}><DriveLogo /></span>
+                {wide ? <StatusPill {...pill} /> : null}
               </div>
-            ) : null}
-
-            <div className="divide-y border-t">
-              <Row label="Account">
-                <span className="truncate">{st.email}</span>
-                <Button variant="link" size="sm" className="text-destructive h-auto p-0" disabled={!!busy}
-                  onClick={act("unlink", async () => {
-                    if (!window.confirm("Unlink Google Drive? Automatic backups stop. Backups already in Drive stay there.")) return null;
-                    setSt(await api.del<Status>("/link"));
-                    return "Google Drive unlinked.";
-                  })}>Unlink</Button>
-              </Row>
-              <Row label="Folder">
-                {st.folderId ? (
-                  <a className="inline-flex min-w-0 items-center gap-1.5 hover:underline" href={`https://drive.google.com/drive/folders/${st.folderId}`} target="_blank" rel="noreferrer">
-                    <span className="truncate">{st.folderName}</span><Icons.ExternalLink className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
-                  </a>
-                ) : <span>Not chosen yet</span>}
-                <Button variant="link" size="sm" className="h-auto p-0" disabled={!!busy} onClick={() => setSheet("folder")}>
-                  {st.folderId ? "Change" : "Choose"}
-                </Button>
-              </Row>
-              <Row label="Last backup"><span>{lastGood ? when(lastGood.at, zone) : "None yet"}</span></Row>
-              <Row label="Next backup">
-                <span>{st.nextRunAt ? when(st.nextRunAt, zone) : s?.auto ? "Choose a folder first" : "Automatic backups are off"}</span>
-              </Row>
-            </div>
-
-            <div className="space-y-4 border-t px-5 py-5 sm:px-6">
-              {last && !last.ok ? (
-                <Alert variant="destructive"><AlertDescription>
-                  The {last === st.lastAuto ? "automatic" : "last"} backup on {when(last.at, zone)} failed: {last.error}
-                </AlertDescription></Alert>
-              ) : null}
-              {lastGood ? (
-                <p className="text-muted-foreground text-xs">
-                  {lastGood.file} · {bytes(lastGood.size)}
-                  {lastGood.activities != null && ` · ${lastGood.accounts} accounts, ${lastGood.activities} entries, ${lastGood.assets} assets, ${lastGood.files} files`}
-                </p>
-              ) : null}
-
-              <label className="flex items-center gap-3 text-sm">
-                <Switch checked={!!s?.auto} disabled={!!busy || !st.folderId} onCheckedChange={(v) => save({ auto: v })} />
-                <span>Back up automatically <span className="text-muted-foreground">· {st.folderId ? `on ${zone} time` : "choose a folder first"}</span></span>
-              </label>
-
-              {s?.auto ? (
-                <>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Field label="How often">
-                      <Choice value={s.frequency} disabled={!!busy} onChange={(v) => save({ frequency: v })}
-                        options={[["daily", "Every day"], ["weekly", "Once a week"]]} />
-                    </Field>
-                    {s.frequency === "weekly" ? (
-                      <Field label="On">
-                        <Choice value={s.weekday} disabled={!!busy} onChange={(v) => save({ weekday: v })}
-                          options={WEEKDAYS.map((d, i) => [i, d] as [number, string])} />
-                      </Field>
-                    ) : null}
-                    <Field label="At">
-                      <Choice value={s.time} disabled={!!busy} onChange={(v) => save({ time: v })}
-                        options={TIMES.map((t) => [t, t] as [string, string])} />
-                    </Field>
-                    <Field label="Keep">
-                      <Choice value={s.keep} disabled={!!busy} onChange={(v) => save({ keep: v })} options={KEEP} />
-                    </Field>
+              <div className="min-w-0 flex-1">
+                <div className={`${wide ? "text-[15px]" : "text-sm"} truncate font-semibold`}>Google Drive</div>
+                <div className={`mt-0.5 truncate text-xs ${status?.needsRelink ? "text-warning" : "text-muted-foreground"}`} title={status?.folderName || undefined}>
+                  {wide || linked || status?.needsRelink ? driveSub : "Not linked"}
+                </div>
+                {signedIn && status?.email && !openDrive ? (
+                  <div className="mt-1 flex min-w-0 items-center gap-1.5" title="Google account linked">
+                    <Icons.CheckCircle className="text-success size-[13px] shrink-0" />
+                    <span className="text-muted-foreground truncate font-mono text-xs">{status.email}</span>
                   </div>
-                  <p className="text-muted-foreground text-xs">
-                    Older automatic backups go to the Drive bin. Ones you make with Back up now are never removed.
+                ) : null}
+              </div>
+              <div className={actions}>
+                {linked ? (
+                  <>
+                    <button type="button" onClick={backupNow} disabled={busy !== null} className={`${btn} ${cta} min-w-0 ${grow}`}>
+                      {busy === "backup" ? <Icons.RefreshCw className="size-3 shrink-0 animate-spin" /> : <Icons.Upload className="size-[13px] shrink-0" />}
+                      <span className="truncate">{busy === "backup" ? "Backing up…" : "Back up now"}</span>
+                    </button>
+                    <button type="button" onClick={() => setOpenDrive((o) => !o)} aria-expanded={openDrive} aria-label="Google Drive settings" title="Google Drive settings"
+                      className={`${btn} w-9 shrink-0 !px-0 ${openDrive ? "!border-primary/50 !bg-primary/10 !text-primary" : ""}`}>
+                      <Icons.Settings className={`size-4 transition-transform duration-300 ${openDrive ? "rotate-90" : ""}`} />
+                    </button>
+                  </>
+                ) : signedIn ? (
+                  <button type="button" onClick={() => setShowFolders(true)} disabled={busy !== null} className={`${btn} ${cta} min-w-0 ${grow}`}>
+                    <Icons.FolderOpen className="size-[13px] shrink-0" /><span className="truncate">Choose folder</span>
+                  </button>
+                ) : (
+                  <button type="button" onClick={link} disabled={busy !== null} className={`${btn} ${cta} min-w-0 ${grow}`}>
+                    {busy === "link" ? <Icons.RefreshCw className="size-3 shrink-0 animate-spin" /> : null}
+                    <span className="truncate">{busy === "link" ? "Waiting for Google…" : status?.needsRelink ? "Link again" : "Link Google Drive"}</span>
+                  </button>
+                )}
+              </div>
+              {openDrive && linked && status ? (
+                <div className={`w-full ${wide ? "" : "basis-full"} space-y-4 border-t pt-4`}>
+                  <div className="divide-y overflow-hidden rounded-lg border">
+                    <div className="bg-background flex items-center gap-3 px-3.5 py-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-muted-foreground text-xs">Google account</div>
+                        <div className="flex min-w-0 items-center gap-1.5"><Icons.CheckCircle className="text-success size-[13px] shrink-0" /><span className="truncate text-sm">{status.email || "Linked"}</span></div>
+                      </div>
+                      <button type="button" onClick={unlink} disabled={busy !== null} className={`${btn} hover:!text-destructive`}>Unlink</button>
+                    </div>
+                    <div className="bg-background flex items-center gap-3 px-3.5 py-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-muted-foreground text-xs">Backup folder</div>
+                        <a href={`https://drive.google.com/drive/folders/${status.folderId}`} target="_blank" rel="noopener noreferrer" className="hover:text-primary inline-flex max-w-full items-center gap-1 text-sm">
+                          <span className="truncate">{status.folderName}</span><Icons.ExternalLink className="text-muted-foreground size-3 shrink-0" />
+                        </a>
+                      </div>
+                      <button type="button" onClick={() => setShowFolders(true)} disabled={busy !== null} className={btn}>
+                        <Icons.FolderOpen className="size-[13px]" />Change folder
+                      </button>
+                    </div>
+                  </div>
+                  {sched ? (
+                    <div className="bg-background overflow-hidden rounded-lg border">
+                      <div className="flex items-center gap-3 px-3.5 py-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium">Automatic backups</div>
+                          <div className="text-muted-foreground mt-0.5 text-xs">
+                            {sched.auto && status.nextRunAt
+                              ? `Next one ${when(status.nextRunAt, tz)} ${zoneShort(tz)}. Runs even with the money app closed.`
+                              : "Saved on a schedule, even with the money app closed."}
+                          </div>
+                        </div>
+                        <Switch checked={sched.auto} onCheckedChange={() => saveSchedule({ auto: !sched.auto })} aria-label="Automatic backups" />
+                      </div>
+                      {sched.auto ? (
+                        <div className="grid grid-cols-2 gap-3 border-t px-3.5 py-3">
+                          <label className="text-muted-foreground flex flex-col gap-1.5 text-[11px] font-medium">How often
+                            <div className="bg-muted flex h-9 rounded-md border p-0.5">
+                              {(["daily", "weekly"] as const).map((f) => (
+                                <button key={f} type="button" onClick={() => saveSchedule({ frequency: f })}
+                                  className={`flex-1 rounded-[6px] text-xs font-medium ${sched.frequency === f ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                                  {f === "daily" ? "Daily" : "Weekly"}
+                                </button>
+                              ))}
+                            </div>
+                          </label>
+                          <label className="text-muted-foreground flex flex-col gap-1.5 text-[11px] font-medium">Day
+                            <select className={field} value={sched.weekday} disabled={sched.frequency !== "weekly"} onChange={(e) => saveSchedule({ weekday: Number(e.target.value) })}>
+                              {sched.frequency !== "weekly" ? <option value={sched.weekday}>Every day</option> : DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+                            </select>
+                          </label>
+                          <label className="text-muted-foreground flex flex-col gap-1.5 text-[11px] font-medium">Time ({zoneShort(tz)})
+                            <select className={field} value={sched.time} onChange={(e) => saveSchedule({ time: e.target.value })}>
+                              {!TIMES.includes(sched.time) ? <option value={sched.time}>{clock(sched.time)}</option> : null}
+                              {TIMES.map((t) => <option key={t} value={t}>{clock(t)}</option>)}
+                            </select>
+                          </label>
+                          <label className="text-muted-foreground flex flex-col gap-1.5 text-[11px] font-medium">Keep
+                            <select className={field} value={sched.keep} onChange={(e) => saveSchedule({ keep: Number(e.target.value) })}>
+                              {KEEPS.map((k) => <option key={k} value={k}>{k ? `Last ${k}` : "All of them"}</option>)}
+                            </select>
+                          </label>
+                        </div>
+                      ) : null}
+                      {sched.auto && lastAuto ? (
+                        <div className={`flex items-start gap-2 border-t px-3.5 py-2.5 text-xs ${lastAuto.ok ? "text-muted-foreground" : "text-warning"}`}>
+                          {lastAuto.ok ? <Icons.Check className="text-success mt-px size-[13px] shrink-0" /> : <Icons.AlertTriangle className="mt-px size-[13px] shrink-0" />}
+                          <span>{lastAuto.ok
+                            ? `Last automatic backup ${when(lastAuto.at, tz)}: ${(lastAuto.activities ?? 0).toLocaleString()} entries, ${mb(lastAuto.size)}${lastAuto.trimmed ? `, ${lastAuto.trimmed} old one${lastAuto.trimmed === 1 ? "" : "s"} moved to the Drive bin` : ""}.`
+                            : `Last automatic backup failed ${when(lastAuto.at, tz)}: ${lastAuto.error}`}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <p className="text-muted-foreground text-xs leading-relaxed">
+                    The money app can only see the folder you chose and the backups it saved there, nothing else in your Drive.
+                    Keep only ever clears automatic backups, into your Drive bin (30 days to get one back). Back up now copies are never removed.
                   </p>
-                </>
+                </div>
               ) : null}
+            </div>
+          </Col>
 
-              <div className="grid gap-2 md:flex md:flex-wrap">
-                <Button className="h-11" disabled={!!busy || !st.folderId}
-                  onClick={act("run", async () => {
-                    const next = await api.post<Status>("/run");
-                    setSt(next);
-                    const r = next.lastManual;
-                    return `Saved ${r?.file} (${bytes(r?.size)}) to ${next.folderName}.`;
-                  })}>
-                  {busy === "run" ? <Icons.Spinner className="mr-2 size-4 animate-spin" aria-hidden /> : <Icons.Upload className="mr-2 size-4" aria-hidden />}
-                  {busy === "run" ? "Backing up…" : "Back up now"}
-                </Button>
-                <Button className="h-11" variant="outline" disabled={!!busy} onClick={() => setSheet("restore")}>
-                  <Icons.History className="mr-2 size-4" aria-hidden />Restore…
-                </Button>
-                <Button className="h-11" variant="ghost" asChild>
-                  <a href={`${BASE}/download`}><Icons.Download className="mr-2 size-4" aria-hidden />Download file</a>
-                </Button>
+          {/* This device */}
+          <Col label="Local">
+            <div className={`${tile(false)} flex-1`}>
+              <div className={`flex shrink-0 items-center ${wide ? "justify-between gap-2" : ""}`}>
+                <span className={`${iconBox} bg-muted`}><Icons.Laptop className="text-primary size-5" /></span>
+                {wide ? <StatusPill on text="Ready" /> : null}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className={`${wide ? "text-[15px]" : "text-sm"} truncate font-semibold`}>This device</div>
+                <div className="text-muted-foreground mt-0.5 text-xs">{wide || !stack ? "Download a backup file to keep anywhere" : "Download a file"}</div>
+              </div>
+              <div className={actions}>
+                <a href={`${BASE}/download`} className={`${btn} min-w-0 ${grow}`}>
+                  <Icons.Download className="size-[13px] shrink-0" /><span className="truncate">Download</span>
+                </a>
               </div>
             </div>
-          </>
-        )}
-      </CardContent>
+          </Col>
+        </div>
 
-      <FolderSheet open={sheet === "folder"} currentId={st?.folderId ?? null} canBrowse={canPick} onClose={() => setSheet(null)}
-        onChosen={async (f) => {
-          setSt(await api.put<Status>("/config", { folderId: f.id, folderName: f.name }));
-          setSheet(null);
-          setErr("");
-          setMsg(`Backups go to “${f.name}”.`);
-        }} />
-      {st ? <RestoreSheet open={sheet === "restore"} status={st} canPick={canPick} onClose={() => setSheet(null)} /> : null}
-    </Card>
+        {note ? (
+          <div className={`flex items-start gap-2 text-xs ${note.tone === "bad" ? "text-destructive" : note.tone === "warn" ? "text-warning" : note.tone === "ok" ? "text-success" : "text-muted-foreground"}`}>
+            {note.tone === "bad" || note.tone === "warn" ? <Icons.AlertTriangle className="mt-px size-3.5 shrink-0" /> : <Icons.Check className="mt-px size-3.5 shrink-0" />}
+            <span>{note.text}</span>
+          </div>
+        ) : null}
+      </section>
+
+      {/* 2. Restore */}
+      <section className="space-y-3.5">
+        <SectionTitle title="2. Restore" hint="You see what comes back before anything changes" />
+        <div className={`grid items-start ${wide ? "grid-cols-2 gap-3.5" : "grid-cols-1 gap-2.5"}`}>
+          <Col label="Cloud">
+            <div className="bg-card overflow-hidden rounded-lg border">
+              {linked && status ? (
+                <div>
+                  <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+                    <span className="bg-background flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border"><DriveLogo size={16} /></span>
+                    <div className="min-w-[150px] flex-1">
+                      <div className="text-sm font-medium">From Google Drive</div>
+                      <div className="text-muted-foreground truncate text-xs">{status.folderName}</div>
+                    </div>
+                    {files === null ? (
+                      <button type="button" onClick={showDriveBackups} disabled={busy !== null} className={btn}>
+                        {busy === "list" ? <Icons.RefreshCw className="size-3 animate-spin" /> : null}Show backups
+                      </button>
+                    ) : canPick ? (
+                      <button type="button" onClick={pickFromDrive} disabled={busy !== null} className={btn} title="Pick a backup anywhere in your Drive">
+                        {busy === "pick" ? <Icons.RefreshCw className="size-3 animate-spin" /> : null}Other file…
+                      </button>
+                    ) : null}
+                  </div>
+                  {files !== null ? (
+                    files.length === 0 ? (
+                      <div className="text-muted-foreground pb-3 pl-4 pr-4 text-xs sm:pl-[60px]">No backups in this folder yet. Press Back up now to make the first one.</div>
+                    ) : (
+                      <div className="pb-1.5">
+                        {files.slice(0, 8).map((f, i) => (
+                          <div key={f.id} className={`flex items-center gap-3 py-2 pl-4 pr-4 sm:pl-[60px] ${i % 2 === 0 ? "bg-muted/40" : ""}`}>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm tabular-nums">{when(f.createdTime, tz)}</div>
+                              <div className="text-muted-foreground truncate text-[11px]" title={f.name}>{mb(f.size)} · {f.auto ? "automatic" : "Back up now"}{i === 0 ? " · newest" : ""}</div>
+                            </div>
+                            <button type="button" onClick={() => restoreFromDrive(f)} disabled={busy !== null} className={`${btn} h-8`}>
+                              {openingId === f.id ? <Icons.RefreshCw className="size-3 animate-spin" /> : <Icons.RotateCcw className="size-3" />}Restore
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  ) : null}
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <span className="bg-background flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border"><DriveLogo size={16} /></span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium">From Google Drive</div>
+                    <div className="text-muted-foreground text-xs">Link Google Drive above to restore straight from it.</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Col>
+          <Col label="Local">
+            <div className="bg-card flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3">
+              <span className="bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px]"><Icons.Upload className="text-primary size-[15px]" /></span>
+              <div className="min-w-[150px] flex-1">
+                <div className="text-sm font-medium">From a file</div>
+                <div className="text-muted-foreground text-xs">A backup you downloaded before (.tar.gz)</div>
+              </div>
+              <input ref={fileRef} type="file" accept=".gz,.tgz,application/gzip" onChange={onFile} className="hidden" />
+              <button type="button" onClick={() => fileRef.current?.click()} className={btn}>Choose file</button>
+            </div>
+          </Col>
+        </div>
+      </section>
+
+      {showFolders ? <DriveFolderChooser currentId={status?.folderId} canBrowse={canPick} onClose={() => setShowFolders(false)} onChosen={onFolderChosen} /> : null}
+      {restore && status ? <RestoreBackupModal source={restore} status={status} onClose={() => setRestore(null)} /> : null}
+    </div>
   );
 }
 
-/**
- * The folders the app can see as a tree from My Drive: top-level first, each
- * folder right under the one it sits in. One whose parent it cannot see goes
- * in a second list, since where it lives is unknown.
- */
-export function folderTree(folders: DriveFolder[]) {
+// ---------- DriveFolderChooser (WheelTradr's) ----------
+interface FolderRow { folder: DriveFolder; depth: number; path: string }
+function folderTree(folders: DriveFolder[]) {
   const byId = new Map(folders.map((f) => [f.id, f]));
   const kids = new Map<string, DriveFolder[]>();
-  for (const f of folders) {
-    if (!f.atTop && f.parentId && byId.has(f.parentId)) kids.set(f.parentId, [...(kids.get(f.parentId) || []), f]);
-  }
+  for (const f of folders) if (!f.atTop && f.parentId && byId.has(f.parentId)) kids.set(f.parentId, [...(kids.get(f.parentId) || []), f]);
   const byName = (a: DriveFolder, b: DriveFolder) => a.name.localeCompare(b.name);
   const seen = new Set<string>();
-  type Line = { folder: DriveFolder; depth: number; path: string };
-  const walk = (f: DriveFolder, depth: number, trail: string, out: Line[]) => {
+  const walk = (f: DriveFolder, depth: number, trail: string, out: FolderRow[]) => {
     if (seen.has(f.id)) return;
     seen.add(f.id);
     const here = `${trail} › ${f.name}`;
     out.push({ folder: f, depth, path: here });
     for (const k of (kids.get(f.id) || []).sort(byName)) walk(k, depth + 1, here, out);
   };
-  const top: Line[] = [];
+  const top: FolderRow[] = [];
   for (const f of folders.filter((x) => x.atTop).sort(byName)) walk(f, 0, "My Drive", top);
-  const elsewhere: Line[] = [];
-  for (const f of folders.filter((x) => !seen.has(x.id) && !(x.parentId && byId.has(x.parentId))).sort(byName)) walk(f, 0, "Another folder", elsewhere);
+  const elsewhere: FolderRow[] = [];
   for (const f of folders.filter((x) => !seen.has(x.id)).sort(byName)) walk(f, 0, "Another folder", elsewhere);
   return { top, elsewhere };
 }
 
-function FolderSheet({ open, currentId, canBrowse, onClose, onChosen }: {
-  open: boolean; currentId: string | null; canBrowse: boolean; onClose: () => void; onChosen: (f: { id: string; name: string }) => Promise<void>;
+function DriveFolderChooser({ currentId, canBrowse, onClose, onChosen }: {
+  currentId?: string | null; canBrowse: boolean; onClose: () => void; onChosen: (f: { id: string; name: string }) => Promise<void>;
 }) {
   const [folders, setFolders] = useState<DriveFolder[] | null>(null);
   const [name, setName] = useState(DEFAULT_FOLDER_NAME);
-  const [parent, setParent] = useState(TOP);
-  const [busy, setBusy] = useState("");
-  const [err, setErr] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    setFolders(null);
-    api.get<DriveFolder[]>("/folders")
-      .then((f) => { setFolders(f); if (f.some((x) => x.name === DEFAULT_FOLDER_NAME)) setName(""); })
-      .catch((e: Error) => { setFolders([]); setErr(e.message); });
-  }, [open]);
-
+  const [parent, setParent] = useState(""); // "" = directly in My Drive
+  const [showNew, setShowNew] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
   const tree = folders ? folderTree(folders) : { top: [], elsewhere: [] };
   const rows = [...tree.top, ...tree.elsewhere];
 
+  useEffect(() => {
+    api.listFolders()
+      .then((f) => { setFolders(f); if (f.some((x) => x.name === DEFAULT_FOLDER_NAME)) setName(""); if (!f.length) setShowNew(true); })
+      .catch((e: Error) => { setFolders([]); setError(e.message); });
+  }, []);
+
   const choose = async (key: string, get: () => Promise<{ id: string; name: string } | null>) => {
-    setBusy(key); setErr("");
+    setBusy(key); setError("");
     try {
       const f = await get();
       if (f) await onChosen(f);
     } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setBusy("");
-    }
+      setError((e as Error).message);
+    } finally { setBusy(null); }
   };
 
-  const line = (r: { folder: DriveFolder; depth: number; path: string }) => {
+  const row = (r: FolderRow) => {
     const f = r.folder;
     const inUse = f.id === currentId;
     return (
-      <button key={f.id} type="button" title={r.path} disabled={!!busy || inUse}
-        className="hover:bg-muted/60 flex w-full items-center gap-2 rounded-md py-2.5 pr-3 text-left text-sm disabled:opacity-100"
-        style={{ paddingLeft: 12 + r.depth * 18 }}
-        onClick={() => choose(f.id, async () => f)}>
-        <Icons.Folder className={`size-4 shrink-0 ${inUse ? "text-primary" : "text-muted-foreground"}`} aria-hidden />
-        <span className="min-w-0 flex-1 truncate">{f.name}</span>
-        {busy === f.id ? <Icons.Spinner className="size-4 animate-spin" aria-hidden />
-          : inUse ? <span className="text-primary inline-flex items-center gap-1 text-xs"><Icons.Check className="size-3.5" /> In use</span>
-            : <span className="text-primary text-xs">Use</span>}
+      <button key={f.id} type="button" disabled={!!busy || inUse} title={r.path} onClick={() => choose(f.id, async () => f)}
+        style={{ paddingLeft: 14 + 22 + r.depth * 18 }}
+        className={`flex w-full items-center gap-3 py-2.5 pr-3.5 text-left transition-colors disabled:cursor-default ${inUse ? "bg-primary/10" : "bg-background hover:bg-muted/60"}`}>
+        <Icons.Folder className={`size-[15px] shrink-0 ${inUse ? "text-primary" : "text-muted-foreground"}`} />
+        <span className="min-w-0 flex-1 truncate text-sm">{f.name}</span>
+        {busy === f.id ? <Icons.RefreshCw className="text-muted-foreground size-3 animate-spin" />
+          : inUse ? <span className="text-primary inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold"><Icons.Check className="size-3" /> In use</span>
+            : <span className="text-primary shrink-0 text-xs">Use</span>}
       </button>
     );
   };
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o && !busy) onClose(); }}>
-      <SheetContent className="flex flex-col gap-4 overflow-y-auto sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>Backup folder</SheetTitle>
-          <SheetDescription>Google only lets the money app see folders it made or you chose, never the rest of your Drive.</SheetDescription>
-        </SheetHeader>
-        {err ? <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert> : null}
-        {canBrowse ? (
-          <Button variant="outline" disabled={!!busy} onClick={() => choose("browse", pickFolder)}>
-            {busy === "browse" ? <Icons.Spinner className="mr-2 size-4 animate-spin" aria-hidden /> : <span className="mr-2"><GoogleDriveMark size={17} /></span>}
-            {busy === "browse" ? "Opening Google Drive…" : "Browse Google Drive"}
-          </Button>
-        ) : null}
-        <div className="space-y-1">
-          <h4 className="text-muted-foreground text-xs font-semibold uppercase tracking-[0.18em]">Your folders</h4>
-          {folders === null ? (
-            <p className="text-muted-foreground text-sm">Looking in your Drive…</p>
-          ) : (
-            <>
-              <div className="text-muted-foreground flex items-center gap-2 px-1 py-1 text-xs"><Icons.Cloud className="size-4" aria-hidden /> My Drive</div>
-              {tree.top.length === 0 ? <p className="text-muted-foreground px-1 text-sm">No folders yet. Make one below.</p> : null}
-              {tree.top.map(line)}
-              {tree.elsewhere.length > 0 ? (
-                <>
-                  <div className="text-muted-foreground px-1 pt-3 text-xs">Inside folders the money app cannot see</div>
-                  {tree.elsewhere.map(line)}
-                </>
-              ) : null}
-            </>
-          )}
-        </div>
-        <div className="space-y-3 border-t pt-4">
-          <h4 className="text-muted-foreground text-xs font-semibold uppercase tracking-[0.18em]">New folder</h4>
-          <Field label="Make it in">
-            <Choice value={parent} disabled={!!busy} onChange={setParent}
-              options={[[TOP, "My Drive (top level)"], ...rows.map((r) => [r.folder.id, r.path] as [string, string])]} />
-          </Field>
-          <div className="flex gap-2">
-            <Input value={name} maxLength={120} placeholder="Folder name" onChange={(e) => setName(e.target.value)} />
-            <Button disabled={!!busy || !name.trim()}
-              onClick={() => choose("new", () => api.post<DriveFolder>("/folders", { name, parentId: parent === TOP ? undefined : parent }))}>
-              {busy === "new" ? <Icons.Spinner className="mr-2 size-4 animate-spin" aria-hidden /> : <Icons.Plus className="mr-2 size-4" aria-hidden />}
-              Make and use
-            </Button>
+    <Dialog open onOpenChange={(o) => { if (!o && !busy) onClose(); }}>
+      <DialogContent className="flex max-h-[90dvh] w-full max-w-md flex-col gap-0 overflow-hidden p-0">
+        <div className="flex shrink-0 items-center gap-3 border-b p-4">
+          <span className="bg-primary/10 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"><Icons.Folder className="text-primary size-4" /></span>
+          <div className="min-w-0">
+            <DialogTitle className="text-base font-semibold">Backup folder</DialogTitle>
+            <div className="text-muted-foreground text-xs">Where your Google Drive backups go</div>
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+
+        <div className="flex-1 space-y-5 overflow-y-auto p-5">
+          <div className="space-y-2">
+            <h4 className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.06em]">Your folders</h4>
+            {folders === null ? (
+              <div className="text-muted-foreground flex items-center gap-2 px-1 py-2 text-xs"><Icons.RefreshCw className="size-3 animate-spin" /> Looking in your Drive…</div>
+            ) : (
+              <div className="divide-y overflow-hidden rounded-lg border">
+                <div className="bg-muted/40 text-muted-foreground flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-semibold">
+                  <Icons.Cloud className="size-3.5" /> My Drive
+                </div>
+                {tree.top.length === 0 ? <div className="bg-background text-muted-foreground px-3.5 py-2.5 pl-10 text-xs">No folders here yet. Make one below.</div> : null}
+                {tree.top.map((r) => row(r))}
+                {tree.elsewhere.length > 0 ? (
+                  <>
+                    <div className="bg-muted/40 text-muted-foreground px-3.5 py-2.5 text-xs font-semibold">Inside folders the money app cannot see</div>
+                    {tree.elsewhere.map((r) => row(r))}
+                  </>
+                ) : null}
+              </div>
+            )}
+            <p className="text-muted-foreground px-1 text-[11px] leading-relaxed">
+              Google only lets the money app see folders it made or you chose before, never the rest of your Drive, so other folders are not listed here.
+            </p>
+          </div>
+
+          {!showNew ? (
+            <button type="button" disabled={!!busy || folders === null} onClick={() => setShowNew(true)}
+              className="text-primary hover:border-primary/60 hover:bg-primary/5 inline-flex h-10 w-full min-w-0 items-center justify-center gap-2 rounded-lg border border-dashed px-3 text-sm font-medium transition-colors disabled:opacity-40">
+              <Icons.Plus className="size-[15px] shrink-0" /><span className="truncate">Create a new folder for backups</span>
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between gap-3">
+                <h4 className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.06em]">New folder</h4>
+                {folders?.length ? <button type="button" onClick={() => setShowNew(false)} disabled={!!busy} className="text-muted-foreground hover:text-foreground text-xs">Cancel</button> : null}
+              </div>
+              <label className="text-muted-foreground flex flex-col gap-1.5 text-[11px] font-medium">Make it in
+                <select value={parent} onChange={(e) => setParent(e.target.value)} disabled={!!busy} className={`${field} w-full`}>
+                  <option value="">My Drive (top level)</option>
+                  {rows.map((r) => <option key={r.folder.id} value={r.folder.id}>{r.path}</option>)}
+                </select>
+              </label>
+              <div className="flex gap-2">
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Folder name" maxLength={120} autoFocus
+                  className="bg-background placeholder:text-muted-foreground focus:border-primary h-9 min-w-0 flex-1 rounded-md border px-3 text-sm focus:outline-none" />
+                <button type="button" disabled={!!busy || !name.trim()} onClick={() => choose("new", () => api.createFolder(name, parent || undefined))}
+                  className="border-primary/40 bg-primary/10 text-primary hover:border-primary inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-3 text-xs font-semibold disabled:opacity-40">
+                  {busy === "new" ? <Icons.RefreshCw className="size-3 animate-spin" /> : <Icons.Plus className="size-[13px]" />}Make and use
+                </button>
+              </div>
+              <p className="text-muted-foreground px-1 text-[11px]">
+                It will be made in {parent ? rows.find((r) => r.folder.id === parent)?.path : "My Drive, at the top level"}. You can move it in Drive later; backups follow it.
+              </p>
+            </div>
+          )}
+
+          {error ? (
+            <div className="bg-destructive/10 border-destructive/30 text-destructive flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-xs leading-relaxed">
+              <Icons.AlertTriangle className="mt-0.5 size-[15px] shrink-0" /><span>{error}</span>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+          {canBrowse ? (
+            <button type="button" disabled={!!busy} onClick={() => choose("browse", () => openPicker("folder"))} className={`${btn} min-w-0 gap-2 px-3.5`}>
+              {busy === "browse" ? <Icons.RefreshCw className="size-3.5 shrink-0 animate-spin" /> : <DriveLogo size={16} />}
+              <span className="truncate">{busy === "browse" ? "Opening Google Drive…" : "Browse Google Drive"}</span>
+            </button>
+          ) : <span />}
+          <button type="button" onClick={onClose} disabled={!!busy} className={`${btn} px-4`}>Close</button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-/**
- * Pick a backup (from the folder, or a file from this device), confirm, and
- * put it back. What is here now is saved to Drive first unless unticked.
- */
-function RestoreSheet({ open, status, canPick, onClose }: { open: boolean; status: Status; canPick: boolean; onClose: () => void }) {
-  const zone = status.timezone;
-  const canDrive = !!status.linked && !status.needsRelink;
-  const [files, setFiles] = useState<DriveFile[] | null>(canDrive ? null : []);
-  const [pick, setPick] = useState<DriveFile | null>(null);
-  const [upload, setUpload] = useState<File | null>(null);
-  const [safety, setSafety] = useState(canDrive && !!status.folderId);
-  const [sure, setSure] = useState(false);
-  const [busy, setBusy] = useState("");
-  const [err, setErr] = useState("");
-  const [done, setDone] = useState<{ createdAt: string; counts: Record<string, number>; mismatched: string[]; files: number; settings: number } | null>(null);
+// ---------- RestoreBackupModal (WheelTradr's layout; the whole app comes back) ----------
+function RestoreBackupModal({ source, status, onClose }: { source: RestoreSource; status: Status; onClose: () => void }) {
+  const m = source.manifest;
+  const tz = status.timezone;
+  const canSave = !!status.linked && !status.needsRelink && !!status.folderId;
+  const [safety, setSafety] = useState(canSave);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState<RestoreDone | null>(null);
+  const fileName = source.kind === "file" ? source.file.name : source.file.name;
+  const n = (x: number) => x.toLocaleString();
+  const parts: { label: string; hint: string; count: string }[] = [
+    { label: "Accounts", hint: "including each rental's own account", count: n(m.counts.accounts) },
+    { label: "Entries", hint: "trades, rent, mortgage payments, costs", count: n(m.counts.activities) },
+    { label: "Assets and liabilities", hint: "the house, the mortgage, anything in Holdings", count: n(m.counts.assets) },
+    { label: "Value history", hint: "prices and property and loan values", count: n(m.counts.quotes) },
+    { label: "Rental page and add-on settings", hint: "", count: `${n(m.data.files)} files` },
+    { label: "App keys and login", hint: "encryption key, password, server job settings", count: `${m.env.length + (m.helper?.length ?? 0)}` },
+  ];
 
-  useEffect(() => {
-    if (!open || !canDrive) return;
-    setFiles(null);
-    api.get<DriveFile[]>(`/files${status.folderId ? "" : "?all=1"}`)
-      .then((f) => { setFiles(f); if (f[0]) setPick(f[0]); })
-      .catch((e: Error) => { setFiles([]); setErr(e.message); });
-  }, [open, canDrive, status.folderId]);
-
-  const other = async () => {
-    setErr(""); setBusy("Opening Google Drive…");
-    try {
-      const f = await pickBackupFile(status.folderId || undefined);
-      if (f) { setPick({ id: f.id, name: f.name, createdTime: "", size: null, auto: false, picked: true }); setUpload(null); setSure(false); }
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const chosen = upload ? upload.name : pick ? (pick.picked ? pick.name : when(pick.createdTime, zone)) : null;
-
-  const restore = async () => {
-    setErr("");
+  const run = async () => {
+    setError("");
     try {
       if (safety) {
         setBusy("Saving what is here now to Drive first…");
-        await api.post("/run");
+        await api.backupNow();
       }
       setBusy("Restoring… the money app restarts on the restored data.");
-      let res;
-      if (upload) {
-        const fd = new FormData();
-        fd.append("file", upload);
-        res = await api.upload<typeof done>("/restore-file", fd);
-      } else {
-        res = await api.post<typeof done>("/restore", { fileId: pick?.id });
-      }
+      const res = source.kind === "file" ? await api.restoreFile(source.file) : await api.restoreDrive(source.file.id);
       setDone(res);
       setBusy("Reloading…");
-      await waitForRestart();
+      const started = Date.now();
+      while (Date.now() - started < 90_000) {
+        await new Promise((r) => setTimeout(r, 1500));
+        if (await fetch("/", { cache: "no-store" }).then((r) => r.ok).catch(() => false)) break;
+      }
+      window.location.assign("/");
     } catch (e) {
-      setErr((e as Error).message);
-      setBusy("");
+      setError(`The restore did not finish: ${(e as Error).message}. Nothing was changed; what was here before is back in place.`);
+      setBusy(null);
     }
   };
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o && !busy) onClose(); }}>
-      <SheetContent className="flex flex-col gap-4 overflow-y-auto sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>{done ? "Restored" : "Restore a backup"}</SheetTitle>
-          <SheetDescription>{done ? "The money app is back on the restored data." : "Put the money app back to how it was when a backup was made."}</SheetDescription>
-        </SheetHeader>
-        {done ? (
-          <>
-            <Alert><AlertDescription>
-              Back to {when(done.createdAt, zone)}: {done.counts.accounts} accounts, {done.counts.activities} entries,
-              {" "}{done.counts.assets} assets, {done.files} files and {done.settings} settings.
-            </AlertDescription></Alert>
-            {done.mismatched?.length ? <Alert variant="destructive"><AlertDescription>Did not match the backup: {done.mismatched.join("; ")}</AlertDescription></Alert> : null}
-            <p className="text-muted-foreground flex items-center gap-2 text-sm"><Icons.Spinner className="size-4 animate-spin" aria-hidden /> {busy || "Reloading…"}</p>
-          </>
-        ) : (
-          <>
-            {err ? <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert> : null}
-            {canDrive ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-muted-foreground text-xs font-semibold uppercase tracking-[0.18em]">
-                    {status.folderName ? `In ${status.folderName}` : "In your Google Drive"}
-                  </h4>
-                  {canPick ? <Button variant="link" size="sm" className="h-auto p-0" disabled={!!busy} onClick={other}>Other file…</Button> : null}
-                </div>
-                {pick?.picked && !upload ? (
-                  <div className="border-primary flex items-center gap-2 rounded-md border px-3 py-2.5 text-sm">
-                    <span className="min-w-0 flex-1"><span className="block truncate font-medium">{pick.name}</span><span className="text-muted-foreground text-xs">Picked from Google Drive</span></span>
-                    <Icons.Check className="text-primary size-4" />
-                  </div>
-                ) : null}
-                {files === null ? (
-                  <p className="text-muted-foreground text-sm">Looking in your Drive…</p>
-                ) : files.length === 0 ? (
-                  !err ? <p className="text-muted-foreground text-sm">No money app backups there yet.</p> : null
-                ) : (
-                  <div className="max-h-64 space-y-1.5 overflow-y-auto">
-                    {files.map((f) => {
-                      const on = !upload && pick?.id === f.id;
-                      return (
-                        <button key={f.id} type="button" disabled={!!busy}
-                          className={`flex w-full items-center gap-2 rounded-md border px-3 py-2.5 text-left text-sm ${on ? "border-primary" : "hover:bg-muted/60"}`}
-                          onClick={() => { setPick(f); setUpload(null); setSure(false); }}>
-                          <span className="min-w-0 flex-1">
-                            <span className="block font-medium">{when(f.createdTime, zone)}</span>
-                            <span className="text-muted-foreground text-xs">{f.auto ? "Automatic" : "Made by hand"} · {bytes(f.size)}{f.folderName ? ` · ${f.folderName}` : ""}</span>
-                          </span>
-                          {on ? <Icons.Check className="text-primary size-4 shrink-0" /> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            <div className="space-y-2 border-t pt-4">
-              <h4 className="text-muted-foreground text-xs font-semibold uppercase tracking-[0.18em]">Or a file from this device</h4>
-              <Input type="file" accept=".gz,.tgz,application/gzip" disabled={!!busy}
-                onChange={(e) => { setUpload(e.target.files?.[0] || null); setSure(false); }} />
+    <Dialog open onOpenChange={(o) => { if (!o && !busy) onClose(); }}>
+      <DialogContent className="flex max-h-[90dvh] w-full max-w-lg flex-col gap-0 overflow-hidden p-0">
+        <div className="flex shrink-0 items-center gap-3 border-b p-4">
+          <span className="bg-primary/10 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"><Icons.RotateCcw className="text-primary size-4" /></span>
+          <div className="min-w-0">
+            <DialogTitle className="text-base font-semibold">{done ? "Restored" : "Restore a backup"}</DialogTitle>
+            <div className="text-muted-foreground truncate text-xs" title={fileName}>
+              {source.kind === "drive" ? "From Google Drive" : "From a file"}{m.createdAt ? ` · made ${when(m.createdAt, tz)}` : ""}
             </div>
+          </div>
+        </div>
 
-            {chosen ? (
-              <div className="space-y-3 border-t pt-4">
-                <Alert><AlertDescription>
-                  This replaces everything in the money app with the backup from {chosen}: accounts, entries,
-                  properties, the Rental page and settings. Anything added since then is gone. What is here now is
-                  also kept on the server, in case.
-                </AlertDescription></Alert>
-                {canDrive && status.folderId ? (
-                  <label className="flex items-start gap-2 text-sm">
-                    <Checkbox checked={safety} disabled={!!busy} onCheckedChange={(v) => setSafety(v === true)} />
-                    <span>Save what is here now to Drive first <span className="text-muted-foreground">· so this can be undone</span></span>
-                  </label>
-                ) : null}
-                <label className="flex items-start gap-2 text-sm">
-                  <Checkbox checked={sure} disabled={!!busy} onCheckedChange={(v) => setSure(v === true)} />
-                  <span>I understand this replaces what is here now</span>
-                </label>
-                <Button className="w-full" disabled={!sure || !!busy} onClick={restore}>
-                  {busy ? <Icons.Spinner className="mr-2 size-4 animate-spin" aria-hidden /> : null}
-                  {busy || "Restore this backup"}
-                </Button>
+        <div className="flex-1 space-y-5 overflow-y-auto p-5">
+          {done ? (
+            <>
+              <div className="bg-success/10 border-success/30 text-success flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-xs leading-relaxed">
+                <Icons.CheckCircle className="mt-0.5 size-[15px] shrink-0" />
+                <span>Back to {when(done.createdAt, tz)}: {n(done.counts.accounts)} accounts, {n(done.counts.activities)} entries, {n(done.counts.assets)} assets, {n(done.files)} files and {done.settings} settings.</span>
               </div>
-            ) : null}
-          </>
-        )}
-      </SheetContent>
-    </Sheet>
+              {done.mismatched?.length ? (
+                <div className="bg-warning/10 border-warning/30 flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-xs leading-relaxed">
+                  <Icons.AlertTriangle className="text-warning mt-0.5 size-[15px] shrink-0" /><span>Did not match the backup: {done.mismatched.join("; ")}</span>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <h4 className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.06em]">What comes back</h4>
+                <div className="divide-y overflow-hidden rounded-lg border">
+                  {parts.map((p) => (
+                    <div key={p.label} className="bg-background flex items-center gap-3 px-3.5 py-2.5">
+                      <span className="bg-primary border-primary flex h-4 w-4 shrink-0 items-center justify-center rounded border"><Icons.Check className="text-primary-foreground size-[11px]" /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm">{p.label}</span>
+                        {p.hint ? <span className="text-muted-foreground block truncate text-xs">{p.hint}</span> : null}
+                      </span>
+                      <span className="text-muted-foreground shrink-0 text-xs tabular-nums">{p.count}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-muted-foreground text-xs leading-relaxed">
+                  The whole money app goes back to this backup. Anything added since {when(m.createdAt, tz)} is gone.
+                </p>
+              </div>
+
+              {canSave ? (
+                <label className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3.5 py-2.5 transition-colors ${safety ? "bg-background" : "bg-card opacity-60"} hover:bg-muted/60`}>
+                  <input type="checkbox" className="sr-only" checked={safety} disabled={!!busy} onChange={() => setSafety((s) => !s)} />
+                  <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${safety ? "bg-primary border-primary" : "bg-card"}`}>
+                    {safety ? <Icons.Check className="text-primary-foreground size-[11px]" /> : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm">Save what is here now to Google Drive first</span>
+                    <span className="text-muted-foreground block text-xs">so this can be undone from Drive</span>
+                  </span>
+                </label>
+              ) : null}
+
+              <div className="bg-background text-muted-foreground flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-xs leading-relaxed">
+                <Icons.ShieldCheck className="text-success mt-0.5 size-[15px] shrink-0" />
+                <span>What is here now is also kept on the server before anything changes, and put straight back if the restore fails.</span>
+              </div>
+
+              {error ? (
+                <div className="bg-destructive/10 border-destructive/30 text-destructive flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-xs leading-relaxed">
+                  <Icons.AlertTriangle className="mt-0.5 size-[15px] shrink-0" /><span>{error}</span>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+          <span className="text-muted-foreground min-w-0 text-xs">
+            {busy ?? `${n(m.counts.accounts)} accounts, ${n(m.counts.activities)} entries, ${n(m.counts.assets)} assets`}
+          </span>
+          {!done ? (
+            <div className="flex shrink-0 gap-2">
+              <button type="button" onClick={onClose} disabled={!!busy} className={`${btn} px-4`}>Cancel</button>
+              <button type="button" onClick={run} disabled={!!busy}
+                className="bg-destructive/10 text-destructive border-destructive/40 hover:border-destructive inline-flex h-9 items-center gap-1.5 rounded-md border px-4 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40">
+                {busy ? <Icons.RefreshCw className="size-3 animate-spin" /> : null}
+                {busy ? "Restoring…" : "Replace"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
