@@ -20,7 +20,7 @@ interface BankAccount {
 }
 interface BankItem {
   id: string; institution: { name: string; plaidName: string; logoUrl: string | null }; env: string; error: string | null; needsLogin: boolean;
-  historical: boolean; accounts: BankAccount[];
+  historical: boolean; canAddInvestments: boolean; hasInvestments: boolean; accounts: BankAccount[];
 }
 interface BanksStatus {
   configured: boolean; env: string; clientIdShown: string | null; secrets: { production: boolean; sandbox: boolean };
@@ -288,6 +288,10 @@ export default function BanksSettingsPage() {
                   <a className={`${btn} ${cta}`} href={`${BASE}/link?item=${encodeURIComponent(item.id)}`}>
                     <Icons.RefreshCw className="size-3.5" /> Reconnect
                   </a>
+                ) : item.canAddInvestments ? (
+                  <a className={`${btn} ${cta}`} href={`${BASE}/link?item=${encodeURIComponent(item.id)}&add=investments`}>
+                    <Icons.Plus className="size-3.5" /> Get transactions
+                  </a>
                 ) : item.error ? (
                   <StatusPill on={false} warn text="Needs a look" />
                 ) : (
@@ -295,6 +299,12 @@ export default function BanksSettingsPage() {
                 )}
               </div>
               {item.error && <p className="text-warning px-4 pb-3 text-xs">{item.error}</p>}
+              {item.canAddInvestments && !item.error && (
+                <p className="text-muted-foreground px-4 pb-3 text-xs leading-relaxed">
+                  Plaid shares only this account's balance. Press Get transactions and allow investments in Plaid's window to
+                  bring in its deposits and transfers, like paychecks. It reconnects this bank, so it uses none of your 10 links.
+                </p>
+              )}
               <div className="divide-y border-t">
                 {item.accounts.map((a) => (
                   <div key={a.id} className="flex items-center gap-3 px-4 py-3">
