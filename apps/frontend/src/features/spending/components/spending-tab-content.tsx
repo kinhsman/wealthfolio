@@ -1191,6 +1191,10 @@ export default function SpendingTabContent() {
                   accountById={accountById}
                   categoriesMeta={categoriesMeta}
                   uncategorizedCount={uncategorizedCount}
+                  pendingRange={{
+                    from: dateRange?.from ? formatDateISO(dateRange.from) : undefined,
+                    to: dateRange?.to ? formatDateISO(dateRange.to) : undefined,
+                  }}
                 />
               </div>
 

@@ -18,6 +18,7 @@ import {
 import { CategoryBadge, ReviewPill, type CategoryMetaMap } from "./category-chips";
 import { merchantFor, useMerchants } from "../lib/merchants";
 import { MerchantLogo } from "./merchant-logo";
+import { usePendingTransactions, type PendingTransaction } from "./pending-transactions";
 
 const SPENDING_TAXONOMY = "spending_categories";
 
@@ -27,6 +28,7 @@ export function RecentActivityCard({
   accountById,
   categoriesMeta,
   uncategorizedCount = 0,
+  pendingRange,
 }: {
   activities: Activity[];
   accountTypeById?: Map<string, string>;
@@ -34,10 +36,24 @@ export function RecentActivityCard({
   accountById?: Map<string, Account>;
   categoriesMeta: CategoryMetaMap;
   uncategorizedCount?: number;
+  /** money-hub patch: the period shown (YYYY-MM-DD); bank entries not posted yet inside it are
+   *  listed first in their day, read-only (components/pending-transactions.tsx). */
+  pendingRange?: { from?: string; to?: string };
 }) {
   const formatting = useDateFormatting();
   const { t } = useTranslation();
   const { data: merchants } = useMerchants();
+  const { data: pendingAll = [] } = usePendingTransactions();
+  const pending = useMemo(
+    () =>
+      pendingAll.filter(
+        (p) =>
+          (!accountById || accountById.has(p.accountId)) &&
+          (!pendingRange?.from || p.date >= pendingRange.from) &&
+          (!pendingRange?.to || p.date <= pendingRange.to),
+      ),
+    [pendingAll, accountById, pendingRange?.from, pendingRange?.to],
+  );
   const recent = useMemo(() => {
     return activities
       .slice()
@@ -89,16 +105,24 @@ export function RecentActivityCard({
     return out;
   }, [recent, assignmentQueries, categoriesMeta]);
 
+  // Pending entries first in their day; ten rows in all, as before.
+  type Row = { kind: "posted"; a: Activity } | { kind: "pending"; p: PendingTransaction };
   const grouped = useMemo(() => {
-    const m = new Map<string, typeof recent>();
-    for (const a of recent) {
-      const dateKey = a.activityDate.slice(0, 10);
+    const rows: { key: string; row: Row }[] = [
+      ...pending.map((p) => ({ key: `${p.date}~`, row: { kind: "pending" as const, p } })),
+      ...recent.map((a) => ({ key: a.activityDate, row: { kind: "posted" as const, a } })),
+    ]
+      .sort((x, y) => y.key.localeCompare(x.key))
+      .slice(0, 10);
+    const m = new Map<string, Row[]>();
+    for (const { key, row } of rows) {
+      const dateKey = key.slice(0, 10);
       const arr = m.get(dateKey) ?? [];
-      arr.push(a);
+      arr.push(row);
       m.set(dateKey, arr);
     }
     return Array.from(m.entries());
-  }, [recent]);
+  }, [recent, pending]);
 
   const dayLabel = (key: string): string => {
     const today = new Date();
@@ -135,7 +159,7 @@ export function RecentActivityCard({
         </Link>
       }
     >
-      {recent.length === 0 ? (
+      {grouped.length === 0 ? (
         <div className="text-muted-foreground px-4 py-6 text-center text-xs md:px-5">
           {t("spending:dashboard.noRecentActivity")}
         </div>
@@ -148,7 +172,26 @@ export function RecentActivityCard({
             <div className="text-muted-foreground/70 text-[10px] font-semibold uppercase tracking-wide">
               {dayLabel(dateKey)}
             </div>
-            {items.map((a) => {
+            {items.map((row) => {
+              if (row.kind === "pending") {
+                const p = row.p;
+                const name = p.notes || p.bankText;
+                const merchant = merchantFor(name, merchants, accountById?.get(p.accountId), p.amount < 0 ? "WITHDRAWAL" : "DEPOSIT");
+                return (
+                  <div key={p.id} className="flex items-center gap-2.5 py-1.5 opacity-70" title="Not posted by the bank yet. Editable once it posts.">
+                    {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} className="h-6 w-6" /> : null}
+                    <div className="text-foreground/90 min-w-0 flex-1 truncate text-xs font-medium">{name}</div>
+                    <span className="text-muted-foreground shrink-0 rounded-full border border-dashed px-1.5 py-px text-[10px] font-medium uppercase tracking-wide">
+                      Pending
+                    </span>
+                    <div className={cn("shrink-0 text-xs font-semibold tabular-nums", p.amount < 0 ? "text-foreground" : "text-success")}>
+                      {p.amount < 0 ? "−" : "+"}
+                      <PrivacyAmount value={Math.abs(p.amount)} currency={p.currency} />
+                    </div>
+                  </div>
+                );
+              }
+              const a = row.a;
               const payee = (a.notes ?? "").trim();
               const merchant = merchantFor(payee, merchants, accountById?.get(a.accountId), getEffectiveCashActivityType(a));
               const spendingAmount = getActivitySpendingAmount(
