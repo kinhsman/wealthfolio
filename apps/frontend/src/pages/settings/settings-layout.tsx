@@ -123,6 +123,13 @@ export default function SettingsLayout() {
             subtitle: "Brokerage accounts in your net worth",
             icon: <Icons.TrendingUp className="size-5" />,
           },
+          // money-hub patch: the owner's bank and credit card accounts through Plaid.
+          {
+            title: "Banks",
+            href: "banks",
+            subtitle: "Bank and credit card accounts, through Plaid",
+            icon: <Icons.Building2 className="size-5" />,
+          },
         ],
       },
       {
