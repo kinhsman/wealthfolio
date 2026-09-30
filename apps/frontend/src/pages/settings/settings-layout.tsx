@@ -47,12 +47,9 @@ export default function SettingsLayout() {
             subtitle: t("settings:nav.subtitles.portfolios"),
             icon: <Icons.Folder className="size-5" />,
           },
-          {
-            title: t("settings:nav.items.contribution_limits"),
-            href: "contribution-limits",
-            subtitle: t("settings:nav.subtitles.contribution_limits"),
-            icon: <Icons.TrendingUp className="size-5" />,
-          },
+          // money-hub patch: Contribution Limits hidden (owner, 2026-09-30). It counts deposits into
+          // IRA/401(k)/HSA accounts; WheelTradr accounts come in as a daily value with no deposits, so
+          // it would always read $0. None were set. Page still at /settings/contribution-limits.
           {
             title: t("settings:nav.items.spending"),
             href: "spending",
@@ -64,12 +61,9 @@ export default function SettingsLayout() {
       {
         title: t("settings:nav.sections.data"),
         items: [
-          {
-            title: t("settings:nav.items.securities"),
-            href: "securities",
-            subtitle: t("settings:nav.subtitles.securities"),
-            icon: <Icons.BadgeDollarSign className="size-5" />,
-          },
+          // money-hub patch: Securities hidden (owner, 2026-09-30: "we track them from wheeltradr").
+          // It only lists the WheelTradr accounts, the house and the mortgage, all priced by our syncs;
+          // switching one to market prices there breaks the WheelTradr sync. Page still at /settings/securities.
           // money-hub patch: Classifications hidden (owner, 2026-09-30: "I don't think those matter").
           // They tag single stocks (asset class, industry, region); here investments are whole
           // WheelTradr accounts, whose one tag the WheelTradr sync sets itself. Page still at /settings/taxonomies.

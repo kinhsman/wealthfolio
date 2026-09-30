@@ -362,13 +362,6 @@ export function AppLauncher() {
         label: t("common:component.import_activities"),
       },
       {
-        title: t("common:component.manage_securities"),
-        href: "/settings/securities",
-        icon: <Icons.BadgeDollarSign className="size-6" />,
-        keywords: ["securities", "assets", "stocks", "manage", "edit", "settings"],
-        label: t("common:component.manage_securities"),
-      },
-      {
         title: t("common:component.manage_accounts"),
         href: "/settings/accounts",
         icon: <Icons.CreditCard className="size-6" />,
@@ -382,14 +375,10 @@ export function AppLauncher() {
         keywords: ["goals", "manage", "edit", "settings"],
         label: t("common:component.manage_goals"),
       },
-      {
-        title: t("common:component.manage_contribution_limits"),
-        href: "/settings/contribution-limits",
-        icon: <Icons.TrendingUp className="size-6" />,
-        keywords: ["contribution", "limits", "manage", "edit", "settings"],
-        label: t("common:component.manage_contribution_limits"),
-      },
     ];
+
+    // money-hub patch: no Manage securities / Manage contribution limits here, hidden like their
+    // Settings entries (pages/settings/settings-layout.tsx).
 
     const navItems = [
       ...(navigation.primary ?? []),
