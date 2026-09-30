@@ -4,6 +4,7 @@
 // neither spending nor income. The work runs in the money-hub service at
 // /api/money-hub/owly (server/drive-backup/lib/owly.js in the money-hub repo).
 import { useEffect, useState } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@wealthfolio/ui/components/ui/avatar";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import {
   Select,
@@ -17,7 +18,7 @@ import { SettingsHeader } from "../settings-header";
 
 const BASE = "/api/money-hub/owly";
 
-interface OwlyPerson { id: number; name: string; active: boolean }
+interface OwlyPerson { id: number; name: string; active: boolean; avatarUrl?: string | null }
 interface OwlyFriend { personId: number | null; name: string | null }
 interface ZelleName {
   name: string; inCount: number; inTotal: number; outCount: number; outTotal: number;
@@ -67,6 +68,19 @@ const when = (iso?: string | null) => {
 };
 /** "QUANG VAN VO" as "Quang Van Vo": the bank writes names in capitals. */
 const nameCase = (s: string) => s.toLowerCase().replace(/(^|[\s-])(\p{L})/gu, (_, a: string, b: string) => a + b.toUpperCase());
+
+const initials = (name: string) =>
+  name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("") || "?";
+
+/** A friend's photo from Owly, or their initials (as Owly shows them). */
+function FriendAvatar({ url, name, className }: { url?: string | null; name: string; className?: string }) {
+  return (
+    <Avatar className={className}>
+      {url && <AvatarImage src={url} alt="" className="object-cover" />}
+      <AvatarFallback className="text-muted-foreground text-[10px] font-medium">{initials(name)}</AvatarFallback>
+    </Avatar>
+  );
+}
 
 // Same pieces as the WheelTradr page: green = connected, amber only when it needs a look.
 function StatusPill({ on, text, warn }: { on: boolean; text: string; warn?: boolean }) {
@@ -130,6 +144,10 @@ export default function OwlySettingsPage() {
   const last = status?.lastSync;
   const matches = status?.owlyTotal != null && status?.bookedTotal != null
     && Math.round(status.owlyTotal * 100) === Math.round(status.bookedTotal * 100);
+  const personFor = (n: ZelleName) => {
+    const f = status?.friends[n.name];
+    return f?.personId == null ? undefined : status?.people.find((p) => p.id === f.personId);
+  };
   const valueFor = (n: ZelleName) => {
     const f = status?.friends[n.name];
     return !f ? NOT_FRIEND : f.personId == null ? FRIEND_NOT_IN_OWLY : String(f.personId);
@@ -253,46 +271,65 @@ export default function OwlySettingsPage() {
             </p>
           )}
           {status?.namesError && <p className="text-destructive text-xs">{status.namesError}</p>}
-          <div className="bg-card divide-y rounded-xl border">
-            {status!.names.length === 0 && !status?.namesError && (
-              <p className="text-muted-foreground p-4 text-sm">No Zelle lines in your bank accounts yet.</p>
-            )}
-            {status!.names.map((n) => (
-              <div key={n.name} className="flex items-center gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{nameCase(n.name)}</div>
-                  <div className="text-muted-foreground truncate text-xs">
-                    {[
-                      n.inCount ? `${n.inCount} from them, ${usd(n.inTotal, 0)}` : null,
-                      n.outCount ? `${n.outCount} to them, ${usd(n.outTotal, 0)}` : null,
-                      n.last ? `last ${day(n.last)}` : null,
-                    ].filter(Boolean).join(" · ")}
-                  </div>
-                </div>
-                {n.counted ? (
-                  <span className="text-muted-foreground w-32 shrink-0 text-right text-xs">{n.counted}</span>
-                ) : busy === n.name ? (
-                  <span className="flex w-32 shrink-0 justify-end"><Icons.Spinner className="text-muted-foreground size-4 animate-spin" /></span>
-                ) : (
-                  <Select value={valueFor(n)} disabled={!!busy}
-                    onValueChange={(v) => run(n.name, () => api.friend(n.name, v === NOT_FRIEND ? null : v))}>
-                    <SelectTrigger className="h-9 w-32 shrink-0 text-xs" aria-label={`Is ${nameCase(n.name)} a friend`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    {/* A set height that scrolls: the shared list's own limit is written the Tailwind 3 way
-                        (max-h-[--var]), which Tailwind 4 drops, so a long list ran off the screen. */}
-                    <SelectContent className="max-h-[min(18rem,var(--radix-select-content-available-height))]">
-                      <SelectItem className="text-xs" value={NOT_FRIEND}>Not a friend</SelectItem>
-                      <SelectItem className="text-xs" value={FRIEND_NOT_IN_OWLY}>Other friend</SelectItem>
-                      {status!.people.map((p) => (
-                        <SelectItem className="text-xs" key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+          {status!.names.length === 0 && !status?.namesError && (
+            <p className="text-muted-foreground bg-card rounded-xl border p-4 text-sm">No Zelle lines in your bank accounts yet.</p>
+          )}
+          {/* Not marked yet on top (and the rent, which is counted elsewhere), the friends below. */}
+          {[
+            { title: "Not marked", rows: status!.names.filter((n) => !status!.friends[n.name] || n.counted) },
+            { title: "Friends", rows: status!.names.filter((n) => status!.friends[n.name] && !n.counted) },
+          ].filter((g) => g.rows.length > 0).map((g) => (
+            <div key={g.title} className="space-y-1.5">
+              <div className="text-muted-foreground px-1 text-xs font-medium">{g.title} · {g.rows.length}</div>
+              <div className="bg-card divide-y rounded-xl border">
+                {[...g.rows.filter((n) => !n.counted), ...g.rows.filter((n) => n.counted)].map((n) => {
+                  const person = personFor(n);
+                  return (
+                    <div key={n.name} className="flex items-center gap-3 px-4 py-3">
+                      <FriendAvatar url={person?.avatarUrl} name={person?.name ?? nameCase(n.name)} className="size-8" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{nameCase(n.name)}</div>
+                        <div className="text-muted-foreground truncate text-xs">
+                          {[
+                            n.inCount ? `${n.inCount} from them, ${usd(n.inTotal, 0)}` : null,
+                            n.outCount ? `${n.outCount} to them, ${usd(n.outTotal, 0)}` : null,
+                            n.last ? `last ${day(n.last)}` : null,
+                          ].filter(Boolean).join(" · ")}
+                        </div>
+                      </div>
+                      {n.counted ? (
+                        <span className="text-muted-foreground w-32 shrink-0 text-right text-xs">{n.counted}</span>
+                      ) : busy === n.name ? (
+                        <span className="flex w-32 shrink-0 justify-end"><Icons.Spinner className="text-muted-foreground size-4 animate-spin" /></span>
+                      ) : (
+                        <Select value={valueFor(n)} disabled={!!busy}
+                          onValueChange={(v) => run(n.name, () => api.friend(n.name, v === NOT_FRIEND ? null : v))}>
+                          <SelectTrigger className="h-9 w-32 shrink-0 text-xs" aria-label={`Is ${nameCase(n.name)} a friend`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          {/* A set height that scrolls: the shared list's own limit is written the Tailwind 3 way
+                              (max-h-[--var]), which Tailwind 4 drops, so a long list ran off the screen. */}
+                          <SelectContent className="max-h-[min(18rem,var(--radix-select-content-available-height))]">
+                            <SelectItem className="text-xs" value={NOT_FRIEND}>Not a friend</SelectItem>
+                            <SelectItem className="text-xs" value={FRIEND_NOT_IN_OWLY}>Other friend</SelectItem>
+                            {status!.people.map((p) => (
+                              <SelectItem className="text-xs" key={p.id} value={String(p.id)}>
+                                <span className="flex items-center gap-2">
+                                  {/* The photo shows in the list only; the box keeps just the name. */}
+                                  <FriendAvatar url={p.avatarUrl} name={p.name} className="size-5 [button_&]:hidden" />
+                                  {p.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </section>
       )}
 
