@@ -16,20 +16,21 @@ const ExportSettingsPage = () => {
       />
       <Separator />
 
-      <Tabs defaultValue="backup" className="w-full">
+      <Tabs defaultValue="drive" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="drive">Cloud Backup</TabsTrigger>
           <TabsTrigger value="backup">{t("settings:export_tab_backup")}</TabsTrigger>
-          <TabsTrigger value="drive">Google Drive</TabsTrigger>
           <TabsTrigger value="export">{t("settings:export_title")}</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="drive" className="mt-6">
+          <DriveBackupTab />
+        </TabsContent>
 
         <TabsContent value="backup" className="mt-6">
           <BackupRestoreForm />
         </TabsContent>
 
-        <TabsContent value="drive" className="mt-6">
-          <DriveBackupTab />
-        </TabsContent>
         <TabsContent value="export" className="mt-6">
           <div className="space-y-4">
             <div>
