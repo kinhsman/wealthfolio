@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 
 import { DashboardCard } from "@/components/dashboard-card";
 import { QueryKeys } from "@/lib/query-keys";
-import type { Activity } from "@/lib/types";
+import type { Account, Activity } from "@/lib/types";
 import { cn, formatDateISO } from "@/lib/utils";
 import { PrivacyAmount, useDateFormatting } from "@wealthfolio/ui";
 
@@ -24,11 +24,14 @@ const SPENDING_TAXONOMY = "spending_categories";
 export function RecentActivityCard({
   activities,
   accountTypeById,
+  accountById,
   categoriesMeta,
   uncategorizedCount = 0,
 }: {
   activities: Activity[];
   accountTypeById?: Map<string, string>;
+  /** money-hub patch: each row's account, for the bank logo on ATM cash (lib/merchants.ts). */
+  accountById?: Map<string, Account>;
   categoriesMeta: CategoryMetaMap;
   uncategorizedCount?: number;
 }) {
@@ -147,7 +150,7 @@ export function RecentActivityCard({
             </div>
             {items.map((a) => {
               const payee = (a.notes ?? "").trim();
-              const merchant = merchantFor(payee, merchants);
+              const merchant = merchantFor(payee, merchants, accountById?.get(a.accountId));
               const spendingAmount = getActivitySpendingAmount(
                 a,
                 accountTypeById?.get(a.accountId),
@@ -177,7 +180,7 @@ export function RecentActivityCard({
                   className="hover:bg-muted/40 flex items-center gap-2.5 rounded-md py-1.5 transition-colors"
                 >
                   {/* money-hub patch: the owner's merchant logo (lib/merchants.ts). */}
-                  {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} className="h-6 w-6" /> : null}
+                  {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} className="h-6 w-6" /> : null}
                   <div className="min-w-0 flex-1">
                     <div className="text-foreground/90 truncate text-xs font-medium">
                       {payee || (

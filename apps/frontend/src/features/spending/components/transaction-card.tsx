@@ -78,7 +78,7 @@ function TransactionCardImpl({
 
   const { t } = useTranslation();
   const a = row.activity;
-  const merchant = useMerchantFor(a.notes);
+  const merchant = useMerchantFor(a.notes, account);
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,
@@ -125,7 +125,7 @@ function TransactionCardImpl({
           />
         )}
         {/* money-hub patch: the owner's merchant logo (lib/merchants.ts). */}
-        {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} className="h-9 w-9" /> : null}
+        {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} className="h-9 w-9" /> : null}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {/* See the table row: the amber stripe is decorative, so the state

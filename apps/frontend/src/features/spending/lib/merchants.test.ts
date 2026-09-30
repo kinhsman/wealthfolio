@@ -19,4 +19,16 @@ describe("merchantFor", () => {
     expect(merchantFor("Costco Gas", list)?.name).toBe("Costco Gas");
     expect(merchantFor("Friend (Quang Vo): Zelle payment from QUANG VAN VO", list)?.name).toBe("Quang");
   });
+  it("ATM cash shows the bank holding the account, ahead of any merchant", () => {
+    const chase = { id: "c", name: "Chase Checking ••8237", group: "Chase", meta: JSON.stringify({ source: "plaid", logoUrl: "https://x/chase.webp" }) };
+    const owly = { id: "o", name: "Owed to me", group: "Owly", meta: JSON.stringify({ source: "owly", logoUrl: "https://x/owly.png" }) };
+    const withAtm = [...list, mk("ATM", "ATM")];
+    const bank = merchantFor("ATM WITHDRAWAL 004521 09/2913 W PE", withAtm, chase);
+    expect([bank?.name, bank?.logoUrl, bank?.source]).toEqual(["Chase", "https://x/chase.webp", "bank"]);
+    expect(merchantFor("CASH DEPOSIT: ATM CASH DEPOSIT 09/12 COSTCO", list, chase)?.source).toBe("bank");
+    expect(merchantFor("Costco Gas", list, chase)?.name).toBe("Costco Gas");               // no ATM: merchants as usual
+    expect(merchantFor("BATMAN TOYS", list, chase)).toBeNull();                             // a whole word only
+    expect(merchantFor("NGA NGUYEN: ATM CASH", withAtm, owly)?.source).toBeUndefined();     // not a bank account
+    expect(merchantFor("ATM WITHDRAWAL", list)).toBeNull();                                 // no account known
+  });
 });

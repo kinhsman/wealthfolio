@@ -847,7 +847,12 @@ export function CashActivityForm({
                             />
                           </FormControl>
                           {/* money-hub patch: this transaction's merchant logo, or add one. */}
-                          {isEditing ? <MerchantShortcut notes={field.value} /> : null}
+                          {isEditing ? (
+                            <MerchantShortcut
+                              notes={field.value}
+                              account={spendingAccounts.find((a) => a.id === watchAccountId)}
+                            />
+                          ) : null}
                           <FormMessage />
                         </FormItem>
                       )}

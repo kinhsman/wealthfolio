@@ -4,6 +4,9 @@
 // /api/money-hub/merchants (server/drive-backup/lib/merchants.js); matching happens here.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { accountLogoUrl } from "@/lib/account-logo";
+import type { Account } from "@/lib/types";
+
 export interface Merchant {
   id: string;
   name: string;
@@ -13,8 +16,29 @@ export interface Merchant {
   patterns?: string[];
   logoUrl: string;
   updatedAt?: string;
-  /** "owly": an Owly friend's photo on their Zelle transactions (read only; changed in Owly). */
-  source?: "owly";
+  /** "owly": an Owly friend's photo on their Zelle transactions (read only; changed in Owly).
+   *  "bank": the logo of the bank holding an ATM transaction's account (read only). */
+  source?: "owly" | "bank";
+}
+
+type AccountLike = Pick<Account, "id" | "name" | "group" | "meta">;
+
+/** ATM cash shows the bank that holds the account (owner, 09-30: "for ATM keyword use the bank
+ *  icon linked with the transaction"): that bank's logo, ahead of any merchant. Bank accounts
+ *  only (meta.source "plaid"), so Owly's "Owed to me" keeps its usual look. */
+export function bankFor(text: string | null | undefined, account?: AccountLike | null): Merchant | null {
+  if (!text || !account || !contains(text.toUpperCase(), "ATM")) return null;
+  let source: unknown;
+  try {
+    const meta = typeof account.meta === "string" ? JSON.parse(account.meta) : account.meta;
+    source = (meta as { source?: unknown } | null)?.source;
+  } catch {
+    return null;
+  }
+  const logoUrl = accountLogoUrl(account);
+  if (source !== "plaid" || !logoUrl) return null;
+  const name = account.group || account.name;
+  return { id: `bank:${account.id}`, name, pattern: "ATM", patterns: ["ATM"], logoUrl, source: "bank" };
 }
 
 const BASE = "/api/money-hub/merchants";
@@ -79,8 +103,14 @@ export function matchLength(text: string | null | undefined, words: string[]): n
 }
 
 /** The merchant with any of its words in the text (any case); the longest matching words win, so
- *  "Costco Gas" beats "Costco". */
-export function merchantFor(notes: string | null | undefined, merchants: Merchant[] | undefined): Merchant | null {
+ *  "Costco Gas" beats "Costco". ATM cash on a bank account shows that bank (bankFor) first. */
+export function merchantFor(
+  notes: string | null | undefined,
+  merchants: Merchant[] | undefined,
+  account?: AccountLike | null,
+): Merchant | null {
+  const bank = bankFor(notes, account);
+  if (bank) return bank;
   if (!notes || !merchants?.length) return null;
   let best: Merchant | null = null;
   let bestLen = 0;
@@ -94,10 +124,10 @@ export function merchantFor(notes: string | null | undefined, merchants: Merchan
   return best;
 }
 
-/** One transaction's merchant, from the shared list. */
-export function useMerchantFor(notes: string | null | undefined): Merchant | null {
+/** One transaction's merchant, from the shared list (its account: the bank for ATM cash). */
+export function useMerchantFor(notes: string | null | undefined, account?: AccountLike | null): Merchant | null {
   const { data } = useMerchants();
-  return merchantFor(notes, data);
+  return merchantFor(notes, data, account);
 }
 
 export interface MerchantDraft {

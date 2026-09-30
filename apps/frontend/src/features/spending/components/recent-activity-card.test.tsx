@@ -7,6 +7,9 @@ import type { Activity } from "@/lib/types";
 
 vi.mock("@tanstack/react-query", () => ({
   useQueries: vi.fn(() => []),
+  // money-hub patch: the merchant logos (lib/merchants.ts) read their list through useQuery.
+  useQuery: vi.fn(() => ({ data: undefined })),
+  useQueryClient: vi.fn(() => ({ setQueryData: vi.fn() })),
 }));
 
 function renderRecentActivityCard(activities: Activity[] = []) {

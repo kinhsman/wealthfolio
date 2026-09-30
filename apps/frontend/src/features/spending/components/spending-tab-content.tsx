@@ -587,6 +587,7 @@ export default function SpendingTabContent() {
     () => new Map(accounts.map((account) => [account.id, account.accountType])),
     [accounts],
   );
+  const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
 
   const totalSpending = report?.current.outflow ?? 0;
   const totalSaved = report?.current.saved ?? 0;
@@ -1187,6 +1188,7 @@ export default function SpendingTabContent() {
                 <RecentActivityCard
                   activities={activities}
                   accountTypeById={accountTypeById}
+                  accountById={accountById}
                   categoriesMeta={categoriesMeta}
                   uncategorizedCount={uncategorizedCount}
                 />

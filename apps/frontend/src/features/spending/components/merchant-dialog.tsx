@@ -21,6 +21,7 @@ import {
 } from "@wealthfolio/ui";
 
 import { useAccounts } from "@/hooks/use-accounts";
+import type { Account } from "@/lib/types";
 
 import { searchCashActivities } from "../adapters/cash-activities";
 
@@ -32,8 +33,8 @@ import { MerchantLogo } from "./merchant-logo";
 const MAX_BYTES = 5 * 1024 * 1024;
 
 /** Under a transaction's text in its edit form: its merchant with Change, or Add a logo. */
-export function MerchantShortcut({ notes }: { notes?: string | null }) {
-  const merchant = useMerchantFor(notes);
+export function MerchantShortcut({ notes, account }: { notes?: string | null; account?: Account | null }) {
+  const merchant = useMerchantFor(notes, account);
   const [draft, setDraft] = useState<MerchantDraft | null>(null);
   const words = rulePatternFrom(notes);
   if (!merchant && !words) return null;
@@ -41,10 +42,12 @@ export function MerchantShortcut({ notes }: { notes?: string | null }) {
     <>
       {merchant ? (
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <MerchantLogo url={merchant.logoUrl} name={merchant.name} />
+          <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} />
           <span className="truncate">{merchant.name}</span>
           {merchant.source === "owly" ? (
             <span>· photo from Owly</span>
+          ) : merchant.source === "bank" ? (
+            <span>· ATM, your bank&rsquo;s logo</span>
           ) : (
             <button type="button" className="text-foreground underline-offset-4 hover:underline" onClick={() => setDraft({ merchant })}>
               Change

@@ -87,7 +87,7 @@ function TransactionRowImpl({
 
   const { t } = useTranslation();
   const a = row.activity;
-  const merchant = useMerchantFor(a.notes);
+  const merchant = useMerchantFor(a.notes, account);
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,
@@ -145,7 +145,7 @@ function TransactionRowImpl({
             </span>
           )}
           {/* money-hub patch: the owner's merchant logo (lib/merchants.ts). */}
-          {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} /> : null}
+          {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} /> : null}
           {a.notes != null ? (
             <TruncatedText text={a.notes} className="text-sm" />
           ) : (
