@@ -339,7 +339,8 @@ export function accountTreeWeights(
         : num(v.totalValue) * (num(v.fxRateToBase) || 1);
     if (value <= 0) continue;
     total += value;
-    const groupName = account.group?.trim() || null;
+    // money-hub patch: WheelTradr accounts one by one (drillable-account-chart.tsx has the same rule).
+    const groupName = account.group?.trim() === "WheelTradr" ? null : account.group?.trim() || null;
     // Ungrouped accounts key by id so two accounts sharing a name stay separate rows.
     const key = groupName ? `grp:${groupName}` : `acct:${account.id}`;
     const group = groups.get(key) ?? {

@@ -385,20 +385,30 @@ export function moveWidget(
  */
 export const REMOVED_WIDGETS: readonly WidgetId[] = ["regions"];
 
-export function withoutRemoved(layout: InsightsLayout): InsightsLayout {
+/** money-hub patch: a taxonomy with nothing known (every holding "Unknown", or no holdings). */
+export function allUnknown(allocation: { categories?: { categoryId: string; value: number }[] } | undefined): boolean {
+  return !(allocation?.categories ?? []).some((c) => c.categoryId !== "__UNKNOWN__" && c.value > 0);
+}
+
+export function withoutRemoved(layout: InsightsLayout, alsoHidden: readonly WidgetId[] = []): InsightsLayout {
+  const removed = [...REMOVED_WIDGETS, ...alsoHidden];
   const layouts = Object.fromEntries(
     (Object.keys(GRID_COLUMNS) as LayoutBreakpoint[]).map((key) => {
       const items = layout.layouts[key];
-      const gone = items.find((item) => REMOVED_WIDGETS.includes(item.i as WidgetId));
-      if (!gone || key === "mobile" || layout.hiddenWidgets.includes(gone.i as WidgetId))
-        return [key, items];
+      const gone = items.filter((item) => removed.includes(item.i as WidgetId) && !layout.hiddenWidgets.includes(item.i as WidgetId));
+      if (!gone.length || key === "mobile") return [key, items];
+      const y = gone[0].y;
       const row = items
-        .filter((item) => item !== gone && item.y === gone.y && !layout.hiddenWidgets.includes(item.i as WidgetId))
+        .filter((item) => !gone.includes(item) && item.y === y && !removed.includes(item.i as WidgetId) && !layout.hiddenWidgets.includes(item.i as WidgetId))
         .sort((a, b) => a.x - b.x);
       if (!row.length) return [key, items];
-      const start = Math.min(gone.x, row[0].x);
+      const inRow = gone.filter((item) => item.y === y);
+      const start = Math.min(row[0].x, ...inRow.map((item) => item.x));
       // A saved layout may already hold the widened row: never past the grid's edge.
-      const total = Math.min(row.reduce((sum, item) => sum + item.w, gone.w), GRID_COLUMNS[key] - start);
+      const total = Math.min(
+        row.reduce((sum, item) => sum + item.w, inRow.reduce((sum, item) => sum + item.w, 0)),
+        GRID_COLUMNS[key] - start,
+      );
       const base = Math.floor(total / row.length);
       let extra = total - base * row.length;
       let x = start;
@@ -415,7 +425,7 @@ export function withoutRemoved(layout: InsightsLayout): InsightsLayout {
   ) as InsightsLayout["layouts"];
   return {
     ...layout,
-    hiddenWidgets: [...new Set([...layout.hiddenWidgets, ...REMOVED_WIDGETS])],
+    hiddenWidgets: [...new Set([...layout.hiddenWidgets, ...removed])],
     layouts,
   };
 }

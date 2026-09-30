@@ -76,7 +76,10 @@ export function DrillableAccountChart({
         return {
           id: account.id,
           name: account.name,
-          group: account.group || account.name, // Use name as group if no group
+          // money-hub patch: WheelTradr accounts one by one, not one "WheelTradr" slice (owner,
+          // 2026-09-30); the group name is the money-hub sync's (lib/wheeltradr.js GROUP).
+          group:
+            account.group === "WheelTradr" ? account.name : account.group || account.name, // Use name as group if no group
           value: valueBase,
           currency: baseCurrency,
         };

@@ -34,6 +34,7 @@ import { PortfolioExplorer } from "./portfolio-explorer";
 import { TargetRailsCard } from "./target-rails-card";
 import { ValueWidget } from "./value-strip";
 import { InsightsDashboard } from "./insights-dashboard";
+import { allUnknown } from "./insights-layout";
 
 interface OverviewPageProps {
   filter?: AccountScope;
@@ -412,6 +413,7 @@ export function OverviewPage({
     <>
       <InsightsDashboard
         onCustomizeActionChange={onCustomizeActionChange}
+        autoHidden={!allocationsLoading && allUnknown(allocations?.sectors) ? ["sectors"] : []}
         widgets={{
           value: (
             <ValueWidget

@@ -47,6 +47,8 @@ const GRID_BREAKPOINTS = { desktop: 1100, tablet: 700, mobile: 0 };
 interface InsightsDashboardProps {
   widgets: Record<WidgetId, ReactNode>;
   onCustomizeActionChange?: (action: ReactNode | null) => void;
+  /** money-hub patch: cards with nothing to show right now (Sectors all "Unknown"), left out like Regions. */
+  autoHidden?: readonly WidgetId[];
 }
 
 // Measure normal document flow so summaries, charts and expanded tables retain
@@ -83,7 +85,11 @@ function WidgetContent({
   );
 }
 
-export function InsightsDashboard({ widgets, onCustomizeActionChange }: InsightsDashboardProps) {
+export function InsightsDashboard({
+  widgets,
+  onCustomizeActionChange,
+  autoHidden = [],
+}: InsightsDashboardProps) {
   const { t } = useTranslation();
   const isMobile = useIsMobileViewport();
   const { settings, updateSettings, isLoading, isError } = useSettingsContext();
@@ -138,7 +144,7 @@ export function InsightsDashboard({ widgets, onCustomizeActionChange }: Insights
   };
   const visibleLayouts = useMemo(
     () => {
-      const shown = withoutRemoved(current);      // money-hub patch: no Regions card
+      const shown = withoutRemoved(current, autoHidden); // money-hub patch: no Regions card
       return Object.fromEntries(
         (Object.keys(GRID_COLUMNS) as LayoutBreakpoint[]).map((key) => {
           const visible = normalizeLayout(
@@ -151,7 +157,8 @@ export function InsightsDashboard({ widgets, onCustomizeActionChange }: Insights
         }),
       ) as InsightsLayout["layouts"];
     },
-    [current],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [current, autoHidden.join(",")],
   );
   const summaryHeight = useCallback(
     (id: string, key: LayoutBreakpoint) => {
@@ -197,7 +204,7 @@ export function InsightsDashboard({ widgets, onCustomizeActionChange }: Insights
   const orderedIds = [...current.layouts.mobile]
     .sort((a, b) => a.y - b.y || a.x - b.x)
     .map((item) => item.i as WidgetId)
-    .filter((id) => !REMOVED_WIDGETS.includes(id));
+    .filter((id) => !REMOVED_WIDGETS.includes(id) && !autoHidden.includes(id));
   const visibleIds = [...verticalCompactor.compact(layouts[breakpoint], GRID_COLUMNS[breakpoint])]
     .sort((a, b) => a.y - b.y || a.x - b.x)
     .map((item) => item.i as WidgetId);

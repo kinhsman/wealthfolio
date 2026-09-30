@@ -18,6 +18,7 @@ import {
   toBreakdownNodes,
   type BreakdownNode,
 } from "./allocation-derivations";
+import { allUnknown } from "./insights-layout";
 
 interface PortfolioExplorerProps {
   allocations?: PortfolioAllocations;
@@ -205,7 +206,9 @@ export function PortfolioExplorer({
         );
       }
     }
-    return list;
+    // money-hub patch: a lens that knows nothing (every holding "Unknown") is left out (owner,
+    // 2026-09-30: "if sector is really unknown then hide it").
+    return list.filter((lens) => !lens.allocation || !allUnknown(lens.allocation));
   }, [allocations, holdings, scopedAccounts, accountValues, t]);
 
   const active = lenses.find((l) => l.key === activeKey) ?? lenses[0];
