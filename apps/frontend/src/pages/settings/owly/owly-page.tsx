@@ -154,7 +154,7 @@ export default function OwlySettingsPage() {
               <div className="min-w-0">
                 <div className="text-sm font-semibold">Owly</div>
                 <div className="text-muted-foreground truncate text-xs">
-                  {connected ? `Key ${status?.keyShown ?? ""}` : "Not connected"}
+                  {connected ? `Key ${status?.keyShown ?? ""}` : status ? "Not connected" : loadError ? "" : "Checking…"}
                 </div>
               </div>
             </div>
