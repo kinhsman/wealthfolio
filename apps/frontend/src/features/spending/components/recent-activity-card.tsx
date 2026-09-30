@@ -112,7 +112,7 @@ export function RecentActivityCard({
       ...pending.map((p) => ({ key: `${p.date}~`, row: { kind: "pending" as const, p } })),
       ...recent.map((a) => ({ key: a.activityDate, row: { kind: "posted" as const, a } })),
     ]
-      .sort((x, y) => y.key.localeCompare(x.key))
+      .sort((x, y) => (y.key < x.key ? -1 : y.key > x.key ? 1 : 0))   // code order: "~" after "T"
       .slice(0, 10);
     const m = new Map<string, Row[]>();
     for (const { key, row } of rows) {
