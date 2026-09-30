@@ -190,9 +190,7 @@ export default function BanksSettingsPage() {
         <div className="bg-card rounded-xl border p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg">
-                <Icons.Building className="text-primary size-5" />
-              </span>
+              <img src="/connections/plaid.png" alt="" className="size-10 shrink-0 rounded-lg border bg-white object-contain" />
               <div className="min-w-0">
                 <div className="text-sm font-semibold">Plaid</div>
                 <div className="text-muted-foreground truncate text-xs">
