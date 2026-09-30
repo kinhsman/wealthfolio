@@ -1,5 +1,4 @@
 import { isExpiredOptionAsset } from "./asset-utils";
-import { notesForDisplay } from "@/lib/wheeltradr-holding";
 import { createActivity, getAssetHoldings, getAssetLots, searchActivities } from "@/adapters";
 import { ActionPalette, type ActionPaletteGroup } from "@/components/action-palette";
 import { AssetLogoDialog } from "@/components/asset-logo/asset-logo-dialog";
@@ -957,8 +956,7 @@ export const AssetProfilePage = () => {
 
         {/* Notes section */}
         <p className="text-muted-foreground text-sm">
-          {/* money-hub patch: the WheelTradr numbers line is for the Holdings table, not for reading */}
-          {notesForDisplay(assetProfile?.notes) || notesForDisplay(holding?.instrument?.notes) || t("asset:profile.no_notes")}
+          {assetProfile?.notes || holding?.instrument?.notes || t("asset:profile.no_notes")}
         </p>
       </div>
     );
@@ -1224,7 +1222,7 @@ export const AssetProfilePage = () => {
 
               {/* Notes section */}
               <p className="text-muted-foreground text-sm">
-                {notesForDisplay(assetProfile?.notes) || t("asset:profile.no_notes")}
+                {assetProfile?.notes || t("asset:profile.no_notes")}
               </p>
             </div>
           )}

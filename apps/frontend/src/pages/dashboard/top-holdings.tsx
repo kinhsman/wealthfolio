@@ -1,5 +1,5 @@
 import { DashboardCard } from "@/components/dashboard-card";
-import { wheeltradrStats } from "@/lib/wheeltradr-holding";
+import { useWheeltradrStats, wheeltradrStatsFor } from "@/lib/wheeltradr-holding";
 import { HoldingPerformancePercent } from "@/components/holding-performance-percent";
 import { TickerAvatar } from "@/components/ticker-avatar";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
@@ -74,7 +74,8 @@ function HoldingRow({
   const avatarSymbol = parsedOption ? parsedOption.underlying : symbol;
   const marketValue = holding.marketValue?.base ?? 0;
   // money-hub patch: a WheelTradr account shows WheelTradr's own today and unrealized P/L.
-  const wt = wheeltradrStats(holding.instrument?.notes);
+  const wtStats = useWheeltradrStats();
+  const wt = wheeltradrStatsFor(wtStats, holding);
   const wtDay = performanceMode === "daily";
   const gainAmount = wt
     ? wtDay ? wt.todayPnl : wt.unrealizedPnl

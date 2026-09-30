@@ -37,7 +37,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, type NavigateFunction } from "react-router-dom";
 import { HoldingsStatusSegmentedControl } from "./holdings-status-control";
 import { isCashHolding, isClosedPosition } from "./holdings-visibility";
-import { wheeltradrStats } from "@/lib/wheeltradr-holding";
+import { useWheeltradrStats, wheeltradrStatsFor, type WheelTradrStatsMap } from "@/lib/wheeltradr-holding";
 import type { HoldingsVisibilityFilter } from "./holdings-visibility";
 import {
   getHoldingTypeFilterOption,
@@ -159,6 +159,9 @@ export const HoldingsTable = ({
     return holding.localCurrency.toUpperCase() !== baseCurrency.toUpperCase();
   });
 
+  // money-hub patch: WheelTradr's own numbers for the WheelTradr account rows.
+  const wtStats = useWheeltradrStats();
+
   // DataTable renders each `cell` as a component, so a new column array remounts every cell.
   const columns = useMemo(
     () =>
@@ -170,6 +173,7 @@ export const HoldingsTable = ({
         dateFormatting,
         navigate,
         onClassify,
+        wtStats,
       ).filter((column) => {
         if (!("id" in column) || column.id == null) return false;
         return isClosedView
@@ -185,6 +189,7 @@ export const HoldingsTable = ({
       navigate,
       onClassify,
       isClosedView,
+      wtStats,
     ],
   );
 
@@ -313,6 +318,7 @@ const getColumns = (
   dateFormatting: Pick<FormattingApi, "formatCalendarDate">,
   navigate: NavigateFunction,
   onClassify?: (holding: Holding) => void,
+  wtStats: WheelTradrStatsMap = {},
 ): ColumnDef<Holding>[] => [
   {
     id: "symbol",
@@ -575,7 +581,7 @@ const getColumns = (
     cell: ({ row }) => {
       const holding = row.original;
       // money-hub patch: a WheelTradr account is one share of itself; the count means nothing.
-      if (isCashHolding(holding) || wheeltradrStats(holding.instrument?.notes)) {
+      if (isCashHolding(holding) || wheeltradrStatsFor(wtStats, holding)) {
         return <div className="text-muted-foreground px-4 text-right">—</div>;
       }
 
@@ -625,7 +631,7 @@ const getColumns = (
         return <div className="text-muted-foreground px-4 text-right">—</div>;
       }
       // money-hub patch: a WheelTradr account shows WheelTradr's today P/L, $ and %.
-      const wt = wheeltradrStats(holding.instrument?.notes);
+      const wt = wheeltradrStatsFor(wtStats, holding);
       if (wt) {
         return (
           <div className="flex min-h-[40px] flex-col items-end justify-center px-4">
@@ -814,7 +820,7 @@ const getColumns = (
         return <div className="text-muted-foreground px-4 text-right">—</div>;
       }
       // money-hub patch: a WheelTradr account's gain is WheelTradr's unrealized P/L, $ and %.
-      const wt = wheeltradrStats(holding.instrument?.notes);
+      const wt = wheeltradrStatsFor(wtStats, holding);
       const value = wt
         ? wt.unrealizedPnl
         : showConvertedValues
@@ -865,7 +871,7 @@ const getColumns = (
         return <div className="text-muted-foreground px-4 text-right">—</div>;
       }
       // money-hub patch: a WheelTradr account's return is WheelTradr's unrealized P/L, $ and %.
-      const wt = wheeltradrStats(holding.instrument?.notes);
+      const wt = wheeltradrStatsFor(wtStats, holding);
       const value = wt
         ? wt.unrealizedPnl
         : showConvertedValues
@@ -911,7 +917,7 @@ const getColumns = (
         return <div className="text-muted-foreground px-4 text-right">—</div>;
       }
       // money-hub patch: a WheelTradr account's day P/L is WheelTradr's today P/L.
-      const wt = wheeltradrStats(holding.instrument?.notes);
+      const wt = wheeltradrStatsFor(wtStats, holding);
       const value = wt
         ? wt.todayPnl
         : showConvertedValues
@@ -952,7 +958,7 @@ const getColumns = (
         return <div className="text-muted-foreground px-4 text-right">—</div>;
       }
       // money-hub patch: a WheelTradr account's unrealized P/L is WheelTradr's.
-      const wt = wheeltradrStats(holding.instrument?.notes);
+      const wt = wheeltradrStatsFor(wtStats, holding);
       const value = wt
         ? wt.unrealizedPnl
         : showConvertedValues
