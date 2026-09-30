@@ -21,7 +21,9 @@ import {
 } from "@wealthfolio/ui";
 
 import { useAccounts } from "@/hooks/use-accounts";
+import { accountLogoUrl } from "@/lib/account-logo";
 import type { Account } from "@/lib/types";
+import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
 import { searchCashActivities } from "../adapters/cash-activities";
 
@@ -55,12 +57,17 @@ export function MerchantShortcut({
           {merchant.source === "owly" ? (
             <span>· photo from Owly</span>
           ) : merchant.source === "bank" ? (
-            <span>· {merchant.pattern}, your bank&rsquo;s logo</span>
-          ) : (
-            <button type="button" className="text-foreground underline-offset-4 hover:underline" onClick={() => setDraft({ merchant })}>
+            <span className="truncate">· {merchant.pattern}, your bank&rsquo;s logo</span>
+          ) : null}
+          {merchant.source !== "owly" && (merchant.source !== "bank" || merchant.from) ? (
+            <button
+              type="button"
+              className="text-foreground shrink-0 underline-offset-4 hover:underline"
+              onClick={() => setDraft({ merchant: merchant.from ?? merchant })}
+            >
               Change
             </button>
-          )}
+          ) : null}
         </div>
       ) : (
         <button
@@ -85,6 +92,9 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
   const [typing, setTyping] = useState("");
   const all = withTyped(words, typing);
   const [file, setFile] = useState<File | null>(null);
+  // "Use the bank's logo" (owner, 09-30: "toggle use bank icon for transactions instead of using a
+  // merchant"): no picture; each matching transaction shows the bank it is on.
+  const [useBank, setUseBank] = useState(!!editing?.useBank);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -102,6 +112,7 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
     if (!f.type.startsWith("image/")) return setErr("That file is not a picture. Use a PNG, JPG or WebP.");
     if (f.size > MAX_BYTES) return setErr("That picture is over 5 MB. Choose a smaller one.");
     setFile(f);
+    setUseBank(false);
   };
 
   // A copied picture can be pasted anywhere in the window (owner, 09-30: "enable pasting for image
@@ -161,24 +172,31 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
   const [showMatches, setShowMatches] = useState(false);
   const { accounts } = useAccounts({ filterActive: false });
   const accountName = useMemo(() => new Map((accounts ?? []).map((a) => [a.id, a.name])), [accounts]);
+  const bankLogo = useMemo(() => new Map((accounts ?? []).map((a) => [a.id, accountLogoUrl(a)])), [accounts]);
   const matchCount = matches.data?.items.length ?? 0;
   const countText = `${matchCount}${matches.data?.more ? "+" : ""}`;
   const settled = all.length > 0 && debounced === key && !matches.isFetching;
   const day = (iso: string) =>
     new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
-  const ready = name.trim().length > 0 && all.length > 0 && (!!file || !!editing);
+  const ready = name.trim().length > 0 && all.length > 0 && (useBank || !!file || !!editing?.logoUrl);
 
   const save = async () => {
     setBusy(true);
     setErr(null);
     try {
-      const fields = { name: name.trim(), patterns: all };
+      const fields = { name: name.trim(), patterns: all, useBank };
       const list = editing
         ? await merchantsApi.update(editing.id, { ...fields, logo: file })
-        : await merchantsApi.create({ ...fields, logo: file! });
+        : await merchantsApi.create({ ...fields, logo: file });
       setMerchants(list);
-      toast.success(editing ? `${fields.name} saved.` : `${fields.name} added. Its logo shows on matching transactions.`);
+      toast.success(
+        editing
+          ? `${fields.name} saved.`
+          : useBank
+            ? `${fields.name} added. Matching transactions show their bank's logo.`
+            : `${fields.name} added. Its logo shows on matching transactions.`,
+      );
       onClose();
     } catch (e) {
       setErr((e as Error)?.message ?? String(e));
@@ -207,53 +225,65 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
           <DialogDescription>Transactions whose text contains these words show this logo, the ones you have and new ones.</DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => input.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragging(false);
-              pick(imageFrom(e.dataTransfer));
-            }}
-            className={`bg-muted hover:bg-muted/70 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border transition-colors ${dragging ? "ring-primary ring-2" : ""}`}
-            aria-label="Choose a logo"
-          >
-            {shown ? <img src={shown} alt="" className={chosen ? "h-full w-full object-contain p-2.5" : "h-full w-full object-cover"} /> : <Icons.Store className="text-muted-foreground h-6 w-6" />}
-          </button>
-          <div className="min-w-0 space-y-1">
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => input.current?.click()} disabled={busy}>
-                <Icons.Upload className="mr-1.5 h-3.5 w-3.5" />
-                {shown ? "Choose another" : "Choose a logo"}
-              </Button>
-              {canReadClipboard ? (
-                <Button type="button" variant="outline" size="sm" onClick={pasteButton} disabled={busy}>
-                  <Icons.Copy className="mr-1.5 h-3.5 w-3.5" />
-                  Paste
-                </Button>
-              ) : null}
-            </div>
+        <div className="flex items-center justify-between gap-4 rounded-lg border px-3 py-2.5">
+          <div className="min-w-0">
+            <Label htmlFor="merchant-use-bank">Use the bank&rsquo;s logo</Label>
             <p className="text-muted-foreground text-xs">
-              Or paste a copied picture with Ctrl+V (Cmd+V on a Mac), or drop one on the circle. PNG, JPG or WebP, up to 5 MB. It is fitted inside the circle, never cut off.
+              No picture needed: each transaction shows the logo of the bank it is on, like Chase or Citi. Good for fees, ATM cash and card perks.
             </p>
           </div>
-          <input
-            ref={input}
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-            className="hidden"
-            onChange={(e) => {
-              pick(e.target.files?.[0]);
-              e.target.value = "";
-            }}
-          />
+          <Switch id="merchant-use-bank" checked={useBank} onCheckedChange={setUseBank} disabled={busy} />
         </div>
+
+        {useBank ? null : (
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => input.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragging(false);
+                pick(imageFrom(e.dataTransfer));
+              }}
+              className={`bg-muted hover:bg-muted/70 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border transition-colors ${dragging ? "ring-primary ring-2" : ""}`}
+              aria-label="Choose a logo"
+            >
+              {shown ? <img src={shown} alt="" className={chosen ? "h-full w-full object-contain p-2.5" : "h-full w-full object-cover"} /> : <Icons.Store className="text-muted-foreground h-6 w-6" />}
+            </button>
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => input.current?.click()} disabled={busy}>
+                  <Icons.Upload className="mr-1.5 h-3.5 w-3.5" />
+                  {shown ? "Choose another" : "Choose a logo"}
+                </Button>
+                {canReadClipboard ? (
+                  <Button type="button" variant="outline" size="sm" onClick={pasteButton} disabled={busy}>
+                    <Icons.Copy className="mr-1.5 h-3.5 w-3.5" />
+                    Paste
+                  </Button>
+                ) : null}
+              </div>
+              <p className="text-muted-foreground text-xs">
+                Or paste a copied picture with Ctrl+V (Cmd+V on a Mac), or drop one on the circle. PNG, JPG or WebP, up to 5 MB. It is fitted inside the circle, never cut off.
+              </p>
+            </div>
+            <input
+              ref={input}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+              className="hidden"
+              onChange={(e) => {
+                pick(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </div>
+        )}
 
         <div className="space-y-3">
           <div className="space-y-1.5">
@@ -277,7 +307,7 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
                   ? "Looking for transactions with these words"
                   : matchCount === 0
                     ? "No transaction has these words yet. New ones will show the logo."
-                    : `${countText} transaction${matchCount === 1 ? "" : "s"} will show this logo, and new ones as they come in.`}
+                    : `${countText} transaction${matchCount === 1 ? "" : "s"} will show ${useBank ? "their bank's logo" : "this logo"}, and new ones as they come in.`}
             </span>
             {settled && matchCount > 0 ? (
               <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 text-xs" onClick={() => setShowMatches((v) => !v)}>
@@ -289,7 +319,11 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
             <div className="max-h-56 divide-y overflow-y-auto border-t">
               {(matches.data?.items ?? []).slice(0, 50).map((x) => (
                 <div key={x.id} className="flex items-center gap-3 px-3 py-2">
-                  {shown ? <img src={shown} alt="" className="bg-muted h-6 w-6 shrink-0 rounded-full border object-cover" /> : null}
+                  {useBank ? (
+                    <MerchantLogo url={bankLogo.get(x.accountId) ?? null} name={name} whole className="h-6 w-6" />
+                  ) : shown ? (
+                    <img src={shown} alt="" className="bg-muted h-6 w-6 shrink-0 rounded-full border object-cover" />
+                  ) : null}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm">{x.notes}</span>
                     <span className="text-muted-foreground block truncate text-xs">

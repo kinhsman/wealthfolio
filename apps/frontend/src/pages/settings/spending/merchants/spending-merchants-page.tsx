@@ -76,6 +76,7 @@ export default function SpendingMerchantsPage() {
                   <span className="block truncate text-sm font-medium">{m.name}</span>
                   <span className="text-muted-foreground block truncate text-xs">
                     Looks for {wordsOf(m).map((w) => `\u201c${w}\u201d`).join(" or ")}
+                    {m.useBank ? " · shows the bank's logo" : ""}
                   </span>
                 </span>
                 <Icons.ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />

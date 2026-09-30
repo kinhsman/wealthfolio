@@ -16,34 +16,26 @@ export interface Merchant {
   pattern: string;
   /** Any of these words shows the logo (owner, 09-30: "multiple keywords ... in OR operation"). */
   patterns?: string[];
-  logoUrl: string;
+  /** Null for a merchant that uses the bank's logo (`useBank`). */
+  logoUrl: string | null;
+  /** "Use the bank's logo" (owner, 09-30: "is there a way to just toggle use bank icon for
+   *  transactions instead of using a merchant?"): each matching transaction shows the logo of the
+   *  bank it is on. */
+  useBank?: boolean;
   updatedAt?: string;
   /** "owly": an Owly friend's photo on their Zelle transactions (read only; changed in Owly).
-   *  "bank": the logo of the bank holding the account, on ATM cash and card payments (read only). */
+   *  "bank": the logo of the bank holding the account (read only). */
   source?: "owly" | "bank";
+  /** On a "bank" one: the owner's merchant that asked for the bank's logo (none: built in). */
+  from?: Merchant;
 }
 
 type AccountLike = Pick<Account, "id" | "name" | "group" | "meta"> & { accountType?: string };
 
-/** The bank that holds the account shows, ahead of any merchant, on ATM cash (owner, 09-30: "for
- *  ATM keyword use the bank icon linked with the transaction") and on a payment arriving on a
- *  credit card (09-30: "make credit card payments showing their bank logo as merchant"; the
- *  import makes those TRANSFER_IN, refunds are CREDIT). Bank accounts only (meta.source "plaid"),
- *  so Owly's "Owed to me" keeps its usual look. The paying side's text names the card's bank,
- *  so the owner's merchants cover it. */
-export function bankFor(
-  text: string | null | undefined,
-  account?: AccountLike | null,
-  activityType?: string | null,
-): Merchant | null {
+/** The bank holding the account, as a merchant: its name and logo. Bank accounts only
+ *  (meta.source "plaid"), so Owly's "Owed to me" keeps its usual look. */
+function bankOf(account: AccountLike | null | undefined, id: string, pattern: string): Merchant | null {
   if (!account) return null;
-  const reason =
-    text && contains(text.toUpperCase(), "ATM")
-      ? "ATM"
-      : isCreditCardAccountType(account.accountType) && activityType === "TRANSFER_IN"
-        ? "Card payment"
-        : null;
-  if (!reason) return null;
   let source: unknown;
   try {
     const meta = typeof account.meta === "string" ? JSON.parse(account.meta) : account.meta;
@@ -54,7 +46,21 @@ export function bankFor(
   const logoUrl = accountLogoUrl(account);
   if (source !== "plaid" || !logoUrl) return null;
   const name = account.group || account.name;
-  return { id: `bank:${account.id}`, name, pattern: reason, patterns: [reason], logoUrl, source: "bank" };
+  return { id: `bank:${account.id}:${id}`, name, pattern, patterns: [pattern], logoUrl, source: "bank" };
+}
+
+/** Built in, ahead of any merchant, where words cannot tell: a payment arriving on a credit card
+ *  (owner, 09-30: "make credit card payments showing their bank logo as merchant"; the import makes
+ *  those TRANSFER_IN, refunds are CREDIT; the paying side's text names the card's bank, so the
+ *  owner's merchants cover it) and interest, earned or charged. Everything else that should show
+ *  the bank (ATM cash, fees, perks) is a merchant with "Use the bank's logo", the owner's to change. */
+export function bankFor(account?: AccountLike | null, activityType?: string | null): Merchant | null {
+  if (!account) return null;
+  if (isCreditCardAccountType(account.accountType) && activityType === "TRANSFER_IN") {
+    return bankOf(account, "card-payment", "Card payment");
+  }
+  if (activityType === "INTEREST") return bankOf(account, "interest", "Interest");
+  return null;
 }
 
 const BASE = "/api/money-hub/merchants";
@@ -67,18 +73,26 @@ async function call<T>(method: string, path: string, body?: FormData): Promise<T
   return data as T;
 }
 
-const form = (fields: { name: string; patterns: string[]; logo?: File | null }) => {
+interface MerchantFields {
+  name: string;
+  patterns: string[];
+  logo?: File | null;
+  useBank?: boolean;
+}
+
+const form = (fields: MerchantFields) => {
   const f = new FormData();
   f.set("name", fields.name);
   f.set("patterns", JSON.stringify(fields.patterns));
-  if (fields.logo) f.set("logo", fields.logo);
+  if (fields.useBank !== undefined) f.set("useBank", String(fields.useBank));
+  if (fields.logo && !fields.useBank) f.set("logo", fields.logo);
   return f;
 };
 
 export const merchantsApi = {
   list: () => call<Merchant[]>("GET", ""),
-  create: (fields: { name: string; patterns: string[]; logo: File }) => call<Merchant[]>("POST", "", form(fields)),
-  update: (id: string, fields: { name: string; patterns: string[]; logo?: File | null }) =>
+  create: (fields: MerchantFields) => call<Merchant[]>("POST", "", form(fields)),
+  update: (id: string, fields: MerchantFields) =>
     call<Merchant[]>("PUT", `/${encodeURIComponent(id)}`, form(fields)),
   remove: (id: string) => call<Merchant[]>("DELETE", `/${encodeURIComponent(id)}`),
 };
@@ -119,30 +133,32 @@ export function matchLength(text: string | null | undefined, words: string[]): n
 }
 
 /** The merchant with any of its words in the text (any case); the longest matching words win, so
- *  "Costco Gas" beats "Costco". ATM cash and card payments show the account's bank (bankFor) first. */
+ *  "Costco Gas" beats "Costco". Card payments and interest show the account's bank (bankFor) first;
+ *  a merchant with "Use the bank's logo" shows the bank of the transaction's account, and is skipped
+ *  where that account has none. */
 export function merchantFor(
   notes: string | null | undefined,
   merchants: Merchant[] | undefined,
   account?: AccountLike | null,
   activityType?: string | null,
 ): Merchant | null {
-  const bank = bankFor(notes, account, activityType);
+  const bank = bankFor(account, activityType);
   if (bank) return bank;
   if (!notes || !merchants?.length) return null;
   let best: Merchant | null = null;
   let bestLen = 0;
   for (const m of merchants) {
     const len = matchLength(notes, wordsOf(m));
-    if (len > bestLen) {
-      best = m;
-      bestLen = len;
-    }
+    if (len <= bestLen) continue;
+    const shown = m.useBank ? bankOf(account, m.id, m.name) : m;
+    if (!shown) continue;
+    best = m.useBank ? { ...shown, from: m } : shown;
+    bestLen = len;
   }
   return best;
 }
 
-/** One transaction's merchant, from the shared list (its account and type: the bank for ATM cash
- *  and card payments). */
+/** One transaction's merchant, from the shared list (its account and type: for the bank's logo). */
 export function useMerchantFor(
   notes: string | null | undefined,
   account?: AccountLike | null,
