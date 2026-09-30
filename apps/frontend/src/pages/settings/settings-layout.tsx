@@ -70,12 +70,9 @@ export default function SettingsLayout() {
             subtitle: t("settings:nav.subtitles.securities"),
             icon: <Icons.BadgeDollarSign className="size-5" />,
           },
-          {
-            title: t("settings:nav.items.classifications"),
-            href: "taxonomies",
-            subtitle: t("settings:nav.subtitles.classifications"),
-            icon: <Icons.Blocks className="size-5" />,
-          },
+          // money-hub patch: Classifications hidden (owner, 2026-09-30: "I don't think those matter").
+          // They tag single stocks (asset class, industry, region); here investments are whole
+          // WheelTradr accounts, whose one tag the WheelTradr sync sets itself. Page still at /settings/taxonomies.
           {
             title: t("settings:nav.items.backup_export"),
             href: "exports",
