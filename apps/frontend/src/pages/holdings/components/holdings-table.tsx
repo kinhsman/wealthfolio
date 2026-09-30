@@ -37,6 +37,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, type NavigateFunction } from "react-router-dom";
 import { HoldingsStatusSegmentedControl } from "./holdings-status-control";
 import { isCashHolding, isClosedPosition } from "./holdings-visibility";
+import { wheeltradrStats } from "@/lib/wheeltradr-holding";
 import type { HoldingsVisibilityFilter } from "./holdings-visibility";
 import {
   getHoldingTypeFilterOption,
@@ -573,7 +574,8 @@ const getColumns = (
     },
     cell: ({ row }) => {
       const holding = row.original;
-      if (isCashHolding(holding)) {
+      // money-hub patch: a WheelTradr account is one share of itself; the count means nothing.
+      if (isCashHolding(holding) || wheeltradrStats(holding.instrument?.notes)) {
         return <div className="text-muted-foreground px-4 text-right">—</div>;
       }
 
@@ -621,6 +623,16 @@ const getColumns = (
       const holding = row.original;
       if (isCashHolding(holding) || isClosedPosition(holding)) {
         return <div className="text-muted-foreground px-4 text-right">—</div>;
+      }
+      // money-hub patch: a WheelTradr account shows WheelTradr's today P/L, $ and %.
+      const wt = wheeltradrStats(holding.instrument?.notes);
+      if (wt) {
+        return (
+          <div className="flex min-h-[40px] flex-col items-end justify-center px-4">
+            <AmountDisplay value={wt.todayPnl} currency={holding.localCurrency} colorFormat={true} isHidden={isHidden} />
+            <GainPercent className="text-xs" value={wt.todayPct / 100} />
+          </div>
+        );
       }
       const price = holding.price ?? 0;
       const currency = holding.localCurrency;
@@ -801,13 +813,19 @@ const getColumns = (
       if (isCashHolding(holding)) {
         return <div className="text-muted-foreground px-4 text-right">—</div>;
       }
-      const value = showConvertedValues
-        ? (holding.totalGain?.base ?? 0)
-        : (holding.totalGain?.local ?? 0);
+      // money-hub patch: a WheelTradr account's gain is WheelTradr's unrealized P/L, $ and %.
+      const wt = wheeltradrStats(holding.instrument?.notes);
+      const value = wt
+        ? wt.unrealizedPnl
+        : showConvertedValues
+          ? (holding.totalGain?.base ?? 0)
+          : (holding.totalGain?.local ?? 0);
       const currency = showConvertedValues ? holding.baseCurrency : holding.localCurrency;
-      const percentage = showConvertedValues
-        ? getBaseHoldingPerformancePercent(holding, "totalGain")
-        : holding.totalGainPct;
+      const percentage = wt
+        ? wt.unrealizedPct / 100
+        : showConvertedValues
+          ? getBaseHoldingPerformancePercent(holding, "totalGain")
+          : holding.totalGainPct;
 
       return (
         <div className="flex min-h-[40px] flex-col items-end justify-center px-4">
@@ -846,13 +864,19 @@ const getColumns = (
       if (isCashHolding(holding)) {
         return <div className="text-muted-foreground px-4 text-right">—</div>;
       }
-      const value = showConvertedValues
-        ? (holding.totalReturn?.base ?? 0)
-        : (holding.totalReturn?.local ?? 0);
+      // money-hub patch: a WheelTradr account's return is WheelTradr's unrealized P/L, $ and %.
+      const wt = wheeltradrStats(holding.instrument?.notes);
+      const value = wt
+        ? wt.unrealizedPnl
+        : showConvertedValues
+          ? (holding.totalReturn?.base ?? 0)
+          : (holding.totalReturn?.local ?? 0);
       const currency = showConvertedValues ? holding.baseCurrency : holding.localCurrency;
-      const percentage = showConvertedValues
-        ? getBaseHoldingPerformancePercent(holding, "totalReturn")
-        : holding.totalReturnPct;
+      const percentage = wt
+        ? wt.unrealizedPct / 100
+        : showConvertedValues
+          ? getBaseHoldingPerformancePercent(holding, "totalReturn")
+          : holding.totalReturnPct;
 
       return (
         <div className="flex min-h-[40px] flex-col items-end justify-center px-4">
@@ -886,15 +910,19 @@ const getColumns = (
       if (isCashHolding(holding) || isClosedPosition(holding)) {
         return <div className="text-muted-foreground px-4 text-right">—</div>;
       }
-      const value = showConvertedValues
-        ? (holding.dayChange?.base ?? 0)
-        : (holding.dayChange?.local ?? 0);
+      // money-hub patch: a WheelTradr account's day P/L is WheelTradr's today P/L.
+      const wt = wheeltradrStats(holding.instrument?.notes);
+      const value = wt
+        ? wt.todayPnl
+        : showConvertedValues
+          ? (holding.dayChange?.base ?? 0)
+          : (holding.dayChange?.local ?? 0);
       const currency = showConvertedValues ? holding.baseCurrency : holding.localCurrency;
 
       return (
         <div className="flex min-h-[40px] flex-col items-end justify-center px-4">
           <AmountDisplay value={value} currency={currency} colorFormat={true} isHidden={isHidden} />
-          <GainPercent className="text-xs" value={holding.dayChangePct || 0} />
+          <GainPercent className="text-xs" value={wt ? wt.todayPct / 100 : holding.dayChangePct || 0} />
         </div>
       );
     },
@@ -923,13 +951,19 @@ const getColumns = (
       if (isCashHolding(holding) || isClosedPosition(holding)) {
         return <div className="text-muted-foreground px-4 text-right">—</div>;
       }
-      const value = showConvertedValues
-        ? (holding.unrealizedGain?.base ?? 0)
-        : (holding.unrealizedGain?.local ?? 0);
+      // money-hub patch: a WheelTradr account's unrealized P/L is WheelTradr's.
+      const wt = wheeltradrStats(holding.instrument?.notes);
+      const value = wt
+        ? wt.unrealizedPnl
+        : showConvertedValues
+          ? (holding.unrealizedGain?.base ?? 0)
+          : (holding.unrealizedGain?.local ?? 0);
       const currency = showConvertedValues ? holding.baseCurrency : holding.localCurrency;
-      const percentage = showConvertedValues
-        ? getBaseHoldingPerformancePercent(holding, "unrealizedGain")
-        : holding.unrealizedGainPct;
+      const percentage = wt
+        ? wt.unrealizedPct / 100
+        : showConvertedValues
+          ? getBaseHoldingPerformancePercent(holding, "unrealizedGain")
+          : holding.unrealizedGainPct;
 
       return (
         <div className="flex min-h-[40px] flex-col items-end justify-center px-4">

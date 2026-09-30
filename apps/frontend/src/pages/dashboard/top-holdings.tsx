@@ -1,4 +1,5 @@
 import { DashboardCard } from "@/components/dashboard-card";
+import { wheeltradrStats } from "@/lib/wheeltradr-holding";
 import { HoldingPerformancePercent } from "@/components/holding-performance-percent";
 import { TickerAvatar } from "@/components/ticker-avatar";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
@@ -72,15 +73,21 @@ function HoldingRow({
       });
   const avatarSymbol = parsedOption ? parsedOption.underlying : symbol;
   const marketValue = holding.marketValue?.base ?? 0;
-  const gainAmount =
-    performanceMode === "return"
+  // money-hub patch: a WheelTradr account shows WheelTradr's own today and unrealized P/L.
+  const wt = wheeltradrStats(holding.instrument?.notes);
+  const wtDay = performanceMode === "daily";
+  const gainAmount = wt
+    ? wtDay ? wt.todayPnl : wt.unrealizedPnl
+    : performanceMode === "return"
       ? (holding.totalReturn?.base ?? holding.totalGain?.base ?? 0)
       : performanceMode === "pnl"
         ? (holding.totalGain?.base ?? holding.unrealizedGain?.base ?? 0)
         : performanceMode === "unrealized"
           ? (holding.unrealizedGain?.base ?? 0)
           : (holding.dayChange?.base ?? 0);
-  const gainPercent = getBaseHoldingPerformancePercentForMode(holding, performanceMode);
+  const gainPercent = wt
+    ? (wtDay ? wt.todayPct : wt.unrealizedPct) / 100
+    : getBaseHoldingPerformancePercentForMode(holding, performanceMode);
 
   return (
     <div
@@ -100,7 +107,7 @@ function HoldingRow({
         />
         <div className="flex min-w-0 flex-col">
           <span className="truncate text-sm font-semibold">{title}</span>
-          <span className="text-muted-foreground truncate text-xs">{subtitle}</span>
+          <span className="text-muted-foreground truncate text-xs">{wt ? "WheelTradr account" : subtitle}</span>
         </div>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
