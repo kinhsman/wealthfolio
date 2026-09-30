@@ -153,7 +153,7 @@ export default function BanksSettingsPage() {
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <span className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg">
-                <Icons.Building2 className="text-primary size-5" />
+                <Icons.Building className="text-primary size-5" />
               </span>
               <div className="min-w-0">
                 <div className="text-sm font-semibold">Plaid</div>

@@ -128,7 +128,7 @@ export default function SettingsLayout() {
             title: "Banks",
             href: "banks",
             subtitle: "Bank and credit card accounts, through Plaid",
-            icon: <Icons.Building2 className="size-5" />,
+            icon: <Icons.Building className="size-5" />,
           },
         ],
       },
