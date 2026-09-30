@@ -2,7 +2,6 @@ import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@wealthfolio/ui/components/ui/tabs";
 import { useTranslation } from "react-i18next";
 import { SettingsHeader } from "../settings-header";
-import { BackupRestoreForm } from "./backup-restore-form";
 import { ExportForm } from "./exports-form";
 import { DriveBackupTab } from "./drive-backup-tab";
 
@@ -17,18 +16,15 @@ const ExportSettingsPage = () => {
       <Separator />
 
       <Tabs defaultValue="drive" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="drive">Cloud Backup</TabsTrigger>
-          <TabsTrigger value="backup">{t("settings:export_tab_backup")}</TabsTrigger>
+        {/* money-hub: one Backups tab, ours (Google Drive + this device). Wealthfolio's own
+            Backups tab is left out: on the web it keeps snapshots it cannot restore. */}
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="drive">{t("settings:export_tab_backup")}</TabsTrigger>
           <TabsTrigger value="export">{t("settings:export_title")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="drive" className="mt-6">
           <DriveBackupTab />
-        </TabsContent>
-
-        <TabsContent value="backup" className="mt-6">
-          <BackupRestoreForm />
         </TabsContent>
 
         <TabsContent value="export" className="mt-6">
