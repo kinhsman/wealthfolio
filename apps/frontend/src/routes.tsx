@@ -36,6 +36,7 @@ import OnboardingPage from "./pages/onboarding/onboarding-page";
 import AboutSettingsPage from "./pages/settings/about/about-page";
 import AddonSettingsPage from "./pages/settings/addons/addon-settings";
 import AgentAccessPage from "./pages/settings/agent-access/agent-access-page";
+import WheelTradrSettingsPage from "./pages/settings/wheeltradr/wheeltradr-page";
 import AiProvidersPage from "./pages/settings/ai-providers/ai-providers-page";
 import ContributionLimitPage from "./pages/settings/contribution-limits/contribution-limits-page";
 import ExportSettingsPage from "./pages/settings/exports/exports-page";
@@ -152,6 +153,7 @@ export function AppRoutes() {
             <Route path="connect" element={<ConnectSettingsPage />} />
             <Route path="ai-providers" element={<AiProvidersPage />} />
             <Route path="agent-access" element={<AgentAccessPage />} />
+            <Route path="wheeltradr" element={<WheelTradrSettingsPage />} />
             <Route path="addons" element={<AddonSettingsPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />

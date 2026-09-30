@@ -110,6 +110,13 @@ export default function SettingsLayout() {
             subtitle: t("settings:nav.subtitles.agent_access"),
             icon: <Icons.Brain className="size-5" />,
           },
+          // money-hub patch: the owner's WheelTradr brokerage accounts in net worth.
+          {
+            title: "WheelTradr",
+            href: "wheeltradr",
+            subtitle: "Brokerage accounts in your net worth",
+            icon: <Icons.TrendingUp className="size-5" />,
+          },
         ],
       },
       {
