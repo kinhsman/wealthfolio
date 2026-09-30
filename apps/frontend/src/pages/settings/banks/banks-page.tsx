@@ -14,12 +14,12 @@ import { SettingsHeader } from "../settings-header";
 const BASE = "/api/money-hub/plaid";
 
 interface BankAccount {
-  id: string; name: string; officialName: string | null; mask: string | null; type: string; subtype: string | null;
+  id: string; name: string; plaidName: string; renamed: boolean; officialName: string | null; mask: string | null; type: string; subtype: string | null;
   balance: number | null; currency: string; include: boolean; supported: boolean; balanceOnly: boolean; wfAccountId: string | null;
   txns: number; firstDate: string | null;
 }
 interface BankItem {
-  id: string; institution: { name: string; logoUrl: string | null }; env: string; error: string | null; needsLogin: boolean;
+  id: string; institution: { name: string; plaidName: string; logoUrl: string | null }; env: string; error: string | null; needsLogin: boolean;
   historical: boolean; accounts: BankAccount[];
 }
 interface BanksStatus {
@@ -47,6 +47,9 @@ const api = {
   include: (item: string, id: string, include: boolean) =>
     call<BanksStatus>("PUT", `/accounts/${encodeURIComponent(item)}/${encodeURIComponent(id)}`, { include }),
   sync: () => call<BanksStatus>("POST", "/sync", {}),
+  renameBank: (item: string, name: string) => call<BanksStatus>("PUT", `/items/${encodeURIComponent(item)}/name`, { name }),
+  renameAccount: (item: string, id: string, name: string) =>
+    call<BanksStatus>("PUT", `/accounts/${encodeURIComponent(item)}/${encodeURIComponent(id)}/name`, { name }),
 };
 
 const money = (n: number | null | undefined, ccy = "USD") =>
@@ -91,6 +94,40 @@ const cta = "!border-primary/50 !text-primary";
 const field = "h-9 rounded-md border bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50";
 
 type Note = { tone: "ok" | "bad"; text: string };
+
+/** A name with a pencil; the pencil turns it into a box (Enter saves, Esc cancels, empty = Plaid's name). */
+function InlineName({ value, fallback, disabled, onSave, className = "" }: {
+  value: string; fallback: string; disabled: boolean; onSave: (name: string) => Promise<void>; className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  if (!editing) {
+    return (
+      <div className="flex min-w-0 items-center gap-1">
+        <span className={`truncate ${className}`}>{value}</span>
+        <button type="button" title="Rename" aria-label={`Rename ${value}`} disabled={disabled}
+          className="text-muted-foreground hover:text-foreground shrink-0 rounded p-1 disabled:opacity-50"
+          onClick={() => { setDraft(value); setEditing(true); }}>
+          <Icons.Pencil className="size-3" />
+        </button>
+      </div>
+    );
+  }
+  const save = () => onSave(draft.trim()).then(() => setEditing(false));
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <input autoFocus value={draft} maxLength={80} onChange={(e) => setDraft(e.target.value)} placeholder={fallback}
+        onKeyDown={(e) => { if (e.key === "Enter") void save(); if (e.key === "Escape") setEditing(false); }}
+        className={`${field} h-7 min-w-0 flex-1`} />
+      <button type="button" aria-label="Save name" className={`${btn} ${cta} h-7 px-2`} disabled={disabled} onClick={() => void save()}>
+        <Icons.Check className="size-3.5" />
+      </button>
+      <button type="button" aria-label="Cancel" className={`${btn} h-7 px-2`} onClick={() => setEditing(false)}>
+        <Icons.Close className="size-3.5" />
+      </button>
+    </div>
+  );
+}
 
 export default function BanksSettingsPage() {
   const [status, setStatus] = useState<BanksStatus | null>(null);
@@ -235,10 +272,15 @@ export default function BanksSettingsPage() {
                       ? <img src={item.institution.logoUrl} alt="" className="size-7 object-contain" />
                       : <Icons.Building className="text-primary size-5" />}
                   </span>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">{item.institution.name}</div>
+                  <div className="min-w-0 flex-1">
+                    <InlineName value={item.institution.name} fallback={item.institution.plaidName} disabled={!!busy}
+                      className="text-sm font-semibold"
+                      onSave={(name) => run(`name:${item.id}`, () => api.renameBank(item.id, name),
+                        name ? `Renamed to ${name}.` : `Back to ${item.institution.plaidName}.`)} />
                     <div className="text-muted-foreground truncate text-xs">
-                      {item.env === "sandbox" ? "Plaid's test bank" : item.historical ? "History loaded" : "Loading history from the bank"}
+                      {[item.institution.name !== item.institution.plaidName ? `${item.institution.plaidName} on Plaid` : null,
+                        item.env === "sandbox" ? "Plaid's test bank" : item.historical ? "History loaded" : "Loading history from the bank",
+                      ].filter(Boolean).join(" · ")}
                     </div>
                   </div>
                 </div>
@@ -257,9 +299,11 @@ export default function BanksSettingsPage() {
                 {item.accounts.map((a) => (
                   <div key={a.id} className="flex items-center gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">
-                        {a.name}{a.mask ? ` ••${a.mask}` : ""}
-                      </div>
+                      <InlineName value={a.renamed ? a.name : `${a.name}${a.mask ? ` ••${a.mask}` : ""}`}
+                        fallback={`${a.plaidName}${a.mask ? ` ••${a.mask}` : ""}`} disabled={!!busy || !a.supported}
+                        className="text-sm font-medium"
+                        onSave={(name) => run(`name:${item.id}/${a.id}`, () => api.renameAccount(item.id, a.id, name),
+                          name ? `Renamed to ${name}.` : "Back to the bank's name.")} />
                       <div className="text-muted-foreground truncate text-xs">
                         {[kindOf(a),
                           !a.supported ? "Not brought in (loans stay out)" :
