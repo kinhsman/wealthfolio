@@ -11,6 +11,7 @@ const ICON_MAP: Record<string, PhosphorIcon> = {
   AlertCircle: Icons.AlertCircle,
   Award: Icons.Award,
   Banknote: Icons.Banknote,
+  BedDouble: Icons.BedDouble, // money-hub patch: travel, hotels
   Briefcase: Icons.Briefcase,
   Building: Icons.Building,
   Calendar: Icons.Calendar,
@@ -51,6 +52,7 @@ const ICON_MAP: Record<string, PhosphorIcon> = {
   Stethoscope: Icons.Stethoscope,
   Tag: Icons.Tag,
   Target: Icons.Target,
+  Ticket: Icons.Ticket, // money-hub patch: travel, tours and activities
   Train: Icons.Train,
   TrendingUp: Icons.TrendingUp,
   Truck: Icons.Truck,

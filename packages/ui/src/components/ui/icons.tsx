@@ -143,6 +143,9 @@ import {
   // Spending taxonomy icons (referenced by category seed data)
   Award,
   Banknote,
+  // money-hub patch: travel subcategories (hotels, tours)
+  BedDouble,
+  Ticket,
   Code,
   Coffee,
   Dumbbell,
@@ -781,6 +784,8 @@ const IconsInternal = {
   // the strings stored in `taxonomy_categories.icon`).
   Award: Award,
   Banknote: Banknote,
+  BedDouble: BedDouble,
+  Ticket: Ticket,
   Code: Code,
   Coffee: Coffee,
   Dumbbell: Dumbbell,
@@ -1007,6 +1012,8 @@ export type IconName =
   // Spending taxonomy icons
   | "Award"
   | "Banknote"
+  | "BedDouble"
+  | "Ticket"
   | "Code"
   | "Coffee"
   | "Dumbbell"
