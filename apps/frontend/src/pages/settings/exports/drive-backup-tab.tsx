@@ -1,14 +1,15 @@
 // money-hub patch: backups to Google Drive and to this device, laid out like WheelTradr's
 // Settings, Data & Backup (DataBackupSettings.tsx, DriveFolderChooser.tsx,
 // RestoreBackupModal.tsx) in Wealthfolio's colours and components. The work runs in the
-// money-hub backup service at /drive-backup (Owly's backup code, server/drive-backup in the
+// money-hub backup service at /api/drive-backup (Owly's backup code, server/drive-backup in the
 // money-hub repo), which keeps the Google pass and runs the schedule with the browser shut.
+// It sits under /api because the login cookie is issued for /api only.
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@wealthfolio/ui/components/ui/dialog";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
-const BASE = "/drive-backup/api/backup";
+const BASE = "/api/drive-backup/backup";
 const DEFAULT_FOLDER_NAME = "Money Backups";
 
 // ---------- the service (same endpoints as Owly's /api/backup) ----------
@@ -62,7 +63,7 @@ function pickerSupported() {
 /** Google's picker runs in its own window: Wealthfolio's pages do not allow Google's scripts. */
 function openPicker(kind: "folder" | "file", parentId?: string): Promise<{ id: string; name: string } | null> {
   const q = new URLSearchParams({ kind, ...(parentId ? { parent: parentId } : {}) });
-  const win = window.open(`/drive-backup/picker?${q}`, "money-drive-picker", "width=1000,height=720");
+  const win = window.open(`/api/drive-backup/picker?${q}`, "money-drive-picker", "width=1000,height=720");
   if (!win) return Promise.reject(new Error("Your browser blocked the Google window. Allow pop-ups for this site and try again."));
   return new Promise((resolve, reject) => {
     const onMsg = (e: MessageEvent) => {
