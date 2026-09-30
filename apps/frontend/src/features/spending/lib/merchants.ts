@@ -49,6 +49,18 @@ export function useSetMerchants() {
   return (list: Merchant[]) => qc.setQueryData(MERCHANTS_KEY, list);
 }
 
+/** Short words (4 letters or fewer) count only as a whole word: "UPS" must not light up
+ *  "CUPS COFFEE", nor "BP" a word that merely contains it. */
+const contains = (text: string, p: string) => {
+  if (p.length > 4) return text.includes(p);
+  for (let i = text.indexOf(p); i !== -1; i = text.indexOf(p, i + 1)) {
+    const before = text[i - 1];
+    const after = text[i + p.length];
+    if ((!before || !/[\p{L}\p{N}]/u.test(before)) && (!after || !/[\p{L}\p{N}]/u.test(after))) return true;
+  }
+  return false;
+};
+
 /** The merchant whose words the text contains (any case); the longest words win, so "Costco Gas"
  *  beats "Costco". */
 export function merchantFor(notes: string | null | undefined, merchants: Merchant[] | undefined): Merchant | null {
@@ -57,7 +69,7 @@ export function merchantFor(notes: string | null | undefined, merchants: Merchan
   let best: Merchant | null = null;
   for (const m of merchants) {
     const p = m.pattern.trim().toUpperCase();
-    if (p && text.includes(p) && (!best || p.length > best.pattern.trim().length)) best = m;
+    if (p && contains(text, p) && (!best || p.length > best.pattern.trim().length)) best = m;
   }
   return best;
 }
