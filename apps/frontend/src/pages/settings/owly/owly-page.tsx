@@ -270,20 +270,22 @@ export default function OwlySettingsPage() {
                   </div>
                 </div>
                 {n.counted ? (
-                  <span className="text-muted-foreground w-44 shrink-0 text-right text-xs">{n.counted}</span>
+                  <span className="text-muted-foreground w-32 shrink-0 text-right text-xs">{n.counted}</span>
                 ) : busy === n.name ? (
-                  <span className="flex w-44 shrink-0 justify-end"><Icons.Spinner className="text-muted-foreground size-4 animate-spin" /></span>
+                  <span className="flex w-32 shrink-0 justify-end"><Icons.Spinner className="text-muted-foreground size-4 animate-spin" /></span>
                 ) : (
                   <Select value={valueFor(n)} disabled={!!busy}
                     onValueChange={(v) => run(n.name, () => api.friend(n.name, v === NOT_FRIEND ? null : v))}>
-                    <SelectTrigger className="h-9 w-44 shrink-0 text-xs" aria-label={`Is ${nameCase(n.name)} a friend`}>
+                    <SelectTrigger className="h-9 w-32 shrink-0 text-xs" aria-label={`Is ${nameCase(n.name)} a friend`}>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={NOT_FRIEND}>Not a friend</SelectItem>
-                      <SelectItem value={FRIEND_NOT_IN_OWLY}>Friend, not in Owly</SelectItem>
+                    {/* A set height that scrolls: the shared list's own limit is written the Tailwind 3 way
+                        (max-h-[--var]), which Tailwind 4 drops, so a long list ran off the screen. */}
+                    <SelectContent className="max-h-[min(18rem,var(--radix-select-content-available-height))]">
+                      <SelectItem className="text-xs" value={NOT_FRIEND}>Not a friend</SelectItem>
+                      <SelectItem className="text-xs" value={FRIEND_NOT_IN_OWLY}>Other friend</SelectItem>
                       {status!.people.map((p) => (
-                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                        <SelectItem className="text-xs" key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
