@@ -194,7 +194,7 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
             className={`bg-muted hover:bg-muted/70 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border transition-colors ${dragging ? "ring-primary ring-2" : ""}`}
             aria-label="Choose a logo"
           >
-            {shown ? <img src={shown} alt="" className="h-full w-full object-contain" /> : <Icons.Store className="text-muted-foreground h-6 w-6" />}
+            {shown ? <img src={shown} alt="" className="h-full w-full object-cover" /> : <Icons.Store className="text-muted-foreground h-6 w-6" />}
           </button>
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap gap-2">
@@ -210,7 +210,7 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
               ) : null}
             </div>
             <p className="text-muted-foreground text-xs">
-              Or paste a copied picture with Ctrl+V (Cmd+V on a Mac), or drop one on the circle. PNG, JPG or WebP, up to 5 MB, made 128 by 128 when saved.
+              Or paste a copied picture with Ctrl+V (Cmd+V on a Mac), or drop one on the circle. PNG, JPG or WebP, up to 5 MB. It fills the circle; the edges may be cut off.
             </p>
           </div>
           <input
@@ -258,7 +258,7 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
             <div className="max-h-56 divide-y overflow-y-auto border-t">
               {(matches.data?.items ?? []).map((x) => (
                 <div key={x.id} className="flex items-center gap-3 px-3 py-2">
-                  {shown ? <img src={shown} alt="" className="bg-muted h-6 w-6 shrink-0 rounded-full border object-contain" /> : null}
+                  {shown ? <img src={shown} alt="" className="bg-muted h-6 w-6 shrink-0 rounded-full border object-cover" /> : null}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm">{x.notes}</span>
                     <span className="text-muted-foreground block truncate text-xs">

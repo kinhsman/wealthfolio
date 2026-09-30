@@ -8,7 +8,7 @@ export function MerchantLogo({ url, name, className }: { url: string; name: stri
       alt=""
       title={name}
       loading="lazy"
-      className={cn("bg-muted h-5 w-5 shrink-0 rounded-full border object-contain", className)}
+      className={cn("bg-muted h-5 w-5 shrink-0 rounded-full border object-cover", className)}
     />
   );
 }
