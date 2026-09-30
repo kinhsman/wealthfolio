@@ -19,7 +19,7 @@ interface BankAccount {
   txns: number; firstDate: string | null;
 }
 interface BankItem {
-  id: string; institution: { name: string }; env: string; error: string | null; needsLogin: boolean;
+  id: string; institution: { name: string; logoUrl: string | null }; env: string; error: string | null; needsLogin: boolean;
   historical: boolean; accounts: BankAccount[];
 }
 interface BanksStatus {
@@ -229,10 +229,17 @@ export default function BanksSettingsPage() {
           {items.map((item) => (
             <div key={item.id} className="bg-card rounded-xl border">
               <div className="flex items-center justify-between gap-3 px-4 py-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold">{item.institution.name}</div>
-                  <div className="text-muted-foreground truncate text-xs">
-                    {item.env === "sandbox" ? "Plaid's test bank" : item.historical ? "History loaded" : "Loading history from the bank"}
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="bg-muted flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+                    {item.institution.logoUrl
+                      ? <img src={item.institution.logoUrl} alt="" className="size-7 object-contain" />
+                      : <Icons.Building className="text-primary size-5" />}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold">{item.institution.name}</div>
+                    <div className="text-muted-foreground truncate text-xs">
+                      {item.env === "sandbox" ? "Plaid's test bank" : item.historical ? "History loaded" : "Loading history from the bank"}
+                    </div>
                   </div>
                 </div>
                 {item.needsLogin ? (

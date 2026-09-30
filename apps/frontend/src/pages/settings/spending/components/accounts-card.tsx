@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useAccounts } from "@/hooks/use-accounts";
 import { useNameComparator } from "@/hooks/use-name-comparator";
 import type { Account } from "@/lib/types";
+import { accountLogoUrl } from "@/lib/account-logo";
 import {
   Card,
   CardContent,
@@ -94,6 +95,7 @@ export function AccountsCard() {
                 ? t("settings:spending.accounts.type_credit_card")
                 : t("settings:spending.accounts.type_cash");
               const TypeIcon = isCredit ? Icons.CreditCard : Icons.Wallet;
+              const logoUrl = accountLogoUrl(account); // money-hub patch: the bank's logo
               return (
                 <div
                   key={account.id}
@@ -112,7 +114,11 @@ export function AccountsCard() {
                         : "border-border/60 text-muted-foreground bg-transparent",
                     )}
                   >
-                    <TypeIcon size={18} weight="duotone" />
+                    {logoUrl ? (
+                      <img src={logoUrl} alt="" className="h-5 w-5 rounded-sm object-contain" />
+                    ) : (
+                      <TypeIcon size={18} weight="duotone" />
+                    )}
                   </div>
                   <div className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">

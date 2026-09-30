@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AccountOperations } from "./account-operations";
 import { displayAccountType } from "@/lib/account-display";
+import { accountLogoUrl } from "@/lib/account-logo";
 
 // Map account types to icons and colors for visual distinction
 const accountTypeConfig: Record<AccountType | "RENTAL", { icon: Icon; bgClass: string; iconClass: string }> = {
@@ -63,16 +64,18 @@ export function AccountItem({
     iconClass: "text-muted-foreground",
   };
   const IconComponent = typeConfig.icon;
+  // money-hub patch: a bank account's own logo first (lib/account-logo.ts), then a synced platform's.
+  const logoUrl = accountLogoUrl(account) ?? (isSynced ? platform?.logoUrl : null);
 
   return (
     <div className="flex items-center justify-between p-4">
       <div className="flex items-center gap-3">
         {/* Avatar with platform logo or account type icon */}
         <Avatar className="h-10 w-10 rounded-lg">
-          {isSynced && platform?.logoUrl ? (
+          {logoUrl ? (
             <AvatarImage
-              src={platform.logoUrl}
-              alt={platform.name || t("settings:accounts.platform_alt")}
+              src={logoUrl}
+              alt={platform?.name || account.group || t("settings:accounts.platform_alt")}
               className="bg-white object-contain p-1"
             />
           ) : null}

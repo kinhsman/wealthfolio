@@ -1,5 +1,6 @@
 import { parseLocalDate } from "@/lib/utils";
 import { displayAccountType } from "@/lib/account-display";
+import { accountLogoUrl } from "@/lib/account-logo";
 import { formatZonedDateKey } from "@/features/spending/lib/timezone";
 import { getContributionLimit, getSnapshots, searchActivities } from "@/adapters";
 import { HistoryChart } from "@/components/history-chart";
@@ -903,7 +904,11 @@ const AccountPage = () => {
                                   onSelect={() => handleAccountSwitch(acc)}
                                   className="flex items-center py-1.5"
                                 >
-                                  <IconComponent className="mr-2 h-4 w-4" />
+                                  {accountLogoUrl(acc) ? (
+                                    <img src={accountLogoUrl(acc)!} alt="" className="mr-2 h-4 w-4 rounded-sm object-contain" />
+                                  ) : (
+                                    <IconComponent className="mr-2 h-4 w-4" />
+                                  )}
                                   <span>
                                     {acc.name} ({acc.currency})
                                   </span>
@@ -969,7 +974,11 @@ const AccountPage = () => {
                                     )}
                                   >
                                     <div className="bg-primary/10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
-                                      <IconComponent className="text-primary h-5 w-5" />
+                                      {accountLogoUrl(acc) ? (
+                                        <img src={accountLogoUrl(acc)!} alt="" className="h-6 w-6 rounded-sm object-contain" />
+                                      ) : (
+                                        <IconComponent className="text-primary h-5 w-5" />
+                                      )}
                                     </div>
                                     <div className="min-w-0 flex-1">
                                       <div className="text-foreground truncate font-medium">
