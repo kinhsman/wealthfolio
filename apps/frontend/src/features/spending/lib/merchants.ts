@@ -7,6 +7,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { accountLogoUrl } from "@/lib/account-logo";
 import type { Account } from "@/lib/types";
 
+import { isCreditCardAccountType } from "./constants";
+
 export interface Merchant {
   id: string;
   name: string;
@@ -17,17 +19,31 @@ export interface Merchant {
   logoUrl: string;
   updatedAt?: string;
   /** "owly": an Owly friend's photo on their Zelle transactions (read only; changed in Owly).
-   *  "bank": the logo of the bank holding an ATM transaction's account (read only). */
+   *  "bank": the logo of the bank holding the account, on ATM cash and card payments (read only). */
   source?: "owly" | "bank";
 }
 
-type AccountLike = Pick<Account, "id" | "name" | "group" | "meta">;
+type AccountLike = Pick<Account, "id" | "name" | "group" | "meta"> & { accountType?: string };
 
-/** ATM cash shows the bank that holds the account (owner, 09-30: "for ATM keyword use the bank
- *  icon linked with the transaction"): that bank's logo, ahead of any merchant. Bank accounts
- *  only (meta.source "plaid"), so Owly's "Owed to me" keeps its usual look. */
-export function bankFor(text: string | null | undefined, account?: AccountLike | null): Merchant | null {
-  if (!text || !account || !contains(text.toUpperCase(), "ATM")) return null;
+/** The bank that holds the account shows, ahead of any merchant, on ATM cash (owner, 09-30: "for
+ *  ATM keyword use the bank icon linked with the transaction") and on a payment arriving on a
+ *  credit card (09-30: "make credit card payments showing their bank logo as merchant"; the
+ *  import makes those TRANSFER_IN, refunds are CREDIT). Bank accounts only (meta.source "plaid"),
+ *  so Owly's "Owed to me" keeps its usual look. The paying side's text names the card's bank,
+ *  so the owner's merchants cover it. */
+export function bankFor(
+  text: string | null | undefined,
+  account?: AccountLike | null,
+  activityType?: string | null,
+): Merchant | null {
+  if (!account) return null;
+  const reason =
+    text && contains(text.toUpperCase(), "ATM")
+      ? "ATM"
+      : isCreditCardAccountType(account.accountType) && activityType === "TRANSFER_IN"
+        ? "Card payment"
+        : null;
+  if (!reason) return null;
   let source: unknown;
   try {
     const meta = typeof account.meta === "string" ? JSON.parse(account.meta) : account.meta;
@@ -38,7 +54,7 @@ export function bankFor(text: string | null | undefined, account?: AccountLike |
   const logoUrl = accountLogoUrl(account);
   if (source !== "plaid" || !logoUrl) return null;
   const name = account.group || account.name;
-  return { id: `bank:${account.id}`, name, pattern: "ATM", patterns: ["ATM"], logoUrl, source: "bank" };
+  return { id: `bank:${account.id}`, name, pattern: reason, patterns: [reason], logoUrl, source: "bank" };
 }
 
 const BASE = "/api/money-hub/merchants";
@@ -103,13 +119,14 @@ export function matchLength(text: string | null | undefined, words: string[]): n
 }
 
 /** The merchant with any of its words in the text (any case); the longest matching words win, so
- *  "Costco Gas" beats "Costco". ATM cash on a bank account shows that bank (bankFor) first. */
+ *  "Costco Gas" beats "Costco". ATM cash and card payments show the account's bank (bankFor) first. */
 export function merchantFor(
   notes: string | null | undefined,
   merchants: Merchant[] | undefined,
   account?: AccountLike | null,
+  activityType?: string | null,
 ): Merchant | null {
-  const bank = bankFor(notes, account);
+  const bank = bankFor(notes, account, activityType);
   if (bank) return bank;
   if (!notes || !merchants?.length) return null;
   let best: Merchant | null = null;
@@ -124,10 +141,15 @@ export function merchantFor(
   return best;
 }
 
-/** One transaction's merchant, from the shared list (its account: the bank for ATM cash). */
-export function useMerchantFor(notes: string | null | undefined, account?: AccountLike | null): Merchant | null {
+/** One transaction's merchant, from the shared list (its account and type: the bank for ATM cash
+ *  and card payments). */
+export function useMerchantFor(
+  notes: string | null | undefined,
+  account?: AccountLike | null,
+  activityType?: string | null,
+): Merchant | null {
   const { data } = useMerchants();
-  return merchantFor(notes, data, account);
+  return merchantFor(notes, data, account, activityType);
 }
 
 export interface MerchantDraft {

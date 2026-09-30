@@ -78,7 +78,7 @@ function TransactionCardImpl({
 
   const { t } = useTranslation();
   const a = row.activity;
-  const merchant = useMerchantFor(a.notes, account);
+  const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a));
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,

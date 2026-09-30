@@ -150,7 +150,7 @@ export function RecentActivityCard({
             </div>
             {items.map((a) => {
               const payee = (a.notes ?? "").trim();
-              const merchant = merchantFor(payee, merchants, accountById?.get(a.accountId));
+              const merchant = merchantFor(payee, merchants, accountById?.get(a.accountId), getEffectiveCashActivityType(a));
               const spendingAmount = getActivitySpendingAmount(
                 a,
                 accountTypeById?.get(a.accountId),

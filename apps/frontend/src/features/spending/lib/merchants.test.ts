@@ -31,4 +31,16 @@ describe("merchantFor", () => {
     expect(merchantFor("NGA NGUYEN: ATM CASH", withAtm, owly)?.source).toBeUndefined();     // not a bank account
     expect(merchantFor("ATM WITHDRAWAL", list)).toBeNull();                                 // no account known
   });
+  it("a payment arriving on a credit card shows the card's bank; the paying side is the merchants'", () => {
+    const citiCard = { id: "s", name: "Strata Elite", group: "Citibank", accountType: "CREDIT_CARD", meta: JSON.stringify({ source: "plaid", logoUrl: "https://x/citi.webp" }) };
+    const checking = { id: "c", name: "Chase Checking", group: "Chase", accountType: "CASH", meta: JSON.stringify({ source: "plaid", logoUrl: "https://x/chase.webp" }) };
+    const paid = merchantFor("ONLINE PAYMENT, THANK YOU", list, citiCard, "TRANSFER_IN");
+    expect([paid?.name, paid?.pattern, paid?.logoUrl]).toEqual(["Citibank", "Card payment", "https://x/citi.webp"]);
+    expect(merchantFor("Costco refund", list, citiCard, "CREDIT")?.name).toBe("Costco");                 // a refund is not a payment
+    expect(merchantFor("COSTCO WHSE #339", list, citiCard, "WITHDRAWAL")?.name).toBe("Costco");          // purchases as usual
+    expect(merchantFor("Transfer from savings", list, checking, "TRANSFER_IN")).toBeNull();              // not a card
+    const chase = mk("Chase", "Chase Bank");
+    chase.patterns = ["Chase Bank", "Chase card", "Chase credit"];
+    expect(merchantFor("Payment to Chase card ending in 5257 09/28", [chase], checking, "TRANSFER_OUT")?.name).toBe("Chase");
+  });
 });

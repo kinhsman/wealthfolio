@@ -33,8 +33,16 @@ import { MerchantLogo } from "./merchant-logo";
 const MAX_BYTES = 5 * 1024 * 1024;
 
 /** Under a transaction's text in its edit form: its merchant with Change, or Add a logo. */
-export function MerchantShortcut({ notes, account }: { notes?: string | null; account?: Account | null }) {
-  const merchant = useMerchantFor(notes, account);
+export function MerchantShortcut({
+  notes,
+  account,
+  activityType,
+}: {
+  notes?: string | null;
+  account?: Account | null;
+  activityType?: string | null;
+}) {
+  const merchant = useMerchantFor(notes, account, activityType);
   const [draft, setDraft] = useState<MerchantDraft | null>(null);
   const words = rulePatternFrom(notes);
   if (!merchant && !words) return null;
@@ -47,7 +55,7 @@ export function MerchantShortcut({ notes, account }: { notes?: string | null; ac
           {merchant.source === "owly" ? (
             <span>· photo from Owly</span>
           ) : merchant.source === "bank" ? (
-            <span>· ATM, your bank&rsquo;s logo</span>
+            <span>· {merchant.pattern}, your bank&rsquo;s logo</span>
           ) : (
             <button type="button" className="text-foreground underline-offset-4 hover:underline" onClick={() => setDraft({ merchant })}>
               Change
