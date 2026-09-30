@@ -3,6 +3,7 @@
 // from a transaction's edit form, rendered inside whatever opened it (a window opened beside the
 // form's own would fight it for focus and close it).
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
@@ -16,7 +17,12 @@ import {
   Icons,
   Input,
   Label,
+  PrivacyAmount,
 } from "@wealthfolio/ui";
+
+import { useAccounts } from "@/hooks/use-accounts";
+
+import { searchCashActivities } from "../adapters/cash-activities";
 
 import { merchantsApi, useMerchantFor, useSetMerchants, type MerchantDraft } from "../lib/merchants";
 import { rulePatternFrom } from "../lib/rule-offer";
@@ -110,6 +116,26 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
     }
   };
   const [dragging, setDragging] = useState(false);
+
+  // No scan and no update step: transactions are matched each time they show. The preview only
+  // shows what the words catch now (owner, 09-30: "how do we scan and preview and update?").
+  const [debounced, setDebounced] = useState(pattern.trim());
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(pattern.trim()), 400);
+    return () => clearTimeout(t);
+  }, [pattern]);
+  const matches = useQuery({
+    queryKey: ["money-hub", "merchant-matches", debounced],
+    queryFn: () => searchCashActivities({ search: debounced, status: "all", sortBy: "date", sortDir: "desc", offset: 0, limit: 50 }),
+    enabled: debounced.length >= 2,
+  });
+  const [showMatches, setShowMatches] = useState(false);
+  const { accounts } = useAccounts({ filterActive: false });
+  const accountName = useMemo(() => new Map((accounts ?? []).map((a) => [a.id, a.name])), [accounts]);
+  const matchCount = matches.data?.totalCount ?? 0;
+  const settled = debounced.length >= 2 && debounced === pattern.trim() && !matches.isFetching;
+  const day = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
   const ready = name.trim().length > 0 && pattern.trim().length >= 2 && (!!file || !!editing);
 
@@ -208,6 +234,47 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
             <Label htmlFor="merchant-words">Words to look for</Label>
             <Input id="merchant-words" value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder="COSTCO" autoComplete="off" />
           </div>
+        </div>
+
+        <div className="rounded-lg border">
+          <div className="flex items-center justify-between gap-3 px-3 py-2">
+            <span className="text-muted-foreground flex items-center gap-2 text-xs">
+              {matches.isFetching ? <Icons.Spinner className="h-3.5 w-3.5 animate-spin" /> : null}
+              {pattern.trim().length < 2
+                ? "Type the words to look for."
+                : !settled
+                  ? "Looking for transactions with these words"
+                  : matchCount === 0
+                    ? "No transaction has these words yet. New ones will show the logo."
+                    : `${matchCount} transaction${matchCount === 1 ? "" : "s"} will show this logo, and new ones as they come in.`}
+            </span>
+            {settled && matchCount > 0 ? (
+              <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 text-xs" onClick={() => setShowMatches((v) => !v)}>
+                {showMatches ? "Hide" : `Preview ${matchCount} ${matchCount === 1 ? "match" : "matches"}`}
+              </Button>
+            ) : null}
+          </div>
+          {showMatches && settled && matchCount > 0 ? (
+            <div className="max-h-56 divide-y overflow-y-auto border-t">
+              {(matches.data?.items ?? []).map((x) => (
+                <div key={x.id} className="flex items-center gap-3 px-3 py-2">
+                  {shown ? <img src={shown} alt="" className="bg-muted h-6 w-6 shrink-0 rounded-full border object-contain" /> : null}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm">{x.notes}</span>
+                    <span className="text-muted-foreground block truncate text-xs">
+                      {[day(x.activityDate), accountName.get(x.accountId)].filter(Boolean).join(" · ")}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm tabular-nums">
+                    <PrivacyAmount value={Math.abs(Number(x.amount ?? 0))} currency={x.currency || "USD"} />
+                  </span>
+                </div>
+              ))}
+              {matchCount > (matches.data?.items.length ?? 0) ? (
+                <p className="text-muted-foreground px-3 py-2 text-xs">The latest {matches.data?.items.length} shown.</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         {err ? <p className="text-destructive text-sm">{err}</p> : null}

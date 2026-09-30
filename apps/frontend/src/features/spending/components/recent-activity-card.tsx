@@ -16,6 +16,8 @@ import {
   isCashActivityIncome,
 } from "../lib/constants";
 import { CategoryBadge, ReviewPill, type CategoryMetaMap } from "./category-chips";
+import { merchantFor, useMerchants } from "../lib/merchants";
+import { MerchantLogo } from "./merchant-logo";
 
 const SPENDING_TAXONOMY = "spending_categories";
 
@@ -32,6 +34,7 @@ export function RecentActivityCard({
 }) {
   const formatting = useDateFormatting();
   const { t } = useTranslation();
+  const { data: merchants } = useMerchants();
   const recent = useMemo(() => {
     return activities
       .slice()
@@ -144,6 +147,7 @@ export function RecentActivityCard({
             </div>
             {items.map((a) => {
               const payee = (a.notes ?? "").trim();
+              const merchant = merchantFor(payee, merchants);
               const spendingAmount = getActivitySpendingAmount(
                 a,
                 accountTypeById?.get(a.accountId),
@@ -172,6 +176,8 @@ export function RecentActivityCard({
                   }
                   className="hover:bg-muted/40 flex items-center gap-2.5 rounded-md py-1.5 transition-colors"
                 >
+                  {/* money-hub patch: the owner's merchant logo (lib/merchants.ts). */}
+                  {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} className="h-6 w-6" /> : null}
                   <div className="min-w-0 flex-1">
                     <div className="text-foreground/90 truncate text-xs font-medium">
                       {payee || (
