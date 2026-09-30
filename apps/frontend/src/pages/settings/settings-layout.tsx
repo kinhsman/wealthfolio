@@ -130,6 +130,13 @@ export default function SettingsLayout() {
             subtitle: "Bank and credit card accounts, through Plaid",
             icon: <Icons.Building className="size-5" />,
           },
+          // money-hub patch: what friends owe (Owly), and friends' Zelle out of spending.
+          {
+            title: "Owly",
+            href: "owly",
+            subtitle: "What friends owe you, and friends' Zelle",
+            icon: <Icons.HandCoins className="size-5" />,
+          },
         ],
       },
       {
