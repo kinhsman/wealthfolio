@@ -2,7 +2,7 @@
 // The service shrinks the logo to 128 by 128 on save. Opened from Settings, Spending, Merchants and
 // from a transaction's edit form, rendered inside whatever opened it (a window opened beside the
 // form's own would fight it for focus and close it).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react";
 import { toast } from "sonner";
 
 import {
@@ -72,13 +72,44 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
   }, [chosen]);
   const shown = chosen ?? editing?.logoUrl ?? null;
 
-  const pick = (f: File | undefined) => {
+  const pick = (f: File | null | undefined) => {
     setErr(null);
     if (!f) return;
     if (!f.type.startsWith("image/")) return setErr("That file is not a picture. Use a PNG, JPG or WebP.");
     if (f.size > MAX_BYTES) return setErr("That picture is over 5 MB. Choose a smaller one.");
     setFile(f);
   };
+
+  // A copied picture can be pasted anywhere in the window (owner, 09-30: "enable pasting for image
+  // upload"); pasted text still goes into the fields as usual.
+  const imageFrom = (data: DataTransfer | null): File | null => {
+    const file =
+      Array.from(data?.files ?? []).find((f) => f.type.startsWith("image/")) ??
+      Array.from(data?.items ?? []).find((i) => i.kind === "file" && i.type.startsWith("image/"))?.getAsFile() ??
+      null;
+    return file ? new File([file], file.name || `pasted.${file.type.split("/")[1] || "png"}`, { type: file.type }) : null;
+  };
+  const onPaste = (e: ClipboardEvent) => {
+    const f = imageFrom(e.clipboardData);
+    if (!f) return;
+    e.preventDefault();
+    pick(f);
+  };
+  const canReadClipboard = typeof navigator !== "undefined" && !!navigator.clipboard?.read;
+  const pasteButton = async () => {
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((t) => t.startsWith("image/"));
+        if (!type) continue;
+        const blob = await item.getType(type);
+        return pick(new File([blob], `pasted.${type.split("/")[1] || "png"}`, { type }));
+      }
+      setErr("There is no picture on the clipboard. Copy a logo first.");
+    } catch {
+      setErr("The browser did not let the app read the clipboard. Press Ctrl+V (Cmd+V on a Mac) instead.");
+    }
+  };
+  const [dragging, setDragging] = useState(false);
 
   const ready = name.trim().length > 0 && pattern.trim().length >= 2 && (!!file || !!editing);
 
@@ -114,7 +145,7 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
 
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[480px]">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[480px]" onPaste={onPaste}>
         <DialogHeader>
           <DialogTitle>{editing ? "Change merchant" : "Add a merchant"}</DialogTitle>
           <DialogDescription>Transactions whose text contains these words show this logo, the ones you have and new ones.</DialogDescription>
@@ -124,17 +155,37 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
           <button
             type="button"
             onClick={() => input.current?.click()}
-            className="bg-muted hover:bg-muted/70 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border transition-colors"
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragging(false);
+              pick(imageFrom(e.dataTransfer));
+            }}
+            className={`bg-muted hover:bg-muted/70 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border transition-colors ${dragging ? "ring-primary ring-2" : ""}`}
             aria-label="Choose a logo"
           >
             {shown ? <img src={shown} alt="" className="h-full w-full object-contain" /> : <Icons.Store className="text-muted-foreground h-6 w-6" />}
           </button>
           <div className="min-w-0 space-y-1">
-            <Button type="button" variant="outline" size="sm" onClick={() => input.current?.click()} disabled={busy}>
-              <Icons.Upload className="mr-1.5 h-3.5 w-3.5" />
-              {shown ? "Choose another logo" : "Choose a logo"}
-            </Button>
-            <p className="text-muted-foreground text-xs">PNG, JPG or WebP, up to 5 MB. It is made 128 by 128 when saved.</p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => input.current?.click()} disabled={busy}>
+                <Icons.Upload className="mr-1.5 h-3.5 w-3.5" />
+                {shown ? "Choose another" : "Choose a logo"}
+              </Button>
+              {canReadClipboard ? (
+                <Button type="button" variant="outline" size="sm" onClick={pasteButton} disabled={busy}>
+                  <Icons.Copy className="mr-1.5 h-3.5 w-3.5" />
+                  Paste
+                </Button>
+              ) : null}
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Or paste a copied picture with Ctrl+V (Cmd+V on a Mac), or drop one on the circle. PNG, JPG or WebP, up to 5 MB, made 128 by 128 when saved.
+            </p>
           </div>
           <input
             ref={input}
