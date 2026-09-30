@@ -54,6 +54,7 @@ import SpendingSettingsPage from "./pages/settings/spending/spending-settings-pa
 import SpendingSettingsCategoriesPage from "./pages/settings/spending/categories/spending-categories-page";
 import SpendingSettingsEventsPage from "./pages/settings/spending/events/spending-events-page";
 import SpendingSettingsRulesPage from "./pages/settings/spending/rules/spending-rules-page";
+import SpendingSettingsMerchantsPage from "./pages/settings/spending/merchants/spending-merchants-page";
 import SpendingSetupPage from "./pages/settings/spending/setup/spending-setup-page";
 import GoalsDashboardPage from "@/features/goals/pages/goals-dashboard-page";
 import GoalNewPage from "@/features/goals/pages/goal-new-page";
@@ -148,6 +149,7 @@ export function AppRoutes() {
             <Route path="spending/categories" element={<SpendingSettingsCategoriesPage />} />
             <Route path="spending/events" element={<SpendingSettingsEventsPage />} />
             <Route path="spending/rules" element={<SpendingSettingsRulesPage />} />
+            <Route path="spending/merchants" element={<SpendingSettingsMerchantsPage />} />
             <Route path="spending/setup" element={<SpendingSetupPage />} />
             <Route path="market-data" element={<MarketDataSettingsPage />} />
             <Route path="market-data/import" element={<MarketDataImportPage />} />

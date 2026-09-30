@@ -17,6 +17,8 @@ import { ActionPalette } from "@/components/action-palette";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
 import { SelectionCheckbox } from "./selection-checkbox";
 import { QuickEventPopover } from "./quick-event-popover";
+import { useMerchantFor } from "../lib/merchants";
+import { MerchantLogo } from "./merchant-logo";
 
 interface TransactionCardProps {
   row: TransactionRowVM;
@@ -76,6 +78,7 @@ function TransactionCardImpl({
 
   const { t } = useTranslation();
   const a = row.activity;
+  const merchant = useMerchantFor(a.notes);
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,
@@ -121,6 +124,8 @@ function TransactionCardImpl({
             className="shrink-0"
           />
         )}
+        {/* money-hub patch: the owner's merchant logo (lib/merchants.ts). */}
+        {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} className="h-9 w-9" /> : null}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {/* See the table row: the amber stripe is decorative, so the state

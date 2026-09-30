@@ -28,6 +28,8 @@ import {
 } from "../lib/transactions-helpers";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
 import { QuickEventPopover } from "./quick-event-popover";
+import { useMerchantFor } from "../lib/merchants";
+import { MerchantLogo } from "./merchant-logo";
 
 interface TransactionRowProps {
   row: TransactionRowVM;
@@ -85,6 +87,7 @@ function TransactionRowImpl({
 
   const { t } = useTranslation();
   const a = row.activity;
+  const merchant = useMerchantFor(a.notes);
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,
@@ -141,6 +144,8 @@ function TransactionRowImpl({
               <span className="sr-only">{t("spending:transactions.review")}</span>
             </span>
           )}
+          {/* money-hub patch: the owner's merchant logo (lib/merchants.ts). */}
+          {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} /> : null}
           {a.notes != null ? (
             <TruncatedText text={a.notes} className="text-sm" />
           ) : (

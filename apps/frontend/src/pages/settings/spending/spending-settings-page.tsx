@@ -11,6 +11,8 @@ import { CategoriesOverviewCard } from "./components/categories-overview-card";
 import { EventTypesOverviewCard } from "./components/event-types-overview-card";
 import { ModuleCard } from "./components/module-card";
 import { RulesOverviewCard } from "./components/rules-overview-card";
+// money-hub patch: the owner's merchant logos.
+import { MerchantsOverviewCard } from "./components/merchants-overview-card";
 
 export default function SpendingSettingsPage() {
   const { t } = useTranslation();
@@ -99,6 +101,7 @@ export default function SpendingSettingsPage() {
             meta={t("settings:spending.section_automation_meta")}
           >
             <RulesOverviewCard />
+            <MerchantsOverviewCard />
           </Section>
         </>
       )}

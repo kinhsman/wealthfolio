@@ -1,0 +1,191 @@
+// money-hub patch: add or change a merchant (lib/merchants.ts): logo, name, words to look for.
+// The service shrinks the logo to 128 by 128 on save. Opened from Settings, Spending, Merchants and
+// from a transaction's edit form, rendered inside whatever opened it (a window opened beside the
+// form's own would fight it for focus and close it).
+import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Icons,
+  Input,
+  Label,
+} from "@wealthfolio/ui";
+
+import { merchantsApi, useMerchantFor, useSetMerchants, type MerchantDraft } from "../lib/merchants";
+import { rulePatternFrom } from "../lib/rule-offer";
+import { MerchantLogo } from "./merchant-logo";
+
+const MAX_BYTES = 5 * 1024 * 1024;
+
+/** Under a transaction's text in its edit form: its merchant with Change, or Add a logo. */
+export function MerchantShortcut({ notes }: { notes?: string | null }) {
+  const merchant = useMerchantFor(notes);
+  const [draft, setDraft] = useState<MerchantDraft | null>(null);
+  const words = rulePatternFrom(notes);
+  if (!merchant && !words) return null;
+  return (
+    <>
+      {merchant ? (
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
+          <MerchantLogo url={merchant.logoUrl} name={merchant.name} />
+          <span className="truncate">{merchant.name}</span>
+          <button type="button" className="text-foreground underline-offset-4 hover:underline" onClick={() => setDraft({ merchant })}>
+            Change
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-xs"
+          onClick={() => setDraft({ name: words!, pattern: words! })}
+        >
+          <Icons.Store className="h-3.5 w-3.5" />
+          Add a logo for &ldquo;{words}&rdquo;
+        </button>
+      )}
+      {draft ? <MerchantDialog draft={draft} onClose={() => setDraft(null)} /> : null}
+    </>
+  );
+}
+
+export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClose: () => void }) {
+  const setMerchants = useSetMerchants();
+  const editing = draft.merchant;
+  const [name, setName] = useState(editing?.name ?? draft.name ?? "");
+  const [pattern, setPattern] = useState(editing?.pattern ?? draft.pattern ?? "");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+
+  const chosen = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+  useEffect(() => () => {
+    if (chosen) URL.revokeObjectURL(chosen);
+  }, [chosen]);
+  const shown = chosen ?? editing?.logoUrl ?? null;
+
+  const pick = (f: File | undefined) => {
+    setErr(null);
+    if (!f) return;
+    if (!f.type.startsWith("image/")) return setErr("That file is not a picture. Use a PNG, JPG or WebP.");
+    if (f.size > MAX_BYTES) return setErr("That picture is over 5 MB. Choose a smaller one.");
+    setFile(f);
+  };
+
+  const ready = name.trim().length > 0 && pattern.trim().length >= 2 && (!!file || !!editing);
+
+  const save = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const fields = { name: name.trim(), pattern: pattern.trim() };
+      const list = editing
+        ? await merchantsApi.update(editing.id, { ...fields, logo: file })
+        : await merchantsApi.create({ ...fields, logo: file! });
+      setMerchants(list);
+      toast.success(editing ? `${fields.name} saved.` : `${fields.name} added. Its logo shows on matching transactions.`);
+      onClose();
+    } catch (e) {
+      setErr((e as Error)?.message ?? String(e));
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!editing) return;
+    setBusy(true);
+    try {
+      setMerchants(await merchantsApi.remove(editing.id));
+      toast.success(`${editing.name} removed.`);
+      onClose();
+    } catch (e) {
+      setErr((e as Error)?.message ?? String(e));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle>{editing ? "Change merchant" : "Add a merchant"}</DialogTitle>
+          <DialogDescription>Transactions whose text contains these words show this logo, the ones you have and new ones.</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => input.current?.click()}
+            className="bg-muted hover:bg-muted/70 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border transition-colors"
+            aria-label="Choose a logo"
+          >
+            {shown ? <img src={shown} alt="" className="h-full w-full object-contain" /> : <Icons.Store className="text-muted-foreground h-6 w-6" />}
+          </button>
+          <div className="min-w-0 space-y-1">
+            <Button type="button" variant="outline" size="sm" onClick={() => input.current?.click()} disabled={busy}>
+              <Icons.Upload className="mr-1.5 h-3.5 w-3.5" />
+              {shown ? "Choose another logo" : "Choose a logo"}
+            </Button>
+            <p className="text-muted-foreground text-xs">PNG, JPG or WebP, up to 5 MB. It is made 128 by 128 when saved.</p>
+          </div>
+          <input
+            ref={input}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+            className="hidden"
+            onChange={(e) => {
+              pick(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="merchant-name">Name</Label>
+            <Input id="merchant-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Costco" autoComplete="off" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="merchant-words">Words to look for</Label>
+            <Input id="merchant-words" value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder="COSTCO" autoComplete="off" />
+          </div>
+        </div>
+
+        {err ? <p className="text-destructive text-sm">{err}</p> : null}
+
+        <DialogFooter className="gap-2 sm:justify-between">
+          {editing ? (
+            confirmDelete ? (
+              <Button type="button" variant="destructive" onClick={remove} disabled={busy}>
+                Yes, remove it
+              </Button>
+            ) : (
+              <Button type="button" variant="ghost" className="text-destructive" onClick={() => setConfirmDelete(true)} disabled={busy}>
+                Remove
+              </Button>
+            )
+          ) : (
+            <span />
+          )}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={save} disabled={!ready || busy}>
+              {busy ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {editing ? "Save" : "Add merchant"}
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

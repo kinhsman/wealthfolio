@@ -15,6 +15,7 @@ import { QueryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { invalidateSpendingCaches } from "../lib/invalidation";
 import { offerRule } from "../lib/rule-offer";
+import { MerchantShortcut } from "./merchant-dialog";
 import type { Account, Activity, ActivityCreate, ActivityUpdate } from "@/lib/types";
 
 import {
@@ -845,6 +846,8 @@ export function CashActivityForm({
                               {...field}
                             />
                           </FormControl>
+                          {/* money-hub patch: this transaction's merchant logo, or add one. */}
+                          {isEditing ? <MerchantShortcut notes={field.value} /> : null}
                           <FormMessage />
                         </FormItem>
                       )}
