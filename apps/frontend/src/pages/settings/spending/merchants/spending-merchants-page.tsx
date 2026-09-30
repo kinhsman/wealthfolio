@@ -13,7 +13,10 @@ import { SettingsHeader } from "../../settings-header";
 import { SpendingBackLink } from "../components/spending-back-link";
 
 export default function SpendingMerchantsPage() {
-  const { data: merchants = [], isLoading, isError, error } = useMerchants();
+  const { data: all = [], isLoading, isError, error } = useMerchants();
+  // Owly friends' photos come along for their Zelle transactions; they are changed in Owly, not here.
+  const merchants = useMemo(() => all.filter((m) => !m.source), [all]);
+  const friends = all.length - merchants.length;
   const [draft, setDraft] = useState<MerchantDraft | null>(null);
   const [search, setSearch] = useState("");
   const shown = useMemo(() => {
@@ -79,6 +82,11 @@ export default function SpendingMerchantsPage() {
             {shown.length === 0 ? <p className="text-muted-foreground px-4 py-6 text-sm">No merchant matches &ldquo;{search}&rdquo;.</p> : null}
           </div>
         )}
+        {friends > 0 ? (
+          <p className="text-muted-foreground text-xs">
+            {friends} friend{friends === 1 ? "" : "s"} from Owly show their photo on their Zelle transactions too. Change a photo in Owly.
+          </p>
+        ) : null}
       </div>
       {draft ? <MerchantDialog key={draft.merchant?.id ?? "new"} draft={draft} onClose={() => setDraft(null)} /> : null}
     </>

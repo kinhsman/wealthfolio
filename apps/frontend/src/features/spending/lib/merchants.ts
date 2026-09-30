@@ -10,6 +10,8 @@ export interface Merchant {
   pattern: string;
   logoUrl: string;
   updatedAt?: string;
+  /** "owly": an Owly friend's photo on their Zelle transactions (read only; changed in Owly). */
+  source?: "owly";
 }
 
 const BASE = "/api/money-hub/merchants";

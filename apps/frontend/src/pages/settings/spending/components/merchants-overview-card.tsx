@@ -7,7 +7,8 @@ import { MerchantLogo } from "@/features/spending/components/merchant-logo";
 import { useMerchants } from "@/features/spending/lib/merchants";
 
 export function MerchantsOverviewCard() {
-  const { data: merchants = [], isLoading } = useMerchants();
+  const { data: all = [], isLoading } = useMerchants();
+  const merchants = all.filter((m) => !m.source);
   if (isLoading) return <div className="bg-muted/40 h-28 w-full animate-pulse rounded-lg" />;
   return (
     <Link

@@ -42,9 +42,13 @@ export function MerchantShortcut({ notes }: { notes?: string | null }) {
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
           <MerchantLogo url={merchant.logoUrl} name={merchant.name} />
           <span className="truncate">{merchant.name}</span>
-          <button type="button" className="text-foreground underline-offset-4 hover:underline" onClick={() => setDraft({ merchant })}>
-            Change
-          </button>
+          {merchant.source === "owly" ? (
+            <span>· photo from Owly</span>
+          ) : (
+            <button type="button" className="text-foreground underline-offset-4 hover:underline" onClick={() => setDraft({ merchant })}>
+              Change
+            </button>
+          )}
         </div>
       ) : (
         <button
