@@ -50,6 +50,7 @@ import { ActivityType } from "@/lib/constants";
 import type { AmountRange } from "./amount-range-filter";
 import { DeleteTransactionsDialog, type DeletePreview } from "./delete-transactions-dialog";
 import { TransactionCard } from "./transaction-card";
+import { PendingTransactions, usePendingTransactions } from "./pending-transactions";
 import { SelectionToolbar } from "./selection-toolbar";
 import { TransactionDayHeader, TransactionDayHeading } from "./transaction-day-header";
 import { TransactionRow } from "./transaction-row";
@@ -524,6 +525,43 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       spendingAccounts.forEach((a) => m.set(a.id, a));
       return m;
     }, [spendingAccounts]);
+
+    // money-hub patch: bank entries not posted yet, read-only above the list. Shown unless a
+    // filter they cannot answer is on (category, type, status, event, amount, dates).
+    const { data: pendingAll = [] } = usePendingTransactions();
+    const pendingShown = useMemo(() => {
+      if (
+        statusFilter !== "all" ||
+        selectedTypes.size > 0 ||
+        selectedCategories.size > 0 ||
+        selectedSubcategories.size > 0 ||
+        selectedEvents.size > 0 ||
+        amountRange.min != null ||
+        amountRange.max != null ||
+        !!dateRange?.from ||
+        !!dateRange?.to
+      )
+        return [];
+      const q = debouncedSearch.toLowerCase();
+      return pendingAll.filter(
+        (p) =>
+          accountById.has(p.accountId) &&
+          (selectedAccounts.size === 0 || selectedAccounts.has(p.accountId)) &&
+          (!q || `${p.notes} ${p.bankText}`.toLowerCase().includes(q)),
+      );
+    }, [
+      pendingAll,
+      accountById,
+      statusFilter,
+      selectedTypes,
+      selectedCategories,
+      selectedSubcategories,
+      selectedEvents,
+      amountRange,
+      dateRange,
+      selectedAccounts,
+      debouncedSearch,
+    ]);
 
     const eventsById = useMemo(() => new Map(events.map((e) => [e.id, e])), [events]);
     const eventTypeById = useMemo(() => new Map(eventTypes.map((t) => [t.id, t])), [eventTypes]);
@@ -1167,6 +1205,15 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
             onTagEvent={handleBulkSetEvent}
             onDelete={handleBulkDelete}
             onClearSelection={clearSelection}
+          />
+        )}
+
+        {!isLoading && (
+          <PendingTransactions
+            items={pendingShown}
+            accountById={accountById}
+            showAccount={showAccount || new Set(pendingShown.map((p) => p.accountId)).size > 1}
+            isMobile={isMobile}
           />
         )}
 
