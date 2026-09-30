@@ -14,6 +14,7 @@ import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { QueryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { invalidateSpendingCaches } from "../lib/invalidation";
+import { offerRule } from "../lib/rule-offer";
 import type { Account, Activity, ActivityCreate, ActivityUpdate } from "@/lib/types";
 
 import {
@@ -412,13 +413,27 @@ export function CashActivityForm({
 
       return saved;
     },
-    onSuccess: () => {
+    onSuccess: (_saved, values) => {
       invalidateSpendingCaches(qc);
       qc.invalidateQueries({ queryKey: [QueryKeys.ACTIVITIES] });
       qc.invalidateQueries({ queryKey: [QueryKeys.ACTIVITY_DATA] });
       toast.success(
         isEditing ? t("spending:cashForm.activityUpdated") : t("spending:cashForm.activityCreated"),
       );
+      // money-hub patch: a category changed by hand offers a rule for transactions like it.
+      const oldCategory =
+        activity?.categoryTaxonomyId && activity?.categoryId
+          ? `${activity.categoryTaxonomyId}:${activity.categoryId}`
+          : "";
+      if (isEditing && values.category && values.category !== oldCategory) {
+        const [taxonomyId, categoryId] = values.category.split(":");
+        void offerRule(qc, {
+          notes: values.notes,
+          taxonomyId,
+          categoryId,
+          categoryName: allCategoriesById.get(categoryId)?.name ?? "that category",
+        });
+      }
       onOpenChange(false);
     },
     onError: (e: unknown) => {

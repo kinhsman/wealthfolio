@@ -87,6 +87,7 @@ import {
 import { useEventTypes, useSpendingEvents } from "../hooks/use-spending-events";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { invalidateSpendingCaches } from "../lib/invalidation";
+import { offerRule } from "../lib/rule-offer";
 import type {
   CashActivitySearchRequest,
   CashActivityStatusFilter,
@@ -754,9 +755,23 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
 
     const handleAssignCategory = useCallback(
       (activityId: string, taxonomyId: string, categoryId: string) => {
-        assignMutation.mutate({ activityId, taxonomyId, categoryId });
+        assignMutation.mutate(
+          { activityId, taxonomyId, categoryId },
+          {
+            // money-hub patch: a category picked by hand offers a rule for transactions like it.
+            onSuccess: () => {
+              const notes = rows.find((r) => r.activity.id === activityId)?.activity.notes;
+              void offerRule(qc, {
+                notes,
+                taxonomyId,
+                categoryId,
+                categoryName: allCategories.get(categoryId)?.name ?? "that category",
+              });
+            },
+          },
+        );
       },
-      [assignMutation],
+      [assignMutation, rows, qc, allCategories],
     );
     const handleClearCategory = useCallback(
       (activityId: string, taxonomyId: string) => {
