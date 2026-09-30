@@ -1,12 +1,15 @@
-// money-hub patch: the Make a rule preview (lib/rule-offer.ts). Shows the rule that would be made,
-// words and category both editable, and the transactions it would re-file, live from the money-hub
-// service; nothing is saved until Make the rule. Mounted once in App.tsx.
+// money-hub patch: the Make a rule window (lib/rule-offer.ts), two steps after the owner's reference
+// (2026-09-30): 1. the rule, words and category editable, with Preview N matches; 2. Preview the
+// updates: the rule in words, every transaction it would re-file with a tick each (Select all), and
+// Create rule. Unticked ones keep their category and later rule runs leave them alone. The matches
+// come live from the money-hub service; nothing is saved before Create rule. Mounted once in App.tsx.
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -26,6 +29,7 @@ import { QueryKeys } from "@/lib/query-keys";
 import { createCategorizationRule } from "../adapters/rules";
 import { invalidateSpendingCaches } from "../lib/invalidation";
 import { ruleOfferStore, type RuleOffer } from "../lib/rule-offer";
+import { CategoryIcon } from "./category-chips";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
 
 interface PreviewItem {
@@ -56,6 +60,8 @@ const day = (ymd: string) => {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(thisYear ? {} : { year: "numeric" }) });
 };
 
+const caps = "text-muted-foreground text-xs font-semibold uppercase tracking-[0.08em]";
+
 export function RuleOfferHost() {
   const offer = useSyncExternalStore(ruleOfferStore.subscribe, ruleOfferStore.get);
   if (!offer) return null;
@@ -64,13 +70,14 @@ export function RuleOfferHost() {
 
 function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => void }) {
   const qc = useQueryClient();
+  const [step, setStep] = useState<"rule" | "review">("rule");
   const [pattern, setPattern] = useState(offer.pattern);
   const [target, setTarget] = useState({ taxonomyId: offer.taxonomyId, categoryId: offer.categoryId });
   const [busy, setBusy] = useState(false);
-  // The matches list opens from the footer's Preview N matches (owner's reference, 09-30).
   const [showMatches, setShowMatches] = useState(false);
+  const [unticked, setUnticked] = useState<Set<string>>(new Set());
 
-  // The preview follows what is typed, a moment after typing stops.
+  // The matches follow what is typed, a moment after typing stops.
   const [debounced, setDebounced] = useState(offer.pattern);
   useEffect(() => {
     const t = setTimeout(() => setDebounced(pattern.trim()), 400);
@@ -81,9 +88,9 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
   const income = useTaxonomy("income_sources");
   const savings = useTaxonomy("savings_categories");
   const categories = useMemo(() => {
-    const map = new Map<string, { name: string; color: string | null }>();
+    const map = new Map<string, { name: string; color: string | null; icon: string | null }>();
     for (const c of [...(spending.data?.categories ?? []), ...(income.data?.categories ?? []), ...(savings.data?.categories ?? [])]) {
-      map.set(c.id, { name: c.name, color: c.color ?? null });
+      map.set(c.id, { name: c.name, color: c.color ?? null, icon: c.icon ?? null });
     }
     return map;
   }, [spending.data?.categories, income.data?.categories, savings.data?.categories]);
@@ -101,10 +108,16 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
       }),
     enabled: debounced.length >= 2,
   });
+  // A different rule means a different list: start again with every match ticked.
+  useEffect(() => setUnticked(new Set()), [debounced, target.categoryId]);
 
   const category = categories.get(target.categoryId);
   const categoryName = category?.name ?? "that category";
   const ready = pattern.trim().length >= 2 && !!target.categoryId;
+  const items = preview.data?.items ?? [];
+  const count = preview.data?.count ?? 0;
+  const ticked = items.filter((it) => !unticked.has(it.id));
+  const settled = ready && !preview.isFetching && debounced === pattern.trim();
 
   const make = async () => {
     setBusy(true);
@@ -120,108 +133,187 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
         isGlobal: true,
       });
       qc.invalidateQueries({ queryKey: [QueryKeys.SPENDING_RULES] });
-      const done = await hub<{ changed: number }>("/apply-rule", { ruleId: rule.id }).catch(() => null);
+      const done = await hub<{ changed: number }>("/apply-rule", { ruleId: rule.id, ids: ticked.map((it) => it.id) }).catch(() => null);
       invalidateSpendingCaches(qc);
       toast.success(
         done == null
-          ? "Rule made. Transactions like it are filed within a minute."
+          ? "Rule created. Transactions like it are filed within a minute."
           : done.changed > 0
-            ? `Rule made. ${done.changed} re-filed as ${categoryName}.`
-            : "Rule made. Nothing else matched it yet.",
+            ? `Rule created. ${done.changed} filed as ${categoryName}.`
+            : "Rule created. New transactions like it will be filed.",
       );
       onClose();
     } catch (e) {
-      toast.error(`The rule was not made: ${(e as Error)?.message ?? String(e)}`);
+      toast.error(`The rule was not created: ${(e as Error)?.message ?? String(e)}`);
       setBusy(false);
     }
   };
 
-  const count = preview.data?.count ?? 0;
+  const catBadge = (
+    <span
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+      style={{ backgroundColor: category?.color ? `${category.color}26` : "var(--muted)", color: category?.color ?? undefined }}
+    >
+      <CategoryIcon icon={category?.icon ?? null} fallback={categoryName} className="h-5 w-5" />
+    </span>
+  );
+
+  const matchesList = (withTicks: boolean) => (
+    <div className="max-h-[45dvh] divide-y overflow-y-auto">
+      {items.map((it) => {
+        const from = it.from ? categories.get(it.from) : undefined;
+        return (
+          <label key={it.id} className={`flex items-center gap-3 px-3 py-2.5 ${withTicks ? "cursor-pointer" : ""}`}>
+            <span className="shrink-0" style={{ color: from?.color ?? undefined }}>
+              <CategoryIcon icon={from?.icon ?? null} fallback={from?.name} className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm">{it.notes}</span>
+              <span className="text-muted-foreground block truncate text-xs">
+                {[day(it.date), accountName.get(it.accountId), from ? `now ${from.name}` : "no category now"].filter(Boolean).join(" · ")}
+              </span>
+            </span>
+            <span className="shrink-0 text-sm tabular-nums">
+              <PrivacyAmount value={Math.abs(it.amount)} currency="USD" />
+            </span>
+            {withTicks ? (
+              <Checkbox
+                checked={!unticked.has(it.id)}
+                onCheckedChange={(v) =>
+                  setUnticked((prev) => {
+                    const next = new Set(prev);
+                    if (v === true) next.delete(it.id);
+                    else next.add(it.id);
+                    return next;
+                  })
+                }
+                aria-label={`Re-file ${it.notes}, ${day(it.date)}`}
+              />
+            ) : null}
+          </label>
+        );
+      })}
+    </div>
+  );
+
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
-      <DialogContent className="sm:max-w-[560px]">
-        <DialogHeader>
-          <DialogTitle>Make a rule</DialogTitle>
-          <DialogDescription>
-            Transactions whose text contains these words get this category, the ones below now and new ones as they come in.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[560px]">
+        {step === "rule" ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Make a rule</DialogTitle>
+              <DialogDescription>Transactions whose text contains these words get this category.</DialogDescription>
+            </DialogHeader>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="rule-offer-words">Words to look for</Label>
-            <Input id="rule-offer-words" value={pattern} onChange={(e) => setPattern(e.target.value)} autoComplete="off" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>File as</Label>
-            <QuickCategorizePopover
-              selectedCategoryId={target.categoryId}
-              onSelect={(taxonomyId, categoryId) => setTarget({ taxonomyId, categoryId })}
-              trigger={
-                <Button type="button" variant="outline" className="w-full justify-start gap-2 font-normal">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: category?.color ?? "var(--muted-foreground)" }} />
-                  <span className="truncate">{categoryName}</span>
-                  <Icons.ChevronDown className="ml-auto h-4 w-4 opacity-50" />
-                </Button>
-              }
-            />
-          </div>
-        </div>
-
-        <div className="rounded-lg border">
-          <div className="text-muted-foreground flex items-center gap-2 border-b px-3 py-2 text-xs">
-            {preview.isFetching ? <Icons.Spinner className="h-3.5 w-3.5 animate-spin" /> : null}
-            {!ready
-              ? "Type the words to look for."
-              : preview.isError
-                ? `The preview could not load: ${(preview.error as Error).message}`
-                : preview.isFetching && !preview.data
-                  ? "Looking for transactions like it"
-                  : count === 0
-                    ? "Nothing else matches yet. New transactions like it will get this category."
-                    : `${count} transaction${count === 1 ? "" : "s"} will be re-filed as ${categoryName}${count > (preview.data?.items.length ?? 0) ? `, the latest ${preview.data?.items.length} shown` : ""}.`}
-          </div>
-          {count > 0 && ready && showMatches ? (
-            <div className="max-h-64 divide-y overflow-y-auto">
-              {preview.data!.items.map((it) => (
-                <div key={it.id} className="flex items-center gap-3 px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm">{it.notes}</div>
-                    <div className="text-muted-foreground truncate text-xs">
-                      {[day(it.date), accountName.get(it.accountId), `${it.from ? categories.get(it.from)?.name ?? "No category" : "No category"} to ${categoryName}`]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </div>
-                  </div>
-                  <span className="shrink-0 text-sm tabular-nums">
-                    <PrivacyAmount value={Math.abs(it.amount)} currency="USD" />
-                  </span>
-                </div>
-              ))}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="rule-offer-words">Words to look for</Label>
+                <Input id="rule-offer-words" value={pattern} onChange={(e) => setPattern(e.target.value)} autoComplete="off" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>File as</Label>
+                <QuickCategorizePopover
+                  selectedCategoryId={target.categoryId}
+                  onSelect={(taxonomyId, categoryId) => setTarget({ taxonomyId, categoryId })}
+                  trigger={
+                    <Button type="button" variant="outline" className="w-full justify-start gap-2 font-normal">
+                      <span style={{ color: category?.color ?? undefined }}>
+                        <CategoryIcon icon={category?.icon ?? null} fallback={categoryName} className="h-4 w-4" />
+                      </span>
+                      <span className="truncate">{categoryName}</span>
+                      <Icons.ChevronDown className="ml-auto h-4 w-4 opacity-50" />
+                    </Button>
+                  }
+                />
+              </div>
             </div>
-          ) : null}
-        </div>
 
-        <DialogFooter className="gap-2 sm:justify-between">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowMatches((v) => !v)}
-              disabled={!ready || count === 0 || busy}
-            >
-              {preview.isFetching && ready ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {showMatches && count > 0 ? "Hide matches" : `Preview ${count} ${count === 1 ? "match" : "matches"}`}
-            </Button>
-            <Button type="button" onClick={make} disabled={!ready || busy}>
-              {busy ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Make the rule
-            </Button>
-          </div>
-        </DialogFooter>
+            <p className="text-muted-foreground flex items-center gap-2 text-xs">
+              {preview.isFetching && ready ? <Icons.Spinner className="h-3.5 w-3.5 animate-spin" /> : null}
+              {!ready
+                ? "Type the words to look for."
+                : preview.isError
+                  ? `The matches could not load: ${(preview.error as Error).message}`
+                  : !settled
+                    ? "Looking for transactions like it"
+                    : count === 0
+                      ? "No other transaction matches yet. New ones like it will get this category."
+                      : `${count} transaction${count === 1 ? "" : "s"} would be re-filed as ${categoryName}.`}
+            </p>
+            {showMatches && settled && count > 0 ? <div className="rounded-lg border">{matchesList(false)}</div> : null}
+
+            <DialogFooter className="gap-2 sm:justify-between">
+              <Button type="button" variant="ghost" onClick={onClose}>
+                Cancel
+              </Button>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row">
+                <Button type="button" variant="outline" onClick={() => setShowMatches((v) => !v)} disabled={!settled || count === 0}>
+                  {showMatches && count > 0 ? "Hide matches" : `Preview ${settled ? count : "…"} ${count === 1 ? "match" : "matches"}`}
+                </Button>
+                <Button type="button" onClick={() => setStep("review")} disabled={!settled || preview.isError}>
+                  Review rule
+                </Button>
+              </div>
+            </DialogFooter>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" size="icon" className="-ml-2 h-8 w-8" onClick={() => setStep("rule")} disabled={busy} aria-label="Back to the rule">
+                  <Icons.ChevronLeft className="h-4 w-4" />
+                </Button>
+                <DialogTitle className={caps}>Preview the updates</DialogTitle>
+              </div>
+              <DialogDescription className="sr-only">The rule and the transactions it will re-file.</DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 rounded-xl border p-4">
+              <div className="bg-muted rounded-lg px-4 py-3 text-sm">If the text contains &lsquo;{pattern.trim()}&rsquo;</div>
+              <div className="flex items-center justify-between gap-3 border-b pb-4">
+                <div className="min-w-0">
+                  <div className="text-muted-foreground text-sm">Category</div>
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <span className="text-muted-foreground" aria-hidden="true">↳</span>
+                    <span className="truncate">{categoryName}</span>
+                  </div>
+                </div>
+                {catBadge}
+              </div>
+              <p className="text-sm">The following transactions and future matches will be filed under this category:</p>
+              <div className="rounded-lg border">
+                <div className="flex items-center justify-between gap-3 border-b px-3 py-2.5">
+                  <span className={caps}>
+                    {count} {count === 1 ? "transaction" : "transactions"} matched
+                  </span>
+                  {items.length > 0 ? (
+                    <label className={`${caps} flex cursor-pointer items-center gap-3`}>
+                      Select all
+                      <Checkbox
+                        checked={unticked.size === 0}
+                        onCheckedChange={(v) => setUnticked(v === true ? new Set() : new Set(items.map((it) => it.id)))}
+                        aria-label="Select all"
+                      />
+                    </label>
+                  ) : null}
+                </div>
+                {items.length > 0 ? (
+                  matchesList(true)
+                ) : (
+                  <p className="text-muted-foreground px-3 py-4 text-sm">None yet. New transactions like it will be filed as they come in.</p>
+                )}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" onClick={make} disabled={busy}>
+                {busy ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Create rule
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
