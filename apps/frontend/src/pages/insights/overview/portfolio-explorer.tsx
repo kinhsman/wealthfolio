@@ -169,13 +169,7 @@ export function PortfolioExplorer({
         allocations?.sectors,
         residualName,
       ),
-      taxonomyLens(
-        "regions",
-        t("insights:insights.explorer.lens_regions"),
-        t("insights:insights.explorer.unit_regions"),
-        allocations?.regions,
-        residualName,
-      ),
+      // money-hub patch: no Regions lens (insights-layout.ts REMOVED_WIDGETS).
       taxonomyLens(
         "risk",
         t("insights:insights.explorer.lens_risk"),

@@ -395,3 +395,18 @@ describe("insights layout preferences", () => {
     );
   });
 });
+
+describe("withoutRemoved (money-hub)", () => {
+  it("hides Regions and gives its width to the cards in its row", async () => {
+    const { withoutRemoved, defaultInsightsLayout } = await import("./insights-layout");
+    const out = withoutRemoved(defaultInsightsLayout());
+    expect(out.hiddenWidgets).toContain("regions");
+    const row = out.layouts.desktop
+      .filter((i) => ["accounts", "classes", "sectors"].includes(i.i))
+      .sort((a, b) => a.x - b.x)
+      .map((i) => [i.x, i.w]);
+    expect(row).toEqual([[0, 4], [4, 4], [8, 4]]);
+    const again = withoutRemoved({ ...out, hiddenWidgets: [] });          // widened row saved back
+    expect(again.layouts.desktop.filter((i) => i.i === "sectors")[0]).toMatchObject({ x: 8, w: 4 });
+  });
+});

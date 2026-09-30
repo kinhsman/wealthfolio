@@ -377,3 +377,45 @@ export function moveWidget(
   }
   return { ...layout, layouts };
 }
+
+/**
+ * money-hub patch: no Regions card (owner, 2026-09-30: "a waste of screen space"; every holding is
+ * a US account). It stays in the stored layout, which must list every widget, but is always
+ * hidden, and the cards in its row share its width evenly.
+ */
+export const REMOVED_WIDGETS: readonly WidgetId[] = ["regions"];
+
+export function withoutRemoved(layout: InsightsLayout): InsightsLayout {
+  const layouts = Object.fromEntries(
+    (Object.keys(GRID_COLUMNS) as LayoutBreakpoint[]).map((key) => {
+      const items = layout.layouts[key];
+      const gone = items.find((item) => REMOVED_WIDGETS.includes(item.i as WidgetId));
+      if (!gone || key === "mobile" || layout.hiddenWidgets.includes(gone.i as WidgetId))
+        return [key, items];
+      const row = items
+        .filter((item) => item !== gone && item.y === gone.y && !layout.hiddenWidgets.includes(item.i as WidgetId))
+        .sort((a, b) => a.x - b.x);
+      if (!row.length) return [key, items];
+      const start = Math.min(gone.x, row[0].x);
+      // A saved layout may already hold the widened row: never past the grid's edge.
+      const total = Math.min(row.reduce((sum, item) => sum + item.w, gone.w), GRID_COLUMNS[key] - start);
+      const base = Math.floor(total / row.length);
+      let extra = total - base * row.length;
+      let x = start;
+      const resized = new Map(
+        row.map((item) => {
+          const w = base + (extra-- > 0 ? 1 : 0);
+          const next = { ...item, x, w };
+          x += w;
+          return [item.i, next];
+        }),
+      );
+      return [key, items.map((item) => resized.get(item.i) ?? item)];
+    }),
+  ) as InsightsLayout["layouts"];
+  return {
+    ...layout,
+    hiddenWidgets: [...new Set([...layout.hiddenWidgets, ...REMOVED_WIDGETS])],
+    layouts,
+  };
+}

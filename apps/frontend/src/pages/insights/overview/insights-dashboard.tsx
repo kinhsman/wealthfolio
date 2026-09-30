@@ -32,7 +32,9 @@ import {
   readInsightsLayout,
   repackMobile,
   WIDGET_IDS,
+  REMOVED_WIDGETS,
   SUMMARY_WIDGET_IDS,
+  withoutRemoved,
   type InsightsLayout,
   type LayoutBreakpoint,
   type WidgetId,
@@ -135,18 +137,20 @@ export function InsightsDashboard({ widgets, onCustomizeActionChange }: Insights
     breakdown: t("insights:customize.breakdown"),
   };
   const visibleLayouts = useMemo(
-    () =>
-      Object.fromEntries(
+    () => {
+      const shown = withoutRemoved(current);      // money-hub patch: no Regions card
+      return Object.fromEntries(
         (Object.keys(GRID_COLUMNS) as LayoutBreakpoint[]).map((key) => {
           const visible = normalizeLayout(
-            current.layouts[key].filter(
-              (item) => !current.hiddenWidgets.includes(item.i as WidgetId),
+            shown.layouts[key].filter(
+              (item) => !shown.hiddenWidgets.includes(item.i as WidgetId),
             ),
             key,
           );
           return [key, key === "mobile" ? repackMobile(visible) : visible];
         }),
-      ) as InsightsLayout["layouts"],
+      ) as InsightsLayout["layouts"];
+    },
     [current],
   );
   const summaryHeight = useCallback(
@@ -192,7 +196,8 @@ export function InsightsDashboard({ widgets, onCustomizeActionChange }: Insights
   };
   const orderedIds = [...current.layouts.mobile]
     .sort((a, b) => a.y - b.y || a.x - b.x)
-    .map((item) => item.i as WidgetId);
+    .map((item) => item.i as WidgetId)
+    .filter((id) => !REMOVED_WIDGETS.includes(id));
   const visibleIds = [...verticalCompactor.compact(layouts[breakpoint], GRID_COLUMNS[breakpoint])]
     .sort((a, b) => a.y - b.y || a.x - b.x)
     .map((item) => item.i as WidgetId);

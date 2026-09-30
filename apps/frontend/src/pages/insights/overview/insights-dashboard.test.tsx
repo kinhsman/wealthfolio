@@ -92,7 +92,7 @@ const click = (name: string) =>
 const hideRegions = () =>
   fireEvent.click(
     screen.getByRole("button", {
-      name: "insights:customize.hide:insights:insights.chart_regions",
+      name: "insights:customize.hide:insights:insights.chart_sectors",
     }),
   );
 
@@ -232,9 +232,9 @@ describe("insights dashboard editing", () => {
     click("edit");
     expect(state.gridProps.dragConfig.enabled).toBe(true);
     hideRegions();
-    expect(screen.queryByText("widget:regions")).toBeNull();
+    expect(screen.queryByText("widget:sectors")).toBeNull();
     click("cancel");
-    expect(screen.getByText("widget:regions")).toBeTruthy();
+    expect(screen.getByText("widget:sectors")).toBeTruthy();
     expect(state.updateSettings).not.toHaveBeenCalled();
   });
 
@@ -265,7 +265,7 @@ describe("insights dashboard editing", () => {
       item.getAttribute("data-widget-id"),
     );
     expect(ids.indexOf("classes")).toBeLessThan(ids.indexOf("accounts"));
-    expect(ids.indexOf("sectors")).toBeLessThan(ids.indexOf("regions"));
+    expect(ids).not.toContain("regions");                                    // money-hub: never shown
   });
 
   it("pairs adjacent mobile metrics even when saved on separate rows", () => {
@@ -322,11 +322,11 @@ describe("insights dashboard editing", () => {
     );
     expect(state.updateSettings.mock.calls[0][0].insightsOverviewLayout).toMatchObject({
       version: 6,
-      hiddenWidgets: ["regions"],
+      hiddenWidgets: ["sectors"],
     });
     view.unmount();
     render(<InsightsDashboard widgets={widgets} />);
-    expect(screen.queryByText("widget:regions")).toBeNull();
+    expect(screen.queryByText("widget:sectors")).toBeNull();
   });
 
   it("hides one summary metric without hiding the others", async () => {
@@ -357,7 +357,7 @@ describe("insights dashboard editing", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "insights:customize.save" })).not.toBeDisabled(),
     );
-    expect(screen.queryByText("widget:regions")).toBeNull();
+    expect(screen.queryByText("widget:sectors")).toBeNull();
     state.updateSettings.mockImplementation((updates) => {
       state.settings = updates;
       return Promise.resolve();
@@ -379,21 +379,21 @@ describe("insights dashboard editing", () => {
     await waitFor(() => expect(state.updateSettings).toHaveBeenCalled());
     const saved = state.updateSettings.mock.calls[0][0].insightsOverviewLayout;
     expect(saved.layouts.desktop).toHaveLength(WIDGET_IDS.length);
-    expect(saved.layouts.desktop.find((item) => item.i === "regions")?.y).toBe(100);
+    expect(saved.layouts.desktop.find((item) => item.i === "sectors")?.y).toBe(100);
     expect(saved.layouts.desktop.find((item) => item.i === "value")?.y).toBe(5);
     expect(saved.layouts.mobile).toEqual(defaultInsightsLayout().layouts.mobile);
   });
 
   it("Reset remains a draft until saved, and Cancel returns the saved layout", () => {
     const saved = defaultInsightsLayout();
-    saved.hiddenWidgets = ["regions"];
+    saved.hiddenWidgets = ["sectors"];
     state.settings.insightsOverviewLayout = saved;
     render(<InsightsDashboard widgets={widgets} />);
     click("edit");
     click("reset");
-    expect(screen.getByText("widget:regions")).toBeTruthy();
+    expect(screen.getByText("widget:sectors")).toBeTruthy();
     expect(state.updateSettings).not.toHaveBeenCalled();
     click("cancel");
-    expect(screen.queryByText("widget:regions")).toBeNull();
+    expect(screen.queryByText("widget:sectors")).toBeNull();
   });
 });
