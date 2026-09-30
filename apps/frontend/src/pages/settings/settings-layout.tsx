@@ -1,4 +1,5 @@
 import { ApplicationShell } from "@wealthfolio/ui";
+import { CONNECT_HIDDEN } from "@/lib/money-hub";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { useMemo } from "react";
@@ -86,12 +87,17 @@ export default function SettingsLayout() {
       {
         title: t("settings:nav.sections.connections"),
         items: [
-          {
-            title: t("settings:nav.items.connect"),
-            href: "connect",
-            subtitle: t("settings:nav.subtitles.connect"),
-            icon: <Icons.CloudSync2 className="size-6 text-blue-400" />,
-          },
+          // money-hub patch: Wealthfolio Connect hidden (lib/money-hub.ts).
+          ...(CONNECT_HIDDEN
+            ? []
+            : [
+                {
+                  title: t("settings:nav.items.connect"),
+                  href: "connect",
+                  subtitle: t("settings:nav.subtitles.connect"),
+                  icon: <Icons.CloudSync2 className="size-6 text-blue-400" />,
+                },
+              ]),
           {
             title: t("settings:nav.items.market_data"),
             href: "market-data",

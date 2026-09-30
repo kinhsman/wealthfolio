@@ -1,4 +1,5 @@
 import { ExternalLink } from "@/components/external-link";
+import { CONNECT_HIDDEN } from "@/lib/money-hub";
 import { StartupError } from "@/components/startup-error";
 import { StartupScreen } from "@/components/startup-screen";
 import { usePlatform } from "@/hooks/use-platform";
@@ -37,7 +38,8 @@ const OnboardingPage = () => {
   const [isStepValid, setIsStepValid] = useState(true);
   const settingsStepRef = useRef<OnboardingStep2Handle>(null);
   const appearanceStepRef = useRef<OnboardingAppearanceHandle>(null);
-  const maxSteps = isMobile ? MOBILE_MAX_STEPS : DESKTOP_MAX_STEPS;
+  // money-hub patch: no Connect step when Connect is hidden (lib/money-hub.ts).
+  const maxSteps = isMobile || CONNECT_HIDDEN ? MOBILE_MAX_STEPS : DESKTOP_MAX_STEPS;
   const completionRoute = isMobile ? "/settings" : "/settings/accounts";
   const isFinalStep = currentStep === maxSteps;
   const isAppearanceStep = currentStep === 3;
@@ -133,7 +135,7 @@ const OnboardingPage = () => {
                 onValidityChange={setIsStepValid}
               />
             )}
-            {!isMobile && currentStep === 4 && <OnboardingConnect />}
+            {!isMobile && !CONNECT_HIDDEN && currentStep === 4 && <OnboardingConnect />}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -155,7 +157,7 @@ const OnboardingPage = () => {
                 </Button>
               </div>
               <div className="order-1 flex flex-col gap-2 sm:order-2 sm:flex-row sm:gap-3">
-                {!isMobile && (
+                {!isMobile && !CONNECT_HIDDEN && (
                   <Button asChild variant="outline" className="order-2 sm:order-1">
                     <ExternalLink href={connectLink}>
                       {t("onboarding:buttons.subscribeConnect")}

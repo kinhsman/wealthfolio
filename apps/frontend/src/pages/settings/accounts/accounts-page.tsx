@@ -1,4 +1,5 @@
 import { getPlatforms, useWealthfolioConnect } from "@/features/wealthfolio-connect";
+import { CONNECT_HIDDEN } from "@/lib/money-hub";
 import { isSubscriptionStatusActive } from "@/features/wealthfolio-connect/lib/plan-capabilities";
 import { useAccounts } from "@/hooks/use-accounts";
 import { QueryKeys } from "@/lib/query-keys";
@@ -273,7 +274,7 @@ const SettingsAccountsPage = () => {
                 <Icons.Plus className="mr-2 h-4 w-4" />
                 {t("settings:accounts_add_first")}
               </Button>
-              {showConnectLink && (
+              {showConnectLink && !CONNECT_HIDDEN && (
                 <Button variant="link" asChild>
                   <Link to="/connect">{t("settings:accounts_connect_account")}</Link>
                 </Button>

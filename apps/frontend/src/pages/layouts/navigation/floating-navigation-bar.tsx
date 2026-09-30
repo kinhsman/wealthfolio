@@ -1,4 +1,5 @@
 import { LiquidGlass } from "@/components/liquid-glass";
+import { CONNECT_HIDDEN } from "@/lib/money-hub";
 import { ProfileMenu } from "@/features/profiles/profile-menu";
 import { SyncStatusIcon } from "@/features/wealthfolio-connect/components/sync-status-icon";
 import { useAggregatedSyncStatus } from "@/features/wealthfolio-connect/hooks";
@@ -120,7 +121,8 @@ export function FloatingNavigationBar({ navigation }: FloatingNavigationBarProps
                 <Icons.Search2 className="size-6" />
               </span>
             </button>
-            {/* Connect with status icon */}
+            {/* Connect with status icon (money-hub patch: hidden, see lib/money-hub.ts) */}
+            {!CONNECT_HIDDEN && (
             <Link
               to="/connect"
               onClick={() =>
@@ -149,6 +151,7 @@ export function FloatingNavigationBar({ navigation }: FloatingNavigationBarProps
                 <SyncStatusIcon status={syncStatus} className="size-6" />
               </span>
             </Link>
+            )}
             {hasMoreItems && (
               <DropdownMenu open={overflowOpen} onOpenChange={setOverflowOpen}>
                 <DropdownMenuTrigger asChild>

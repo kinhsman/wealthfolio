@@ -1,4 +1,5 @@
 import { RestoredPortfolioNotice } from "@/features/database-recovery/restored-portfolio-notice";
+import { CONNECT_HIDDEN } from "@/lib/money-hub";
 import { useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
@@ -113,7 +114,7 @@ export function AppRoutes() {
           <Route path="insights" element={<PortfolioInsightsPage />} />
           <Route path="health" element={<HealthPage />} />
           <Route path="assistant" element={<AiAssistantPage />} />
-          <Route path="connect" element={<ConnectPage />} />
+          <Route path="connect" element={CONNECT_HIDDEN ? <Navigate to="/" replace /> : <ConnectPage />} />
           <Route
             path="allocation-targets"
             element={<Navigate to="/insights?tab=overview" replace />}
@@ -150,7 +151,7 @@ export function AppRoutes() {
             <Route path="market-data/import" element={<MarketDataImportPage />} />
             <Route path="securities" element={<AssetsPage />} />
             <Route path="taxonomies" element={<TaxonomiesPage />} />
-            <Route path="connect" element={<ConnectSettingsPage />} />
+            <Route path="connect" element={CONNECT_HIDDEN ? <Navigate to="/settings" replace /> : <ConnectSettingsPage />} />
             <Route path="ai-providers" element={<AiProvidersPage />} />
             <Route path="agent-access" element={<AgentAccessPage />} />
             <Route path="wheeltradr" element={<WheelTradrSettingsPage />} />

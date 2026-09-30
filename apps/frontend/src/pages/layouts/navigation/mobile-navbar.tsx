@@ -1,4 +1,5 @@
 import { LiquidGlass } from "@/components/liquid-glass";
+import { CONNECT_HIDDEN } from "@/lib/money-hub";
 import { ProfileAvatar } from "@/features/profiles/profile-avatar";
 import { useProfile } from "@/features/profiles/profile-context";
 import { MobileProfileMenu } from "@/features/profiles/mobile-profile-menu";
@@ -90,11 +91,16 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
   const standardMenuItems: NavLink[] = [
     ...primaryItems.slice(visiblePrimaryCount),
     ...secondaryItems,
-    {
-      title: t("common:connect"),
-      href: "/connect",
-      icon: <SyncStatusIcon status={syncStatus} className="size-6" />,
-    },
+    // money-hub patch: Connect hidden (lib/money-hub.ts).
+    ...(CONNECT_HIDDEN
+      ? []
+      : [
+          {
+            title: t("common:connect"),
+            href: "/connect",
+            icon: <SyncStatusIcon status={syncStatus} className="size-6" />,
+          },
+        ]),
   ];
   const moreItems = [...standardMenuItems, ...addonItems];
   const hasMenu = moreItems.length > 0;

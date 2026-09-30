@@ -1,4 +1,5 @@
 import { isWeb } from "@/adapters";
+import { CONNECT_HIDDEN } from "@/lib/money-hub";
 import { isAppleDevice } from "@/lib/device-utils";
 import { useAuth } from "@/context/auth-context";
 import { ProfileMenu } from "@/features/profiles/profile-menu";
@@ -152,7 +153,7 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
               {navigation?.secondary?.map((item) => (
                 <NavItem key={item.title} item={item} collapsed={collapsed} />
               ))}
-              <ConnectNavItem collapsed={collapsed} />
+              {!CONNECT_HIDDEN && <ConnectNavItem collapsed={collapsed} />}
               {isWeb && requiresAuth && (
                 <Button
                   type="button"
