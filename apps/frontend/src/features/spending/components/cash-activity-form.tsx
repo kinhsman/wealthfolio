@@ -427,7 +427,7 @@ export function CashActivityForm({
           : "";
       if (isEditing && values.category && values.category !== oldCategory) {
         const [taxonomyId, categoryId] = values.category.split(":");
-        void offerRule(qc, {
+        void offerRule({
           notes: values.notes,
           taxonomyId,
           categoryId,

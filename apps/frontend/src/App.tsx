@@ -7,6 +7,8 @@ import { AssetLogoRegistrySync } from "@/components/asset-logo-registry-sync";
 import { Toaster } from "@/components/sonner";
 import { AuthGate, AuthProvider } from "@/context/auth-context";
 import { EventDialogProvider } from "@/features/spending/components/event-dialog-provider";
+// money-hub patch: the Make a rule preview, opened from the rule offer toast.
+import { RuleOfferHost } from "@/features/spending/components/rule-offer-dialog";
 import { WealthfolioConnectProvider } from "@/features/wealthfolio-connect";
 import { SettingsProvider } from "@/lib/settings-provider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -43,6 +45,7 @@ function App() {
             <AddonRuntimeLoader />
             <EventDialogProvider>
               <AssetLogoRegistrySync />
+              <RuleOfferHost />
               <AppRoutes />
             </EventDialogProvider>
           </TooltipProvider>

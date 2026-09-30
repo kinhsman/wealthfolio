@@ -761,7 +761,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
             // money-hub patch: a category picked by hand offers a rule for transactions like it.
             onSuccess: () => {
               const notes = rows.find((r) => r.activity.id === activityId)?.activity.notes;
-              void offerRule(qc, {
+              void offerRule({
                 notes,
                 taxonomyId,
                 categoryId,
@@ -771,7 +771,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
           },
         );
       },
-      [assignMutation, rows, qc, allCategories],
+      [assignMutation, rows, allCategories],
     );
     const handleClearCategory = useCallback(
       (activityId: string, taxonomyId: string) => {

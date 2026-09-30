@@ -1,16 +1,14 @@
 // money-hub patch: after the owner files a transaction under a category by hand, offer a rule for
 // transactions like it (owner, 2026-09-30: "when i edit a transaction, offer a rule creation, and
-// rerun rules only on that specific rule i just added"). Making the rule re-files only what that
-// rule matches: the bank-imported entries go through the money-hub service
-// (/api/money-hub/plaid/apply-rule, server/drive-backup/lib/plaidSync.js applyRules), because
-// Wealthfolio's own re-run treats their categories as picked by hand and never changes them.
-import type { QueryClient } from "@tanstack/react-query";
+// rerun rules only on that specific rule i just added"; then "make the button bigger, also open a
+// modal to preview and confirm the rule before apply"). The toast's Make a rule opens the preview
+// (components/rule-offer-dialog.tsx, mounted once in App.tsx); making the rule there re-files only
+// what that rule matches: the bank-imported entries go through the money-hub service
+// (/api/money-hub/plaid/preview-rule and /apply-rule, server/drive-backup/lib/plaidSync.js),
+// because Wealthfolio's own re-run treats their categories as picked by hand and never changes them.
 import { toast } from "sonner";
 
-import { QueryKeys } from "@/lib/query-keys";
-
-import { createCategorizationRule, listCategorizationRules } from "../adapters/rules";
-import { invalidateSpendingCaches } from "./invalidation";
+import { listCategorizationRules } from "../adapters/rules";
 
 /**
  * The words a rule should look for: the bank's text up to its first reference number
@@ -30,60 +28,53 @@ export function rulePatternFrom(notes?: string | null): string | null {
   return pattern.length >= 3 ? pattern : null;
 }
 
-/** Re-files what this one rule matches; null when the service could not do it now. */
-async function applyOnly(ruleId: string): Promise<number | null> {
-  try {
-    const res = await fetch("/api/money-hub/plaid/apply-rule", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ruleId }),
-    });
-    if (!res.ok) return null;
-    return ((await res.json()) as { changed?: number }).changed ?? 0;
-  } catch {
-    return null;
-  }
+export interface RuleOffer {
+  pattern: string;
+  taxonomyId: string;
+  categoryId: string;
 }
 
+// The one open offer, for the dialog host (a tiny store: the toast outlives the form that raised it).
+let current: RuleOffer | null = null;
+const listeners = new Set<() => void>();
+export const ruleOfferStore = {
+  get: () => current,
+  subscribe: (fn: () => void) => {
+    listeners.add(fn);
+    return () => {
+      listeners.delete(fn);
+    };
+  },
+  open: (offer: RuleOffer) => {
+    current = offer;
+    listeners.forEach((fn) => fn());
+  },
+  close: () => {
+    current = null;
+    listeners.forEach((fn) => fn());
+  },
+};
+
 /** Shows the offer as a toast with a Make a rule button, unless a rule for these words exists. */
-export async function offerRule(
-  qc: QueryClient,
-  { notes, taxonomyId, categoryId, categoryName }: { notes?: string | null; taxonomyId: string; categoryId: string; categoryName: string },
-): Promise<void> {
+export async function offerRule({
+  notes,
+  taxonomyId,
+  categoryId,
+  categoryName,
+}: {
+  notes?: string | null;
+  taxonomyId: string;
+  categoryId: string;
+  categoryName: string;
+}): Promise<void> {
   const pattern = rulePatternFrom(notes);
   if (!pattern) return;
   const rules = await listCategorizationRules().catch(() => []);
   if (rules.some((r) => !r.presetId && r.pattern.trim().toLowerCase() === pattern.toLowerCase())) return;
-
-  const make = async () => {
-    try {
-      const rule = await createCategorizationRule({
-        name: pattern,
-        pattern,
-        matchType: "contains",
-        taxonomyId,
-        categoryId,
-        priority: 0,
-        isGlobal: true,
-      });
-      qc.invalidateQueries({ queryKey: [QueryKeys.SPENDING_RULES] });
-      const n = await applyOnly(rule.id);
-      invalidateSpendingCaches(qc);
-      toast.success(
-        n == null
-          ? "Rule made. Transactions like it are filed within a minute."
-          : n > 0
-            ? `Rule made. ${n} more filed as ${categoryName}.`
-            : "Rule made. Nothing else matched it yet.",
-      );
-    } catch (e) {
-      toast.error(`The rule was not made: ${(e as Error)?.message ?? String(e)}`);
-    }
-  };
-
   toast(`Always file "${pattern}" as ${categoryName}?`, {
-    duration: 12000,
-    action: { label: "Make a rule", onClick: () => void make() },
+    duration: 15000,
+    action: { label: "Make a rule", onClick: () => ruleOfferStore.open({ pattern, taxonomyId, categoryId }) },
+    // Sonner's action button is a small chip; this one is the point of the toast.
+    actionButtonStyle: { height: 32, padding: "0 14px", fontSize: 13, fontWeight: 600, borderRadius: 6 },
   });
 }
