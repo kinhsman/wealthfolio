@@ -17,7 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
   Icons,
-  Input,
   Label,
   PrivacyAmount,
 } from "@wealthfolio/ui";
@@ -31,6 +30,8 @@ import { invalidateSpendingCaches } from "../lib/invalidation";
 import { ruleOfferStore, type RuleOffer } from "../lib/rule-offer";
 import { CategoryIcon } from "./category-chips";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
+import { keywordsToRule } from "../lib/keywords";
+import { KeywordChips, withTyped } from "./keyword-chips";
 
 interface PreviewItem {
   id: string;
@@ -71,18 +72,21 @@ export function RuleOfferHost() {
 function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => void }) {
   const qc = useQueryClient();
   const [step, setStep] = useState<"rule" | "review">("rule");
-  const [pattern, setPattern] = useState(offer.pattern);
+  const [words, setWords] = useState<string[]>([offer.pattern]);
+  const [typing, setTyping] = useState("");
+  const all = withTyped(words, typing);
+  const key = all.join("\u0001");
   const [target, setTarget] = useState({ taxonomyId: offer.taxonomyId, categoryId: offer.categoryId });
   const [busy, setBusy] = useState(false);
   const [showMatches, setShowMatches] = useState(false);
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
 
   // The matches follow what is typed, a moment after typing stops.
-  const [debounced, setDebounced] = useState(offer.pattern);
+  const [debounced, setDebounced] = useState(key);
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(pattern.trim()), 400);
+    const t = setTimeout(() => setDebounced(key), 400);
     return () => clearTimeout(t);
-  }, [pattern]);
+  }, [key]);
 
   const spending = useTaxonomy("spending_categories");
   const income = useTaxonomy("income_sources");
@@ -101,8 +105,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
     queryKey: ["money-hub", "rule-preview", debounced, target.taxonomyId, target.categoryId],
     queryFn: () =>
       hub<{ count: number; items: PreviewItem[] }>("/preview-rule", {
-        pattern: debounced,
-        matchType: "contains",
+        ...keywordsToRule(debounced.split("\u0001").filter(Boolean)),
         taxonomyId: target.taxonomyId,
         categoryId: target.categoryId,
       }),
@@ -113,20 +116,18 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
 
   const category = categories.get(target.categoryId);
   const categoryName = category?.name ?? "that category";
-  const ready = pattern.trim().length >= 2 && !!target.categoryId;
+  const ready = all.length > 0 && !!target.categoryId;
   const items = preview.data?.items ?? [];
   const count = preview.data?.count ?? 0;
   const ticked = items.filter((it) => !unticked.has(it.id));
-  const settled = ready && !preview.isFetching && debounced === pattern.trim();
+  const settled = ready && !preview.isFetching && debounced === key;
 
   const make = async () => {
     setBusy(true);
     try {
-      const words = pattern.trim();
       const rule = await createCategorizationRule({
-        name: words,
-        pattern: words,
-        matchType: "contains",
+        name: all.join(", ").slice(0, 60),
+        ...keywordsToRule(all),
         taxonomyId: target.taxonomyId,
         categoryId: target.categoryId,
         priority: 0,
@@ -203,13 +204,13 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
           <>
             <DialogHeader>
               <DialogTitle>Make a rule</DialogTitle>
-              <DialogDescription>Transactions whose text contains these words get this category.</DialogDescription>
+              <DialogDescription>Transactions whose text contains any of these words get this category.</DialogDescription>
             </DialogHeader>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="rule-offer-words">Words to look for</Label>
-                <Input id="rule-offer-words" value={pattern} onChange={(e) => setPattern(e.target.value)} autoComplete="off" />
+                <KeywordChips id="rule-offer-words" words={words} onChange={setWords} typing={typing} onTyping={setTyping} />
               </div>
               <div className="space-y-1.5">
                 <Label>File as</Label>
@@ -270,7 +271,9 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
             </DialogHeader>
 
             <div className="space-y-4 rounded-xl border p-4">
-              <div className="bg-muted rounded-lg px-4 py-3 text-sm">If the text contains &lsquo;{pattern.trim()}&rsquo;</div>
+              <div className="bg-muted rounded-lg px-4 py-3 text-sm">
+                If the text contains {all.map((w) => `\u2018${w}\u2019`).join(" or ")}
+              </div>
               <div className="flex items-center justify-between gap-3 border-b pb-4">
                 <div className="min-w-0">
                   <div className="text-muted-foreground text-sm">Category</div>

@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import * as z from "zod";
@@ -24,6 +24,8 @@ import {
 
 import type { CategorizationRule, RuleAmountOp, RuleMatchType } from "../types/rule";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
+import { keywordsToRule, ruleToKeywords } from "../lib/keywords";
+import { KeywordChips, withTyped } from "./keyword-chips";
 
 export interface RuleFormValues {
   name: string;
@@ -209,12 +211,18 @@ export function RuleForm({
     [t],
   );
 
+  // money-hub patch: "contains" takes several keywords, any of them matching (lib/keywords.ts);
+  // saved as one case-blind regex when there are several, read back as words here.
+  const initialWords = rule ? ruleToKeywords(rule.pattern, rule.matchType) : [];
+  const [words, setWords] = useState<string[]>(initialWords ?? []);
+  const [typing, setTyping] = useState("");
+
   const form = useForm<RuleFormValues>({
     resolver: zodResolver(ruleFormSchema) as never,
     defaultValues: {
       name: rule?.name ?? "",
-      pattern: rule?.pattern ?? "",
-      matchType: rule?.matchType ?? "contains",
+      pattern: initialWords ? (initialWords[0] ?? "") : (rule?.pattern ?? ""),
+      matchType: initialWords ? "contains" : (rule?.matchType ?? "contains"),
       taxonomyId: rule?.taxonomyId ?? "",
       categoryId: composite(rule), // we encode taxonomyId:categoryId in this single field
       activityType: rule?.activityType ?? "",
@@ -239,7 +247,17 @@ export function RuleForm({
     return [...accountOptions, { id: scopedId, name: t("spending:rules.unknownAccount") }];
   }, [accountOptions, rule, t]);
 
+  const matchTypeNow = form.watch("matchType");
+  const keywordsNow = withTyped(words, typing);
+  // The form checks a pattern is there; with chips, the first word stands for it.
+  useEffect(() => {
+    if (matchTypeNow === "contains") form.setValue("pattern", keywordsNow[0] ?? "", { shouldValidate: form.formState.isSubmitted });
+  }, [matchTypeNow, keywordsNow.join("\u0001")]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSubmit = (values: RuleFormValues) => {
+    if (values.matchType === "contains") {
+      values = { ...values, ...keywordsToRule(keywordsNow) };
+    }
     // Decode composite categoryId back into taxonomyId + categoryId
     let taxonomyId = "";
     let categoryId = "";
@@ -303,6 +321,14 @@ export function RuleForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t("spending:rules.pattern")}</FormLabel>
+              {matchTypeNow === "contains" ? (
+                <>
+                  <KeywordChips words={words} onChange={setWords} typing={typing} onTyping={setTyping} placeholder={t("spending:rules.patternPlaceholder")} />
+                  <FormDescription>Any of these words matches. Press Enter to add another.</FormDescription>
+                  <FormMessage />
+                </>
+              ) : (
+              <>
               <FormControl>
                 <Input
                   placeholder={
@@ -317,6 +343,8 @@ export function RuleForm({
                 <FormDescription>{t("spending:rules.patternRegexHint")}</FormDescription>
               )}
               <FormMessage />
+              </>
+              )}
             </FormItem>
           )}
         />

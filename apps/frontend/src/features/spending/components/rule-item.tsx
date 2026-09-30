@@ -19,6 +19,7 @@ import {
 } from "@wealthfolio/ui";
 
 import type { CategorizationRule } from "../types/rule";
+import { ruleToKeywords } from "../lib/keywords";
 
 export interface RuleCategoryMeta {
   name: string;
@@ -120,7 +121,10 @@ export function RuleItem({
             { value: formatAmount(rule.amountValue) },
           )
       : null;
-  const matchLabel = MATCH_TYPE_LABELS[rule.matchType] ?? rule.matchType;
+  // money-hub patch: a rule of several keywords (lib/keywords.ts) reads as its words.
+  const keywords = rule.matchType === "regex" ? ruleToKeywords(rule.pattern, rule.matchType) : null;
+  const matchLabel = keywords ? MATCH_TYPE_LABELS.contains : (MATCH_TYPE_LABELS[rule.matchType] ?? rule.matchType);
+  const patternText = keywords ? keywords.map((w) => `\u201c${w}\u201d`).join(" or ") : rule.pattern;
   const preset = rule.presetId ? (presetMeta?.[rule.presetId] ?? null) : null;
   const presetBadgeTitle = preset
     ? rule.presetModified
@@ -189,7 +193,7 @@ export function RuleItem({
                 ? t("spending:rules.collapsePattern")
                 : t("spending:rules.expandPattern")
             }
-            title={rule.pattern}
+            title={patternText}
           >
             <code
               className={
@@ -198,7 +202,7 @@ export function RuleItem({
                   : "block truncate font-mono text-[11px]"
               }
             >
-              {rule.pattern}
+              {patternText}
             </code>
           </button>
 
