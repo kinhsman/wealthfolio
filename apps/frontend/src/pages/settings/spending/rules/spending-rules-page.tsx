@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CountsAsRulesSection } from "@/features/spending/components/counts-as-dialog";
 import { useTranslation } from "react-i18next";
 import { Navigate } from "react-router-dom";
 
@@ -431,6 +432,8 @@ export default function SpendingRulesPage() {
             )}
           </div>
         )}
+        {/* money-hub patch: the owner's Counts as rules (features/spending/lib/counts-as.ts). */}
+        <CountsAsRulesSection />
       </div>
 
       <RuleEditModal

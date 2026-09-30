@@ -52,4 +52,11 @@ describe("merchantFor", () => {
     chase.patterns = ["Chase Bank", "Chase card", "Chase credit"];
     expect(merchantFor("Payment to Chase card ending in 5257 09/28", [chase], checking, "TRANSFER_OUT")?.name).toBe("Chase");
   });
+  it("lets a merchant with its own picture win over a bank's-logo one", () => {
+    const chase = { id: "c", name: "Chase Checking", group: "Chase", accountType: "CASH", meta: JSON.stringify({ source: "plaid", logoUrl: "https://x/chase.webp" }) };
+    const atm: Merchant = { id: "atm", name: "ATM", pattern: "ATM WITHDRAWAL CASH", logoUrl: null, useBank: true };
+    const shop: Merchant = { id: "7e", name: "7-Eleven", pattern: "7-ELEVEN", logoUrl: "https://x/711.png" };
+    expect(merchantFor("ATM WITHDRAWAL CASH 7-ELEVEN 1234", [atm, shop], chase)?.name).toBe("7-Eleven");
+    expect(merchantFor("ATM WITHDRAWAL CASH 1234", [atm, shop], chase)?.source).toBe("bank");
+  });
 });

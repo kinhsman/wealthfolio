@@ -134,8 +134,8 @@ export function matchLength(text: string | null | undefined, words: string[]): n
 
 /** The merchant with any of its words in the text (any case); the longest matching words win, so
  *  "Costco Gas" beats "Costco". Card payments and interest show the account's bank (bankFor) first;
- *  a merchant with "Use the bank's logo" shows the bank of the transaction's account, and is skipped
- *  where that account has none. */
+ *  a merchant with "Use the bank's logo" shows the bank of the transaction's account (skipped where
+ *  that account has none), unless a merchant with its own picture matches too: that one wins. */
 export function merchantFor(
   notes: string | null | undefined,
   merchants: Merchant[] | undefined,
@@ -145,17 +145,29 @@ export function merchantFor(
   const bank = bankFor(account, activityType);
   if (bank) return bank;
   if (!notes || !merchants?.length) return null;
-  let best: Merchant | null = null;
-  let bestLen = 0;
+  // A merchant with its own picture wins over a "Use the bank's logo" one, whatever the words'
+  // length (owner, 2026-09-30); among each kind the longest matching words win.
+  let own: Merchant | null = null;
+  let ownLen = 0;
+  let viaBank: Merchant | null = null;
+  let bankLen = 0;
   for (const m of merchants) {
     const len = matchLength(notes, wordsOf(m));
-    if (len <= bestLen) continue;
-    const shown = m.useBank ? bankOf(account, m.id, m.name) : m;
+    if (!len) continue;
+    if (!m.useBank) {
+      if (len > ownLen) {
+        own = m;
+        ownLen = len;
+      }
+      continue;
+    }
+    if (len <= bankLen) continue;
+    const shown = bankOf(account, m.id, m.name);
     if (!shown) continue;
-    best = m.useBank ? { ...shown, from: m } : shown;
-    bestLen = len;
+    viaBank = { ...shown, from: m };
+    bankLen = len;
   }
-  return best;
+  return own ?? viaBank;
 }
 
 /** One transaction's merchant, from the shared list (its account and type: for the bank's logo). */
