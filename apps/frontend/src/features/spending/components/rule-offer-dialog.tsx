@@ -67,6 +67,8 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
   const [pattern, setPattern] = useState(offer.pattern);
   const [target, setTarget] = useState({ taxonomyId: offer.taxonomyId, categoryId: offer.categoryId });
   const [busy, setBusy] = useState(false);
+  // The matches list opens from the footer's Preview N matches (owner's reference, 09-30).
+  const [showMatches, setShowMatches] = useState(false);
 
   // The preview follows what is typed, a moment after typing stops.
   const [debounced, setDebounced] = useState(offer.pattern);
@@ -179,7 +181,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
                     ? "Nothing else matches yet. New transactions like it will get this category."
                     : `${count} transaction${count === 1 ? "" : "s"} will be re-filed as ${categoryName}${count > (preview.data?.items.length ?? 0) ? `, the latest ${preview.data?.items.length} shown` : ""}.`}
           </div>
-          {count > 0 && ready ? (
+          {count > 0 && ready && showMatches ? (
             <div className="max-h-64 divide-y overflow-y-auto">
               {preview.data!.items.map((it) => (
                 <div key={it.id} className="flex items-center gap-3 px-3 py-2">
@@ -200,14 +202,25 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
           ) : null}
         </div>
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button type="button" onClick={make} disabled={!ready || busy}>
-            {busy ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {count > 0 && ready ? `Make the rule and re-file ${count}` : "Make the rule"}
-          </Button>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowMatches((v) => !v)}
+              disabled={!ready || count === 0 || busy}
+            >
+              {preview.isFetching && ready ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {showMatches && count > 0 ? "Hide matches" : `Preview ${count} ${count === 1 ? "match" : "matches"}`}
+            </Button>
+            <Button type="button" onClick={make} disabled={!ready || busy}>
+              {busy ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Make the rule
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
