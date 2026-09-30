@@ -180,21 +180,23 @@ const consumedPromptKeys = new Set<string>();
  * Reads an `aiPrompt` passed via navigation state (e.g. from the spending
  * insights "Ask AI to categorize" action), auto-sends it as a new message,
  * then clears the state so it isn't resent on refresh or back navigation.
+ * Waits for `ready` (provider settings loaded): sending earlier goes out with
+ * no provider and the server falls back to Ollama on localhost (money-hub).
  * Renders nothing; must live under AssistantRuntimeProvider.
  */
-function InitialPromptSender() {
+function InitialPromptSender({ ready }: { ready: boolean }) {
   const location = useLocation();
   const navigate = useNavigate();
   const threadRuntime = useThreadRuntime();
 
   useEffect(() => {
     const prompt = (location.state as { aiPrompt?: string } | null)?.aiPrompt;
-    if (!prompt || consumedPromptKeys.has(location.key)) return;
+    if (!ready || !prompt || consumedPromptKeys.has(location.key)) return;
     consumedPromptKeys.add(location.key);
     // Clear navigation state first so a refresh or back nav won't resend.
     navigate(location.pathname, { replace: true, state: null });
     threadRuntime.append(prompt);
-  }, [location, navigate, threadRuntime]);
+  }, [ready, location, navigate, threadRuntime]);
 
   return null;
 }
@@ -256,7 +258,7 @@ function ChatShellInner({ className }: ChatShellProps) {
         <ListCategorizationContextToolUI />
         <CategorizationProposalsToolUI />
 
-        <InitialPromptSender />
+        <InitialPromptSender ready={!!chatConfig} />
 
         <div className={cn("bg-background flex h-full min-h-0 w-full", className)}>
           {/* Desktop Sidebar */}
