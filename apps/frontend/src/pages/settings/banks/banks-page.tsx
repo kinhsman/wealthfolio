@@ -15,7 +15,7 @@ const BASE = "/api/money-hub/plaid";
 
 interface BankAccount {
   id: string; name: string; officialName: string | null; mask: string | null; type: string; subtype: string | null;
-  balance: number | null; currency: string; include: boolean; supported: boolean; wfAccountId: string | null;
+  balance: number | null; currency: string; include: boolean; supported: boolean; balanceOnly: boolean; wfAccountId: string | null;
   txns: number; firstDate: string | null;
 }
 interface BankItem {
@@ -66,7 +66,8 @@ const KIND: Record<string, string> = {
   paypal: "PayPal", "cash management": "Cash management",
 };
 const kindOf = (a: BankAccount) =>
-  KIND[a.subtype ?? ""] ?? (a.type === "credit" ? "Credit card" : a.type === "depository" ? "Bank account" : a.type);
+  a.balanceOnly ? "Cash, balance only"
+    : KIND[a.subtype ?? ""] ?? (a.type === "credit" ? "Credit card" : a.type === "depository" ? "Bank account" : a.type);
 
 // Same pieces as the WheelTradr and Backups pages: green = connected, amber only when it needs a look.
 function StatusPill({ on, text, warn }: { on: boolean; text: string; warn?: boolean }) {
@@ -254,9 +255,10 @@ export default function BanksSettingsPage() {
                       </div>
                       <div className="text-muted-foreground truncate text-xs">
                         {[kindOf(a),
-                          !a.supported ? "Not brought in (only bank and card accounts are)" :
-                            a.include ? (a.firstDate ? `In net worth, ${a.txns} transactions since ${monthYear(a.firstDate)}` : "In net worth, first update running")
-                              : "Not in net worth",
+                          !a.supported ? "Not brought in (loans stay out)" :
+                            !a.include ? "Not in net worth" :
+                              a.balanceOnly ? (a.firstDate ? `In net worth since ${monthYear(a.firstDate)}` : "In net worth, first update running")
+                                : a.firstDate ? `In net worth, ${a.txns} transactions since ${monthYear(a.firstDate)}` : "In net worth, first update running",
                         ].join(" · ")}
                       </div>
                     </div>
