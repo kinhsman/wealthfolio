@@ -8,6 +8,12 @@ describe("merchantFor", () => {
     expect(merchantFor("UPS STORE 1234", list)?.name).toBe("UPS");
     expect(merchantFor("BP#12345 CHICAGO", list)?.name).toBe("BP");
   });
+  it("any of a merchant's words shows it", () => {
+    const xanh: Merchant = { id: "x", name: "Xanh SM", pattern: "Green Sm", patterns: ["Green Sm", "Xanhsm"], logoUrl: "" };
+    expect(merchantFor("Xanhsm Gsm Ha", [xanh])?.name).toBe("Xanh SM");
+    expect(merchantFor("Green Sm Hanoi", [xanh])?.name).toBe("Xanh SM");
+    expect(merchantFor("Grab", [xanh])).toBeNull();
+  });
   it("longer words are contained, longest wins", () => {
     expect(merchantFor("COSTCO WHSE #339", list)?.name).toBe("Costco");
     expect(merchantFor("Costco Gas", list)?.name).toBe("Costco Gas");

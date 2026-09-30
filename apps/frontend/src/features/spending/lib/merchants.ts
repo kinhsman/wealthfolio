@@ -7,7 +7,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 export interface Merchant {
   id: string;
   name: string;
+  /** The first of `patterns` (merchants saved before they had several words). */
   pattern: string;
+  /** Any of these words shows the logo (owner, 09-30: "multiple keywords ... in OR operation"). */
+  patterns?: string[];
   logoUrl: string;
   updatedAt?: string;
   /** "owly": an Owly friend's photo on their Zelle transactions (read only; changed in Owly). */
@@ -24,18 +27,18 @@ async function call<T>(method: string, path: string, body?: FormData): Promise<T
   return data as T;
 }
 
-const form = (fields: { name: string; pattern: string; logo?: File | null }) => {
+const form = (fields: { name: string; patterns: string[]; logo?: File | null }) => {
   const f = new FormData();
   f.set("name", fields.name);
-  f.set("pattern", fields.pattern);
+  f.set("patterns", JSON.stringify(fields.patterns));
   if (fields.logo) f.set("logo", fields.logo);
   return f;
 };
 
 export const merchantsApi = {
   list: () => call<Merchant[]>("GET", ""),
-  create: (fields: { name: string; pattern: string; logo: File }) => call<Merchant[]>("POST", "", form(fields)),
-  update: (id: string, fields: { name: string; pattern: string; logo?: File | null }) =>
+  create: (fields: { name: string; patterns: string[]; logo: File }) => call<Merchant[]>("POST", "", form(fields)),
+  update: (id: string, fields: { name: string; patterns: string[]; logo?: File | null }) =>
     call<Merchant[]>("PUT", `/${encodeURIComponent(id)}`, form(fields)),
   remove: (id: string) => call<Merchant[]>("DELETE", `/${encodeURIComponent(id)}`),
 };
@@ -61,15 +64,32 @@ const contains = (text: string, p: string) => {
   return false;
 };
 
-/** The merchant whose words the text contains (any case); the longest words win, so "Costco Gas"
- *  beats "Costco". */
+export const wordsOf = (m: Pick<Merchant, "pattern" | "patterns">): string[] =>
+  (m.patterns?.length ? m.patterns : [m.pattern]).map((w) => w.trim()).filter(Boolean);
+
+/** The length of the longest of these words the text contains (any case), or 0 for none. */
+export function matchLength(text: string | null | undefined, words: string[]): number {
+  const t = (text ?? "").toUpperCase();
+  let best = 0;
+  for (const w of words) {
+    const p = w.trim().toUpperCase();
+    if (p && p.length > best && contains(t, p)) best = p.length;
+  }
+  return best;
+}
+
+/** The merchant with any of its words in the text (any case); the longest matching words win, so
+ *  "Costco Gas" beats "Costco". */
 export function merchantFor(notes: string | null | undefined, merchants: Merchant[] | undefined): Merchant | null {
-  const text = (notes ?? "").toUpperCase();
-  if (!text || !merchants?.length) return null;
+  if (!notes || !merchants?.length) return null;
   let best: Merchant | null = null;
+  let bestLen = 0;
   for (const m of merchants) {
-    const p = m.pattern.trim().toUpperCase();
-    if (p && contains(text, p) && (!best || p.length > best.pattern.trim().length)) best = m;
+    const len = matchLength(notes, wordsOf(m));
+    if (len > bestLen) {
+      best = m;
+      bestLen = len;
+    }
   }
   return best;
 }

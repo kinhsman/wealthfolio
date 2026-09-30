@@ -7,7 +7,7 @@ import { Button, EmptyPlaceholder, Icons, Input, Skeleton } from "@wealthfolio/u
 
 import { MerchantDialog } from "@/features/spending/components/merchant-dialog";
 import { MerchantLogo } from "@/features/spending/components/merchant-logo";
-import { useMerchants, type MerchantDraft } from "@/features/spending/lib/merchants";
+import { useMerchants, wordsOf, type MerchantDraft } from "@/features/spending/lib/merchants";
 
 import { SettingsHeader } from "../../settings-header";
 import { SpendingBackLink } from "../components/spending-back-link";
@@ -21,7 +21,7 @@ export default function SpendingMerchantsPage() {
   const [search, setSearch] = useState("");
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return q ? merchants.filter((m) => m.name.toLowerCase().includes(q) || m.pattern.toLowerCase().includes(q)) : merchants;
+    return q ? merchants.filter((m) => m.name.toLowerCase().includes(q) || wordsOf(m).some((w) => w.toLowerCase().includes(q))) : merchants;
   }, [merchants, search]);
 
   return (
@@ -74,7 +74,9 @@ export default function SpendingMerchantsPage() {
                 <MerchantLogo url={m.logoUrl} name={m.name} className="h-9 w-9" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{m.name}</span>
-                  <span className="text-muted-foreground block truncate text-xs">Looks for &ldquo;{m.pattern}&rdquo;</span>
+                  <span className="text-muted-foreground block truncate text-xs">
+                    Looks for {wordsOf(m).map((w) => `\u201c${w}\u201d`).join(" or ")}
+                  </span>
                 </span>
                 <Icons.ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
               </button>

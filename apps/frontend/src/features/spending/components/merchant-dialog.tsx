@@ -24,7 +24,8 @@ import { useAccounts } from "@/hooks/use-accounts";
 
 import { searchCashActivities } from "../adapters/cash-activities";
 
-import { merchantsApi, useMerchantFor, useSetMerchants, type MerchantDraft } from "../lib/merchants";
+import { matchLength, merchantsApi, useMerchantFor, useSetMerchants, wordsOf, type MerchantDraft } from "../lib/merchants";
+import { KeywordChips, withTyped } from "./keyword-chips";
 import { rulePatternFrom } from "../lib/rule-offer";
 import { MerchantLogo } from "./merchant-logo";
 
@@ -69,7 +70,9 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
   const setMerchants = useSetMerchants();
   const editing = draft.merchant;
   const [name, setName] = useState(editing?.name ?? draft.name ?? "");
-  const [pattern, setPattern] = useState(editing?.pattern ?? draft.pattern ?? "");
+  const [words, setWords] = useState<string[]>(editing ? wordsOf(editing) : draft.pattern ? [draft.pattern] : []);
+  const [typing, setTyping] = useState("");
+  const all = withTyped(words, typing);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -123,31 +126,43 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
 
   // No scan and no update step: transactions are matched each time they show. The preview only
   // shows what the words catch now (owner, 09-30: "how do we scan and preview and update?").
-  const [debounced, setDebounced] = useState(pattern.trim());
+  const key = all.join("\u0001");
+  const [debounced, setDebounced] = useState(key);
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(pattern.trim()), 400);
+    const t = setTimeout(() => setDebounced(key), 400);
     return () => clearTimeout(t);
-  }, [pattern]);
+  }, [key]);
+  // One search per word, joined; then the same whole-word test the logos use (a short word must
+  // not count a transaction it would not light up).
   const matches = useQuery({
     queryKey: ["money-hub", "merchant-matches", debounced],
-    queryFn: () => searchCashActivities({ search: debounced, status: "all", sortBy: "date", sortDir: "desc", offset: 0, limit: 50 }),
-    enabled: debounced.length >= 2,
+    queryFn: async () => {
+      const ws = debounced.split("\u0001").filter(Boolean);
+      const pages = await Promise.all(
+        ws.map((w) => searchCashActivities({ search: w, status: "all", sortBy: "date", sortDir: "desc", offset: 0, limit: 200 })),
+      );
+      const byId = new Map(pages.flatMap((p) => p.items).filter((x) => matchLength(x.notes, ws) > 0).map((x) => [x.id, x]));
+      const items = [...byId.values()].sort((a, b) => (a.activityDate < b.activityDate ? 1 : -1));
+      return { items, more: pages.some((p) => p.totalCount > p.items.length) };
+    },
+    enabled: debounced.length > 0,
   });
   const [showMatches, setShowMatches] = useState(false);
   const { accounts } = useAccounts({ filterActive: false });
   const accountName = useMemo(() => new Map((accounts ?? []).map((a) => [a.id, a.name])), [accounts]);
-  const matchCount = matches.data?.totalCount ?? 0;
-  const settled = debounced.length >= 2 && debounced === pattern.trim() && !matches.isFetching;
+  const matchCount = matches.data?.items.length ?? 0;
+  const countText = `${matchCount}${matches.data?.more ? "+" : ""}`;
+  const settled = all.length > 0 && debounced === key && !matches.isFetching;
   const day = (iso: string) =>
     new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
-  const ready = name.trim().length > 0 && pattern.trim().length >= 2 && (!!file || !!editing);
+  const ready = name.trim().length > 0 && all.length > 0 && (!!file || !!editing);
 
   const save = async () => {
     setBusy(true);
     setErr(null);
     try {
-      const fields = { name: name.trim(), pattern: pattern.trim() };
+      const fields = { name: name.trim(), patterns: all };
       const list = editing
         ? await merchantsApi.update(editing.id, { ...fields, logo: file })
         : await merchantsApi.create({ ...fields, logo: file! });
@@ -198,7 +213,7 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
             className={`bg-muted hover:bg-muted/70 flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border transition-colors ${dragging ? "ring-primary ring-2" : ""}`}
             aria-label="Choose a logo"
           >
-            {shown ? <img src={shown} alt="" className="h-full w-full object-cover" /> : <Icons.Store className="text-muted-foreground h-6 w-6" />}
+            {shown ? <img src={shown} alt="" className={chosen ? "h-full w-full object-contain p-2.5" : "h-full w-full object-cover"} /> : <Icons.Store className="text-muted-foreground h-6 w-6" />}
           </button>
           <div className="min-w-0 space-y-1">
             <div className="flex flex-wrap gap-2">
@@ -214,7 +229,7 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
               ) : null}
             </div>
             <p className="text-muted-foreground text-xs">
-              Or paste a copied picture with Ctrl+V (Cmd+V on a Mac), or drop one on the circle. PNG, JPG or WebP, up to 5 MB. It fills the circle; the edges may be cut off.
+              Or paste a copied picture with Ctrl+V (Cmd+V on a Mac), or drop one on the circle. PNG, JPG or WebP, up to 5 MB. It is fitted inside the circle, never cut off.
             </p>
           </div>
           <input
@@ -229,14 +244,15 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
           />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="merchant-name">Name</Label>
             <Input id="merchant-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Costco" autoComplete="off" />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="merchant-words">Words to look for</Label>
-            <Input id="merchant-words" value={pattern} onChange={(e) => setPattern(e.target.value)} placeholder="COSTCO" autoComplete="off" />
+            <KeywordChips id="merchant-words" words={words} onChange={setWords} typing={typing} onTyping={setTyping} placeholder="COSTCO" />
+            <p className="text-muted-foreground text-xs">Any of these words shows the logo. Press Enter to add another.</p>
           </div>
         </div>
 
@@ -244,23 +260,23 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
           <div className="flex items-center justify-between gap-3 px-3 py-2">
             <span className="text-muted-foreground flex items-center gap-2 text-xs">
               {matches.isFetching ? <Icons.Spinner className="h-3.5 w-3.5 animate-spin" /> : null}
-              {pattern.trim().length < 2
+              {all.length === 0
                 ? "Type the words to look for."
                 : !settled
                   ? "Looking for transactions with these words"
                   : matchCount === 0
                     ? "No transaction has these words yet. New ones will show the logo."
-                    : `${matchCount} transaction${matchCount === 1 ? "" : "s"} will show this logo, and new ones as they come in.`}
+                    : `${countText} transaction${matchCount === 1 ? "" : "s"} will show this logo, and new ones as they come in.`}
             </span>
             {settled && matchCount > 0 ? (
               <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 text-xs" onClick={() => setShowMatches((v) => !v)}>
-                {showMatches ? "Hide" : `Preview ${matchCount} ${matchCount === 1 ? "match" : "matches"}`}
+                {showMatches ? "Hide" : `Preview ${countText} ${matchCount === 1 ? "match" : "matches"}`}
               </Button>
             ) : null}
           </div>
           {showMatches && settled && matchCount > 0 ? (
             <div className="max-h-56 divide-y overflow-y-auto border-t">
-              {(matches.data?.items ?? []).map((x) => (
+              {(matches.data?.items ?? []).slice(0, 50).map((x) => (
                 <div key={x.id} className="flex items-center gap-3 px-3 py-2">
                   {shown ? <img src={shown} alt="" className="bg-muted h-6 w-6 shrink-0 rounded-full border object-cover" /> : null}
                   <span className="min-w-0 flex-1">
@@ -274,7 +290,7 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
                   </span>
                 </div>
               ))}
-              {matchCount > (matches.data?.items.length ?? 0) ? (
+              {matchCount > 50 ? (
                 <p className="text-muted-foreground px-3 py-2 text-xs">The latest {matches.data?.items.length} shown.</p>
               ) : null}
             </div>
