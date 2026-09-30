@@ -29,6 +29,7 @@ import {
 import { QuickCategorizePopover } from "./quick-categorize-popover";
 import { QuickEventPopover } from "./quick-event-popover";
 import { useMerchantFor } from "../lib/merchants";
+import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
 
 interface TransactionRowProps {
@@ -288,6 +289,12 @@ function TransactionRowImpl({
               <DropdownMenuItem onClick={() => onEditSplits(row)}>
                 <Icons.SplitHorizontal className="mr-2 h-4 w-4" aria-hidden="true" />
                 {t("spending:transactions.splitTransaction")}
+              </DropdownMenuItem>
+            )}
+            {canSetCountsAs(a) && (
+              <DropdownMenuItem onClick={() => countsAsStore.open({ activity: a })}>
+                <Icons.ArrowLeftRight className="mr-2 h-4 w-4" aria-hidden="true" />
+                Counts as…
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={() => onDuplicate(row)}>

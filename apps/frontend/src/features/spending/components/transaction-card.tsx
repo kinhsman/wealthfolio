@@ -18,6 +18,7 @@ import { QuickCategorizePopover } from "./quick-categorize-popover";
 import { SelectionCheckbox } from "./selection-checkbox";
 import { QuickEventPopover } from "./quick-event-popover";
 import { useMerchantFor } from "../lib/merchants";
+import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
 
 interface TransactionCardProps {
@@ -282,6 +283,15 @@ function TransactionCardImpl({
                         icon: Icons.SplitHorizontal,
                         label: t("spending:transactions.splitTransaction"),
                         onClick: () => onEditSplits(row),
+                      },
+                    ]
+                  : []),
+                ...(canSetCountsAs(a)
+                  ? [
+                      {
+                        icon: Icons.ArrowLeftRight,
+                        label: "Counts as…",
+                        onClick: () => countsAsStore.open({ activity: a }),
                       },
                     ]
                   : []),
