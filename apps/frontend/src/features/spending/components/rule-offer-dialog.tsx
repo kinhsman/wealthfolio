@@ -41,6 +41,8 @@ interface PreviewItem {
   accountId: string;
   from: string | null;
   to: string;
+  /** Filed by hand: listed, but re-filed only when ticked (they start unticked). */
+  byHand?: boolean;
 }
 
 async function hub<T>(path: string, body: unknown): Promise<T> {
@@ -104,21 +106,29 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
   const preview = useQuery({
     queryKey: ["money-hub", "rule-preview", debounced, target.taxonomyId, target.categoryId],
     queryFn: () =>
-      hub<{ count: number; items: PreviewItem[] }>("/preview-rule", {
+      hub<{ count: number; already?: number; existing?: { name: string; categoryId: string } | null; items: PreviewItem[] }>("/preview-rule", {
         ...keywordsToRule(debounced.split("\u0001").filter(Boolean)),
         taxonomyId: target.taxonomyId,
         categoryId: target.categoryId,
       }),
     enabled: debounced.length >= 2,
   });
-  // A different rule means a different list: start again with every match ticked.
-  useEffect(() => setUnticked(new Set()), [debounced, target.categoryId]);
+  // A different rule means a different list: start again with every match ticked, but the ones
+  // filed by hand (owner, 10-01: they were left out, so Membership Fee's rule showed 0 matches).
+  useEffect(
+    () => setUnticked(new Set((preview.data?.items ?? []).filter((it) => it.byHand).map((it) => it.id))),
+    [preview.data],
+  );
 
   const category = categories.get(target.categoryId);
   const categoryName = category?.name ?? "that category";
   const ready = all.length > 0 && !!target.categoryId;
   const items = preview.data?.items ?? [];
   const count = preview.data?.count ?? 0;
+  const byHand = items.filter((it) => it.byHand).length;
+  const already = preview.data?.already ?? 0;
+  const alreadyText = already > 0 ? `${already} already filed as ${categoryName}.` : "";
+  const auto = count - byHand;
   const ticked = items.filter((it) => !unticked.has(it.id));
   const settled = ready && !preview.isFetching && debounced === key;
 
@@ -172,7 +182,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm">{it.notes}</span>
               <span className="text-muted-foreground block truncate text-xs">
-                {[day(it.date), accountName.get(it.accountId), from ? `now ${from.name}` : "no category now"].filter(Boolean).join(" · ")}
+                {[day(it.date), accountName.get(it.accountId), from ? `now ${from.name}${it.byHand ? ", filed by hand" : ""}` : "no category now"].filter(Boolean).join(" · ")}
               </span>
             </span>
             <span className="shrink-0 text-sm tabular-nums">
@@ -239,9 +249,19 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
                   ? `The matches could not load: ${(preview.error as Error).message}`
                   : !settled
                     ? "Looking for transactions like it"
+                    : preview.data?.existing
+                      ? `You already have a rule for these words: ${preview.data.existing.name}, filing as ${categories.get(preview.data.existing.categoryId)?.name ?? "its category"}. Change it in Settings, Spending, Rules.`
                     : count === 0
-                      ? "No other transaction matches yet. New ones like it will get this category."
-                      : `${count} transaction${count === 1 ? "" : "s"} would be re-filed as ${categoryName}.`}
+                      ? already > 0
+                        ? `${alreadyText} New ones like it will get this category too.`
+                        : "No other transaction matches yet. New ones like it will get this category."
+                      : [
+                          auto > 0 ? `${auto} transaction${auto === 1 ? "" : "s"} would be re-filed as ${categoryName}.` : "",
+                          byHand > 0
+                            ? `${byHand} ${auto > 0 ? "more " : ""}you filed by hand ${byHand === 1 ? "matches" : "match"} too: ${byHand === 1 ? "it stays" : "they stay"} unless you tick ${byHand === 1 ? "it" : "them"} in the review.`
+                            : "",
+                          alreadyText,
+                        ].filter(Boolean).join(" ")}
             </p>
             {showMatches && settled && count > 0 ? <div className="rounded-lg border">{matchesList(false)}</div> : null}
 
@@ -253,7 +273,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
                 <Button type="button" variant="outline" onClick={() => setShowMatches((v) => !v)} disabled={!settled || count === 0}>
                   {showMatches && count > 0 ? "Hide matches" : `Preview ${settled ? count : "…"} ${count === 1 ? "match" : "matches"}`}
                 </Button>
-                <Button type="button" onClick={() => setStep("review")} disabled={!settled || preview.isError}>
+                <Button type="button" onClick={() => setStep("review")} disabled={!settled || preview.isError || !!preview.data?.existing}>
                   Review rule
                 </Button>
               </div>
