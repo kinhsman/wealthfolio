@@ -693,17 +693,19 @@ async fn stream_agent_response<E: AiEnvironment + 'static>(
     // total tool-call count, aborts stuck text-token loops, and turns tools off
     // on the last turn so the run ends with an answer. Cheap to clone (state is
     // behind an Arc<Mutex<_>>).
-    let max_turns = crate::stream_hook::MAX_TURNS;
+    use crate::stream_hook::{FINAL_TURN_RETRIES, MAX_TURNS};
     let hook = crate::stream_hook::WealthfolioStreamHook::for_provider(&title_ctx.provider_id)
-        .with_final_turn(max_turns, preamble);
+        .with_final_turn(MAX_TURNS, preamble);
 
     // Start multi-turn streaming (up to MAX_TURNS - 1 tool rounds, then the
-    // answer). The hook provides the finer-grained guards inside those turns.
+    // answer, plus FINAL_TURN_RETRIES if the model calls a tool on its last
+    // turn anyway). The hook provides the finer-grained guards inside them.
     let mut stream = agent
         .runner(prompt)
         .history(history)
         .add_hook(hook.clone())
-        .max_turns(max_turns)
+        .max_turns(MAX_TURNS + FINAL_TURN_RETRIES)
+        .max_invalid_tool_call_retries(FINAL_TURN_RETRIES)
         .stream()
         .await;
 

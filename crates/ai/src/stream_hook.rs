@@ -24,8 +24,10 @@
 //! 4. **Running out of turns** (money-hub) — rig ends a run that is still
 //!    calling tools after its last turn with `MaxTurnsError`, throwing away
 //!    everything the tools found. [`WealthfolioStreamHook::with_final_turn`]
-//!    turns tool calls off for the last turn and tells the model to answer
-//!    from what it already has, so the run always ends with an answer.
+//!    takes the tools away from the last turn and tells the model to answer
+//!    from what it already has. Some models (Gemini behind 9Router) call a
+//!    tool anyway; that call is sent back with [`FINAL_TURN_RETRY_NOTE`], up
+//!    to [`FINAL_TURN_RETRIES`] times, instead of failing the run.
 //!
 //! The hook is cheaply cloneable because state is behind
 //! an `Arc<Mutex<_>>`.
@@ -35,8 +37,9 @@ use std::sync::{Arc, Mutex};
 
 use log::{debug, warn};
 use rig::agent::hook::{
-    AgentHook, CompletionCall, CompletionCallAction, HookContext, ObservationAction, RequestPatch,
-    TextDelta, ToolCall, ToolCallAction, ToolResultAction, ToolResultEvent,
+    AgentHook, CompletionCall, CompletionCallAction, HookContext, InvalidToolCallAction,
+    InvalidToolCallContext, ObservationAction, RequestPatch, TextDelta, ToolCall, ToolCallAction,
+    ToolResultAction, ToolResultEvent,
 };
 use rig::message::ToolChoice;
 
@@ -55,6 +58,15 @@ const MAX_TOTAL_TOOL_CALLS: usize = 20;
 /// Model calls in one chat run (money-hub: was 7). The last one may not call
 /// tools, see [`WealthfolioStreamHook::with_final_turn`].
 pub const MAX_TURNS: usize = 10;
+
+/// Extra model calls when the last turn calls a tool anyway. Give the runner
+/// `max_turns(MAX_TURNS + FINAL_TURN_RETRIES)` and
+/// `max_invalid_tool_call_retries(FINAL_TURN_RETRIES)`.
+pub const FINAL_TURN_RETRIES: usize = 2;
+
+/// Sent back as the result of a tool the model called after its last lookup.
+pub const FINAL_TURN_RETRY_NOTE: &str = "Not run: there are no more lookups. Do not call any tool. \
+Write your answer to the user now as text, from the results above, and say what you could not check.";
 
 /// Added to the system prompt on the last turn, when tools are switched off.
 pub const FINAL_TURN_NOTE: &str = "FINAL TURN: you cannot call any more tools. \
@@ -108,10 +120,10 @@ impl WealthfolioStreamHook {
         }
     }
 
-    /// On turn `max_turns` (the run's last), send `tool_choice: none` and the
-    /// system prompt plus [`FINAL_TURN_NOTE`], so the model answers instead of
-    /// calling a tool rig would refuse to run. Pass the same `max_turns` to
-    /// the runner.
+    /// From turn `max_turns` on, send no tools, `tool_choice: none` and the
+    /// system prompt plus [`FINAL_TURN_NOTE`], so the model answers. A tool it
+    /// calls anyway is retried with [`FINAL_TURN_RETRY_NOTE`] (see
+    /// [`FINAL_TURN_RETRIES`] for the runner settings this needs).
     pub fn with_final_turn(mut self, max_turns: usize, preamble: &str) -> Self {
         self.final_turn = Some((max_turns, Arc::from(preamble)));
         self
@@ -170,6 +182,9 @@ impl AgentHook for WealthfolioStreamHook {
         if let Some((max_turns, preamble)) = &self.final_turn {
             if ctx.turn() >= *max_turns {
                 debug!("Final turn {} of {}: tools off", ctx.turn(), max_turns);
+                // No tool list at all: 9Router's Gemini ignores tool_choice
+                // "none" while tools are listed.
+                patch.active_tools = Some(Vec::new());
                 patch.tool_choice = Some(ToolChoice::None);
                 patch.preamble = Some(format!("{preamble}\n\n{FINAL_TURN_NOTE}"));
                 patched = true;
@@ -180,6 +195,23 @@ impl AgentHook for WealthfolioStreamHook {
         } else {
             CompletionCallAction::Continue
         }
+    }
+
+    async fn on_invalid_tool_call(
+        &self,
+        ctx: &HookContext,
+        event: &InvalidToolCallContext,
+    ) -> Option<InvalidToolCallAction> {
+        let (max_turns, _) = self.final_turn.as_ref()?;
+        if ctx.turn() < *max_turns {
+            return None; // an unknown tool earlier still fails the run
+        }
+        warn!(
+            "Tool `{}` called on final turn {}: asking for the answer again",
+            event.tool_name,
+            ctx.turn()
+        );
+        Some(InvalidToolCallAction::retry(FINAL_TURN_RETRY_NOTE))
     }
 
     fn on_tool_call(
