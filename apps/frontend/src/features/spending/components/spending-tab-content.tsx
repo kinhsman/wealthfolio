@@ -81,6 +81,8 @@ import { CashFlowStrip } from "./cash-flow-strip";
 import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
 import { SubscriptionsCard } from "./subscriptions-card";
+import { useSubscriptions } from "../lib/subscriptions";
+import { forecastParts } from "../lib/budget-forecast";
 import { ReturnsCard } from "./returns-card";
 import { CreditCardsCard } from "./credit-cards-card";
 import { FreeCashCard } from "./free-cash-card";
@@ -535,6 +537,29 @@ export default function SpendingTabContent() {
     const days = Math.max(1, calendarDaysBetweenInclusive(start, end));
     return total / days;
   }, [historyReport, budgetMonthKey, todayParts]);
+
+  // money-hub patch: the budget forecast with the bills apart (lib/budget-forecast.ts): the 3 months'
+  // average less their bills is the everyday day; the bills still due this month come by date.
+  const { data: subscriptionsView } = useSubscriptions();
+  const budgetForecastParts = useMemo(() => {
+    if (!subscriptionsView || !historyReport) return null;
+    const month = parseMonthKey(budgetMonthKey) ?? todayParts;
+    const monthStart = { year: month.year, month: month.month, day: 1 };
+    const monthEnd = { ...monthStart, day: daysInCalendarMonth(month.year, month.month) };
+    const histStart = addCalendarMonths(monthStart, -3);
+    const histEndMonth = addCalendarMonths(monthStart, -1);
+    const histEnd = { ...histEndMonth, day: daysInCalendarMonth(histEndMonth.year, histEndMonth.month) };
+    const iso = (d: { year: number; month: number; day: number }) =>
+      `${d.year}-${String(d.month).padStart(2, "0")}-${String(d.day).padStart(2, "0")}`;
+    return forecastParts(subscriptionsView.items, {
+      monthStart: iso(monthStart),
+      monthEnd: iso(monthEnd),
+      histStart: iso(histStart),
+      histEnd: iso(histEnd),
+      historyOutflow: historyReport.current.outflow ?? 0,
+      historyDays: Math.max(1, calendarDaysBetweenInclusive(histStart, histEnd)),
+    });
+  }, [subscriptionsView, historyReport, budgetMonthKey, todayParts]);
 
   // Always render in the user's base currency. The backend FX-converts every
   // activity in `report` to base at period end, so labeling by the first
@@ -1251,6 +1276,7 @@ export default function SpendingTabContent() {
                   spent={monthReport?.current.outflow ?? 0}
                   currency={budgetCardBudget?.computed.currency ?? currency}
                   historicalDailyAvg={historicalDailyAvg}
+                  forecastParts={budgetForecastParts}
                   allocations={
                     budgetCardBudget?.computed.groupRows.flatMap((row) => row.categories) ?? []
                   }

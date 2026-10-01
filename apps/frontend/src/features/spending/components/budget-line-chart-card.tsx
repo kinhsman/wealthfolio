@@ -12,6 +12,7 @@ import {
   useDateFormatting,
 } from "@wealthfolio/ui";
 
+import { forecastFrom, type ForecastParts } from "../lib/budget-forecast";
 import { topCategoryId } from "../lib/category-rollup";
 import type { BudgetCategoryRow } from "../types/budget";
 import type { DayBucket } from "../types/report";
@@ -81,6 +82,7 @@ export function BudgetLineChartCard({
   spent,
   currency,
   historicalDailyAvg,
+  forecastParts,
   allocations,
   spendingBreakdown,
   categoriesMeta,
@@ -98,6 +100,8 @@ export function BudgetLineChartCard({
   spent: number;
   currency: string;
   historicalDailyAvg: number;
+  /** money-hub patch: the bills apart (lib/budget-forecast.ts); without it, Wealthfolio's own forecast. */
+  forecastParts?: ForecastParts | null;
   allocations: BudgetCategoryRow[];
   spendingBreakdown: { categoryId: string; amount: number; count: number }[];
   categoriesMeta: CategoryMetaMap;
@@ -226,7 +230,9 @@ export function BudgetLineChartCard({
   const forecast =
     target > 0 && isCurrentMonth
       ? haveHistory
-        ? spent + historicalDailyAvg * daysRemaining
+        ? forecastParts
+          ? forecastFrom(spent, forecastParts, daysRemaining)
+          : spent + historicalDailyAvg * daysRemaining
         : dayOfMonth > 0
           ? (spent / dayOfMonth) * daysInMonth
           : 0
@@ -475,6 +481,16 @@ export function BudgetLineChartCard({
         <span>{t("spending:budgetChart.dayN", { day: daysInMonth })}</span>
       </div>
 
+      {isCurrentMonth && haveHistory && forecastParts ? (
+        // money-hub patch: what the forecast is made of, so a bill paid early never reads as overspending.
+        <p className="text-muted-foreground/80 mt-3 text-[11px] leading-snug tabular-nums">
+          Forecast: spent so far +{" "}
+          <PrivacyAmount value={forecastParts.billsLeftTotal} currency={currency} /> in{" "}
+          {forecastParts.billsLeft.length} {forecastParts.billsLeft.length === 1 ? "bill" : "bills"} still due +{" "}
+          <PrivacyAmount value={forecastParts.everydayDaily} currency={currency} /> a day of everyday spending
+          for the {daysRemaining} {daysRemaining === 1 ? "day" : "days"} left
+        </p>
+      ) : null}
       <div className="border-border mt-4 grid grid-cols-2 gap-3 border-t pt-3 text-xs">
         <div>
           <div className="text-muted-foreground/70 text-[11px] uppercase tracking-wide">

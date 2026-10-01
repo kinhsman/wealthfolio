@@ -15,6 +15,8 @@ import { TooltipProvider } from "@wealthfolio/ui";
 import { Dialog, DialogContent } from "@wealthfolio/ui/components/ui/dialog";
 import { PrivacyProvider } from "../src/context/privacy-context";
 import { CreditCardsCard } from "../src/features/spending/components/credit-cards-card";
+import { BudgetLineChartCard } from "../src/features/spending/components/budget-line-chart-card";
+import { forecastParts } from "../src/features/spending/lib/budget-forecast";
 import { FreeCashCard } from "../src/features/spending/components/free-cash-card";
 import { CREDIT_CARDS_KEY, type CreditCardsView } from "../src/features/spending/lib/credit-cards";
 import { FREE_CASH_KEY, type FreeCashView } from "../src/features/spending/lib/free-cash";
@@ -121,7 +123,47 @@ function OpenBills() {
   return null;
 }
 
+/** The Monthly budget card on Oct 1 as the owner saw it: $4,000 budget, the mortgage paid that day,
+ *  $19,953.76 spent over Jul to Sep (?view=budget; &old=1 = Wealthfolio's own forecast). */
+function BudgetPreview() {
+  const parts = forecastParts((subsFixture as unknown as SubscriptionsView).items, {
+    monthStart: "2026-10-01",
+    monthEnd: "2026-10-31",
+    histStart: "2026-07-01",
+    histEnd: "2026-09-30",
+    historyOutflow: 19953.76,
+    historyDays: 92,
+  });
+  return (
+    <div className="bg-background text-foreground min-h-screen px-4 py-6 md:px-6 lg:px-10 lg:py-10">
+      <div className="lg:grid lg:grid-cols-3 lg:gap-20">
+        <div className="lg:col-span-2" />
+        <BudgetLineChartCard
+          monthKey="2026-10"
+          today={{ year: 2026, month: 10, day: 1 }}
+          isCurrentMonth
+          onPreviousMonth={() => undefined}
+          onNextMonth={() => undefined}
+          canGoNextMonth={false}
+          activityRange={{ from: "2026-10-01", to: "2026-10-31" }}
+          target={4000}
+          spent={2505.76}
+          currency="USD"
+          historicalDailyAvg={19953.76 / 92}
+          forecastParts={params.get("old") === "1" ? null : parts}
+          allocations={[]}
+          spendingBreakdown={[]}
+          categoriesMeta={{}}
+          monthByDay={[{ date: "2026-10-01", income: 0, outflow: 2505.76 }]}
+          historicalByDay={[]}
+        />
+      </div>
+    </div>
+  );
+}
+
 function Shell() {
+  if (view === "budget") return <BudgetPreview />;
   if (view === "alerts") {
     return (
       <div className="bg-background text-foreground min-h-screen px-6 py-8">
