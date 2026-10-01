@@ -4,6 +4,7 @@
 // window (components/track-charge-dialog.tsx, mounted once in App.tsx) links the charge to one on
 // Subscriptions & bills, or starts a new one from it; the money-hub service keeps the link
 // (server/drive-backup/lib/subscriptions.js `links`).
+import { cachedCategoryGroup } from "./category-groups";
 import type { StreamGroup } from "./subscriptions";
 
 /** Categories whose charges are subscriptions. */
@@ -28,6 +29,10 @@ interface CategoryLike {
 
 /** Subscriptions or Bills when this category asks which one a charge is; null when it does not. */
 export function trackGroupFor(categoryId: string, categories: CategoryLike[]): StreamGroup | null {
+  // The owner's choice per category, from the money-hub service (lib/category-groups.ts); the lists
+  // here only until it has answered once.
+  const chosen = cachedCategoryGroup(categoryId);
+  if (chosen !== undefined) return chosen;
   const c = categories.find((x) => x.id === categoryId);
   if (!c) return null;
   if (SUBSCRIPTION_KEYS.has(c.key)) return "subscriptions";

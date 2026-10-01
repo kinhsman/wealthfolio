@@ -1,10 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import * as z from "zod";
 
 import {
+  AnimatedToggleGroup,
   Button,
   Form,
   FormControl,
@@ -16,6 +18,7 @@ import {
   Switch,
 } from "@wealthfolio/ui";
 
+import { saveCategoryGroup, useCategoryGroups, type CategoryChoice } from "../lib/category-groups";
 import type { CategoryNode } from "./category-item";
 import { ColorPicker } from "./color-picker";
 import { IconPicker } from "./icon-picker";
@@ -88,9 +91,32 @@ export function CategoryForm({
 
   const colorValue = form.watch("color");
 
+  // money-hub patch: Subscriptions & bills, per spending category (lib/category-groups.ts). Saved
+  // with the rest of the form; shown when editing one (a new category has no id to save it under).
+  const qc = useQueryClient();
+  const trackId = showExcludeToggle && category ? category.id : null;
+  const { data: groups } = useCategoryGroups();
+  const nowTrack: CategoryChoice | null = trackId && groups ? (groups.groups[trackId] ?? "off") : null;
+  const [track, setTrack] = useState<CategoryChoice | null>(null);
+  useEffect(() => {
+    if (track === null && nowTrack) setTrack(nowTrack);
+  }, [nowTrack, track]);
+  const [trackError, setTrackError] = useState<string | null>(null);
+  const submit = async (values: CategoryFormValues) => {
+    if (trackId && track && track !== nowTrack) {
+      try {
+        await saveCategoryGroup(qc, trackId, track);
+      } catch (e) {
+        setTrackError(e instanceof Error ? e.message : String(e));
+        return;
+      }
+    }
+    onSubmit(values);
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
         <FormField
           control={form.control}
           name="name"
@@ -180,6 +206,32 @@ export function CategoryForm({
             )}
           />
         )}
+        {trackId && track ? (
+          <div className="space-y-2 rounded-md border px-3 py-2.5">
+            <div>
+              <div className="text-sm font-medium">Subscriptions &amp; bills</div>
+              <p className="text-muted-foreground mt-0.5 text-xs">
+                {track === "off"
+                  ? "Charges filed here are not asked about."
+                  : `Filing a charge here asks which ${track === "bills" ? "bill" : "subscription"} it is, and it shows under ${track === "bills" ? "Bills" : "Subscriptions"}.`}
+              </p>
+            </div>
+            <AnimatedToggleGroup<CategoryChoice>
+              aria-label="Subscriptions and bills"
+              rounded="lg"
+              size="sm"
+              className="w-fit"
+              value={track}
+              onValueChange={setTrack}
+              items={[
+                { value: "subscriptions", label: "Subscription" },
+                { value: "bills", label: "Bill" },
+                { value: "off", label: "Off" },
+              ]}
+            />
+            {trackError ? <p className="text-destructive text-xs">{trackError}</p> : null}
+          </div>
+        ) : null}
         <div className="flex justify-end gap-2 pt-4">
           <Button type="button" variant="outline" onClick={onCancel}>
             {t("common:cancel")}

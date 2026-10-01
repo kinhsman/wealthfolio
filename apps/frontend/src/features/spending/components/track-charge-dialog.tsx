@@ -41,6 +41,7 @@ import {
   type StreamGroup,
   type WhichOne,
 } from "../lib/subscriptions";
+import { useCategoryGroups } from "../lib/category-groups";
 import { trackChargeStore, type TrackCharge } from "../lib/track-charge";
 import { MerchantLogo } from "./merchant-logo";
 import { StreamLogo } from "./stream-logo";
@@ -50,6 +51,7 @@ const caps = "text-muted-foreground text-[11px] font-semibold uppercase tracking
 const errorText = (e: unknown) => (e as Error)?.message ?? String(e);
 
 export function TrackChargeHost() {
+  useCategoryGroups(); // keeps each category's Subscriptions & bills choice at hand (lib/category-groups.ts)
   const charge = useSyncExternalStore(trackChargeStore.subscribe, trackChargeStore.get);
   if (!charge) return null;
   return <TrackChargeDialog key={charge.id} charge={charge} onClose={trackChargeStore.close} />;
