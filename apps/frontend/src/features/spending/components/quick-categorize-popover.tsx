@@ -114,7 +114,10 @@ export function QuickCategorizePopover({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent className="w-70 p-0" align={align}>
+      <PopoverContent
+        className="w-80 max-w-[calc(100vw-2rem)] p-0"
+        align={align}
+      >
         <Command>
           <CommandInput placeholder={t("spending:category.searchCategories")} />
           <CommandList>
@@ -134,17 +137,17 @@ export function QuickCategorizePopover({
                         key={`${opt.taxonomyId}:${opt.category.id}`}
                         value={`${groupKey} ${label}`}
                         onSelect={() => handleSelect(opt)}
-                        className="flex items-center gap-2"
+                        className="flex items-start gap-2"
                       >
                         <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
                           style={{
                             backgroundColor: opt.category.color ?? "var(--muted-foreground)",
                           }}
                         />
-                        <span className="truncate">{label}</span>
+                        <span className="min-w-0 flex-1 break-words">{label}</span>
                         {isSelected && (
-                          <Icons.Check className="text-muted-foreground ml-auto h-3.5 w-3.5" />
+                          <Icons.Check className="text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0" />
                         )}
                       </CommandItem>
                     );
