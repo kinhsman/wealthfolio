@@ -338,7 +338,32 @@ fn is_repetitive(aggregated_text: &str) -> bool {
         return false;
     }
 
-    tail.matches(probe).count() >= REPETITION_MIN_REPEATS
+    if tail.matches(probe).count() < REPETITION_MIN_REPEATS {
+        return false;
+    }
+
+    // money-hub: a stuck model repeats the same chunk back to back. A table
+    // whose rows end alike ("| No transaction found | — |" for 13 years) also
+    // repeats the probe, but its rows differ (the year), so it is not
+    // periodic. Require the last REPETITION_MIN_REPEATS periods to be equal.
+    // Bytes, not str slices: a slice that cuts a multi-byte character (the
+    // table's dashes) would panic.
+    let bytes = tail.as_bytes();
+    let probe = probe.as_bytes();
+    let probe_start = bytes.len() - probe.len();
+    let Some(previous) = (0..probe_start)
+        .rev()
+        .find(|&i| &bytes[i..i + probe.len()] == probe)
+    else {
+        return false;
+    };
+    let period = probe_start - previous;
+    let span = period * REPETITION_MIN_REPEATS;
+    if period == 0 || span > bytes.len() {
+        return false;
+    }
+    let start = bytes.len() - span;
+    bytes[start..bytes.len() - period] == bytes[start + period..]
 }
 
 #[cfg(test)]
@@ -374,6 +399,20 @@ mod tests {
             buf.push_str("the same answer ");
         }
         assert!(is_repetitive(&buf));
+    }
+
+    #[test]
+    fn table_rows_that_end_alike_pass() {
+        let mut buf = String::from("| Year | Date | Amount |\n| :--- | :--- | :--- |\n");
+        for year in 2014..2027 {
+            buf.push_str(&format!(
+                "| **{year}** | — | *No transaction found* | — | — |\n"
+            ));
+        }
+        // Checked at every point while it streams, like on_text_delta does.
+        for end in (1..=buf.len()).filter(|i| buf.is_char_boundary(*i)) {
+            assert!(!is_repetitive(&buf[..end]), "tripped at {end}");
+        }
     }
 
     #[test]
