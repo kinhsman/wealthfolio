@@ -61,6 +61,35 @@ pub struct SearchActivitiesOutput {
     pub account_scope: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total_amount: Option<f64>,
+    /// money-hub: set when nothing matched the whole `symbol` text and these
+    /// are the entries matching any one of its words instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub match_note: Option<String>,
+}
+
+/// Filler that would match half the bank lines ("PAYMENT THANK YOU").
+const FILLER_WORDS: [&str; 8] = [
+    "the", "and", "for", "with", "from", "total", "paid", "payment",
+];
+
+/// Words of a multi-word search worth trying one by one (3+ letters, no
+/// filler, at most 6).
+fn search_words(keyword: &str) -> Vec<String> {
+    let mut words: Vec<String> = Vec::new();
+    for word in keyword.split(|c: char| !c.is_alphanumeric()) {
+        let word = word.to_lowercase();
+        if word.chars().count() >= 3
+            && !FILLER_WORDS.contains(&word.as_str())
+            && !words.contains(&word)
+        {
+            words.push(word);
+        }
+    }
+    if words.len() < 2 {
+        return Vec::new();
+    }
+    words.truncate(6);
+    words
 }
 
 /// Tool to search activities/transactions.
@@ -73,7 +102,7 @@ impl AgentTool for SearchActivities {
     }
 
     fn description(&self) -> &'static str {
-        "Search and get investment activities (transactions) such as buys, sells, dividends, deposits, and withdrawals. Supports filtering, date ranges, and pagination. Returns paginated results with totalPages so you can request more pages if needed."
+        "Search the user's transactions: bank and card spending, bills, income, transfers, and investment activity (buys, sells, dividends, deposits, withdrawals). Supports filtering, date ranges, and pagination. Returns paginated results with totalPages so you can request more pages if needed. To find a payee or purchase, put ONE distinctive word in `symbol` (for example \"sticker\", \"costco\", \"water\"): it is a case-insensitive substring match on the payee/description text and the security symbol/name. Bank descriptions are often abbreviated (\"CTYCHGO CLK STICKER\" is a City of Chicago sticker), so prefer the most specific word over a phrase. When a multi-word `symbol` matches nothing, the result lists entries matching any one of its words and says so in matchNote. Spending is usually WITHDRAWAL. Do not repeat a search that differs only in letter case."
     }
 
     fn input_schema(&self) -> serde_json::Value {
@@ -91,7 +120,7 @@ impl AgentTool for SearchActivities {
                 },
                 "symbol": {
                     "type": "string",
-                    "description": "Filter by symbol or asset keyword"
+                    "description": "Text to look for in the payee/description or the security symbol/name (case-insensitive substring). One distinctive word works best."
                 },
                 "dateFrom": {
                     "type": "string",
@@ -203,29 +232,70 @@ impl AgentTool for SearchActivities {
         };
 
         // Search activities
-        let response = env
-            .activity_service()
-            .search_activities(
-                backend_page,
-                page_size,
-                account_ids.clone(),
-                activity_types,
-                symbol_keyword,
-                Some(sort),
-                None, // needs_review_filter
-                date_from,
-                date_to,
-                None, // instrument_type_filter
-                None, // activity_id_filter
-            )
-            .map_err(|e| AgentToolError::ExecutionFailed(e.to_string()))?;
+        let search = |page: i64, size: i64, keyword: Option<String>| {
+            env.activity_service()
+                .search_activities(
+                    page,
+                    size,
+                    account_ids.clone(),
+                    activity_types.clone(),
+                    keyword,
+                    Some(Sort {
+                        id: sort.id.clone(),
+                        desc: sort.desc,
+                    }),
+                    None, // needs_review_filter
+                    date_from,
+                    date_to,
+                    None, // instrument_type_filter
+                    None, // activity_id_filter
+                )
+                .map_err(|e| AgentToolError::ExecutionFailed(e.to_string()))
+        };
+        let response = search(backend_page, page_size, symbol_keyword.clone())?;
+        let mut rows = response.data;
+        let mut total_row_count = response.meta.total_row_count as usize;
+        let mut match_note = None;
 
-        let total_row_count = response.meta.total_row_count as usize;
+        // money-hub: bank text is abbreviated ("CTYCHGO CLK STICKER"), so a
+        // phrase like "city sticker" finds nothing. Then list what matches any
+        // one of its words (newest first, de-duplicated), so the model sees the
+        // candidates in this call instead of guessing spellings over many.
+        let words = symbol_keyword
+            .as_deref()
+            .map(search_words)
+            .unwrap_or_default();
+        if total_row_count == 0 && !words.is_empty() {
+            let mut found = Vec::new();
+            let mut seen = std::collections::HashSet::new();
+            for word in &words {
+                let hits = search(0, MAX_ACTIVITIES_ROWS as i64, Some(word.clone()))?;
+                for row in hits.data {
+                    if seen.insert(row.id.clone()) {
+                        found.push(row);
+                    }
+                }
+            }
+            found.sort_by(|a, b| b.date.cmp(&a.date));
+            total_row_count = found.len();
+            if total_row_count > 0 {
+                match_note = Some(format!(
+                    "Nothing contains \"{}\" as written. These entries contain at least one of: {}. Check each one before using it.",
+                    symbol_keyword.as_deref().unwrap_or_default(),
+                    words.join(", ")
+                ));
+            }
+            rows = found
+                .into_iter()
+                .skip((backend_page * page_size) as usize)
+                .take(page_size as usize)
+                .collect();
+        }
+
         let total_pages = ((total_row_count as i64) + page_size - 1) / page_size;
 
         // Convert to DTOs
-        let activities: Vec<ActivityDto> = response
-            .data
+        let activities: Vec<ActivityDto> = rows
             .into_iter()
             .map(|a| {
                 let quantity = a.quantity.as_ref().and_then(|v| v.parse::<f64>().ok());
@@ -276,9 +346,28 @@ impl AgentTool for SearchActivities {
             } else {
                 None
             },
+            match_note,
         };
         Ok(AgentToolResult {
             content: serde_json::to_value(output)?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::search_words;
+
+    #[test]
+    fn search_words_splits_phrases_only() {
+        assert_eq!(search_words("city sticker"), vec!["city", "sticker"]);
+        assert_eq!(search_words("City of Chicago"), vec!["city", "chicago"]);
+        assert!(search_words("sticker").is_empty());
+        assert!(search_words("ab cd").is_empty());
+        assert_eq!(search_words("Water-water bill"), vec!["water", "bill"]);
+        assert_eq!(
+            search_words("total paid for city sticker"),
+            vec!["city", "sticker"]
+        );
     }
 }

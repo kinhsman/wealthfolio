@@ -373,7 +373,8 @@ pub(super) async fn spawn_chat_stream<E: AiEnvironment + 'static>(
 
             let agent = builder.build();
             stream_agent_response(
-                agent, prompt, history, tx, repo, thread_id, run_id, message_id, title_ctx,
+                agent, &preamble, prompt, history, tx, repo, thread_id, run_id, message_id,
+                title_ctx,
             )
             .await
             .map_err(|e| remap_provider_error(&provider_id, &model_id, e))
@@ -405,7 +406,8 @@ pub(super) async fn spawn_chat_stream<E: AiEnvironment + 'static>(
 
             let agent = builder.build();
             stream_agent_response(
-                agent, prompt, history, tx, repo, thread_id, run_id, message_id, title_ctx,
+                agent, &preamble, prompt, history, tx, repo, thread_id, run_id, message_id,
+                title_ctx,
             )
             .await
             .map_err(|e| remap_provider_error(&provider_id, &model_id, e))
@@ -677,6 +679,7 @@ impl ThinkTagParser {
 #[allow(clippy::too_many_arguments)]
 async fn stream_agent_response<E: AiEnvironment + 'static>(
     agent: Agent,
+    preamble: &str,
     prompt: Message,
     history: Vec<Message>,
     tx: mpsc::Sender<AiStreamEvent>,
@@ -687,17 +690,20 @@ async fn stream_agent_response<E: AiEnvironment + 'static>(
     title_ctx: TitleContext<E>,
 ) -> Result<(), AiError> {
     // Attach a per-run hook that deduplicates repeated tool calls, caps the
-    // total tool-call count, and aborts stuck text-token loops. Cheap to clone
-    // (state is behind an Arc<Mutex<_>>).
-    let hook = crate::stream_hook::WealthfolioStreamHook::for_provider(&title_ctx.provider_id);
+    // total tool-call count, aborts stuck text-token loops, and turns tools off
+    // on the last turn so the run ends with an answer. Cheap to clone (state is
+    // behind an Arc<Mutex<_>>).
+    let max_turns = crate::stream_hook::MAX_TURNS;
+    let hook = crate::stream_hook::WealthfolioStreamHook::for_provider(&title_ctx.provider_id)
+        .with_final_turn(max_turns, preamble);
 
-    // Start multi-turn streaming (up to 6 tool rounds). The hook provides the
-    // finer-grained guards inside those turns.
+    // Start multi-turn streaming (up to MAX_TURNS - 1 tool rounds, then the
+    // answer). The hook provides the finer-grained guards inside those turns.
     let mut stream = agent
         .runner(prompt)
         .history(history)
         .add_hook(hook.clone())
-        .max_turns(7)
+        .max_turns(max_turns)
         .stream()
         .await;
 
@@ -1254,6 +1260,7 @@ mod tests {
         let mut events = super::super::owned_event_stream(rx, async move {
             stream_agent_response(
                 agent,
+                "",
                 Message::user("Fixture prompt"),
                 vec![],
                 tx,

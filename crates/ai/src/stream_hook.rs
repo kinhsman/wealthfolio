@@ -21,6 +21,12 @@
 //!    that already appears many times in the trailing buffer, or by the
 //!    stream exceeding [`MAX_STREAM_CHARS`].
 //!
+//! 4. **Running out of turns** (money-hub) — rig ends a run that is still
+//!    calling tools after its last turn with `MaxTurnsError`, throwing away
+//!    everything the tools found. [`WealthfolioStreamHook::with_final_turn`]
+//!    turns tool calls off for the last turn and tells the model to answer
+//!    from what it already has, so the run always ends with an answer.
+//!
 //! The hook is cheaply cloneable because state is behind
 //! an `Arc<Mutex<_>>`.
 
@@ -32,6 +38,7 @@ use rig::agent::hook::{
     AgentHook, CompletionCall, CompletionCallAction, HookContext, ObservationAction, RequestPatch,
     TextDelta, ToolCall, ToolCallAction, ToolResultAction, ToolResultEvent,
 };
+use rig::message::ToolChoice;
 
 /// Maximum distinct identical `(tool_name, args_json)` calls we'll execute.
 /// Beyond this count the hook returns a "stop calling this" skip. Two is
@@ -44,6 +51,15 @@ const ASSET_SELECTION_PAUSE: &str = "Waiting for asset selection";
 /// LibreChat's `recursionLimit` (default 25) — we're slightly tighter because
 /// this is a desktop UX, not a server agent.
 const MAX_TOTAL_TOOL_CALLS: usize = 20;
+
+/// Model calls in one chat run (money-hub: was 7). The last one may not call
+/// tools, see [`WealthfolioStreamHook::with_final_turn`].
+pub const MAX_TURNS: usize = 10;
+
+/// Added to the system prompt on the last turn, when tools are switched off.
+pub const FINAL_TURN_NOTE: &str = "FINAL TURN: you cannot call any more tools. \
+Answer the user's latest question now, using only the tool results already in this conversation. \
+If they are incomplete, give what you found (amounts, dates, totals) and say plainly what you could not find.";
 
 /// Maximum streamed text+reasoning characters before we assume runaway
 /// generation and terminate. Jan's default `max_tokens` is 2048 (~8000 chars);
@@ -76,6 +92,8 @@ struct HookState {
 pub struct WealthfolioStreamHook {
     state: Arc<Mutex<HookState>>,
     omit_reasoning_history: bool,
+    /// Last turn of the run and the system prompt to extend on it.
+    final_turn: Option<(usize, Arc<str>)>,
 }
 
 impl WealthfolioStreamHook {
@@ -88,6 +106,15 @@ impl WealthfolioStreamHook {
             omit_reasoning_history: provider_id == "groq",
             ..Self::default()
         }
+    }
+
+    /// On turn `max_turns` (the run's last), send `tool_choice: none` and the
+    /// system prompt plus [`FINAL_TURN_NOTE`], so the model answers instead of
+    /// calling a tool rig would refuse to run. Pass the same `max_turns` to
+    /// the runner.
+    pub fn with_final_turn(mut self, max_turns: usize, preamble: &str) -> Self {
+        self.final_turn = Some((max_turns, Arc::from(preamble)));
+        self
     }
 
     pub fn paused_for_asset_selection(&self) -> bool {
@@ -104,19 +131,28 @@ impl WealthfolioStreamHook {
     }
 
     fn key(tool_name: &str, args: &str) -> String {
-        format!("{}::{}", tool_name, args)
+        // The activity search ignores case, so "STICKER" and "sticker" are the
+        // same call.
+        if tool_name == "search_activities" {
+            format!("{}::{}", tool_name, args.to_lowercase())
+        } else {
+            format!("{}::{}", tool_name, args)
+        }
     }
 }
 
 impl AgentHook for WealthfolioStreamHook {
     async fn on_completion_call(
         &self,
-        _ctx: &HookContext,
+        ctx: &HookContext,
         event: CompletionCall<'_>,
     ) -> CompletionCallAction {
         if self.paused_for_asset_selection() {
-            CompletionCallAction::Stop(ASSET_SELECTION_PAUSE.into())
-        } else if self.omit_reasoning_history {
+            return CompletionCallAction::Stop(ASSET_SELECTION_PAUSE.into());
+        }
+        let mut patch = RequestPatch::default();
+        let mut patched = false;
+        if self.omit_reasoning_history {
             // Groq rejects reasoning_content on assistant input messages. Keep
             // streamed reasoning in the UI, but omit it from provider requests.
             let mut history = event.history.to_vec();
@@ -128,10 +164,19 @@ impl AgentHook for WealthfolioStreamHook {
                 }
             }
             history.retain(|message| !matches!(message, rig::completion::Message::Assistant { content, .. } if content.is_empty()));
-            CompletionCallAction::Patch(RequestPatch {
-                history: Some(history),
-                ..Default::default()
-            })
+            patch.history = Some(history);
+            patched = true;
+        }
+        if let Some((max_turns, preamble)) = &self.final_turn {
+            if ctx.turn() >= *max_turns {
+                debug!("Final turn {} of {}: tools off", ctx.turn(), max_turns);
+                patch.tool_choice = Some(ToolChoice::None);
+                patch.preamble = Some(format!("{preamble}\n\n{FINAL_TURN_NOTE}"));
+                patched = true;
+            }
+        }
+        if patched {
+            CompletionCallAction::Patch(patch)
         } else {
             CompletionCallAction::Continue
         }

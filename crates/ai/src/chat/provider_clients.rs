@@ -296,6 +296,7 @@ mod transport_tests {
     use rig::{
         agent::MultiTurnStreamItem,
         client::AgentClientExt,
+        message::ToolChoice,
         streaming::StreamedAssistantContent,
         tool::{DynamicTool, ToolOutput},
     };
@@ -428,6 +429,83 @@ mod transport_tests {
         assert!(requests[4].contains("fixture-value"));
         assert!(tool_result_seen);
         assert_eq!(text, "Fixture complete");
+    }
+
+    #[tokio::test]
+    async fn last_turn_turns_tools_off_so_the_run_answers() {
+        // money-hub: a model that keeps searching used to end the run with
+        // MaxTurnsError and no answer. The last turn now has tools off.
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for round in 0..3 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let request = read_request(&mut socket).await;
+                // The fixture model calls the tool whenever it is allowed to.
+                let body = if request.contains("\"tool_choice\":\"none\"") {
+                    sse(
+                        serde_json::json!({"role":"assistant","content":"Found it"}),
+                        Some("stop"),
+                    )
+                } else {
+                    sse(
+                        serde_json::json!({"role":"assistant","tool_calls":[{
+                            "index":0,"id":format!("call_{round}"),"type":"function",
+                            "function":{"name":"echo","arguments":format!("{{\"value\":\"v{round}\"}}")}
+                        }]}),
+                        Some("tool_calls"),
+                    )
+                } + "data: [DONE]\n\n";
+                requests.push(request);
+                let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+            requests
+        });
+        let calls = Arc::new(AtomicUsize::new(0));
+        let client = create_openai_client(
+            Some("fixture-key".into()),
+            "openai",
+            Some(format!("http://{address}")),
+        )
+        .unwrap();
+        let agent = client
+            .agent("fixture")
+            .preamble("Fixture preamble")
+            .dynamic_tools(vec![echo_tool(calls.clone())])
+            .tool_choice(ToolChoice::Auto)
+            .build();
+        let mut stream = agent
+            .runner("Find it")
+            .add_hook(
+                crate::stream_hook::WealthfolioStreamHook::new()
+                    .with_final_turn(3, "Fixture preamble"),
+            )
+            .max_turns(3)
+            .stream()
+            .await;
+        let mut text = String::new();
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while let Some(item) = stream.next().await {
+                if let MultiTurnStreamItem::StreamAssistantItem(StreamedAssistantContent::Text(t)) =
+                    item.unwrap()
+                {
+                    text.push_str(&t.text)
+                }
+            }
+        })
+        .await
+        .unwrap();
+        let requests = server.await.unwrap();
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert!(requests[1].contains("\"tool_choice\":\"auto\""));
+        assert!(!requests[1].contains("FINAL TURN"));
+        assert!(requests[2].contains("\"tool_choice\":\"none\""));
+        assert!(requests[2].contains("Fixture preamble"));
+        assert!(requests[2].contains("FINAL TURN"));
+        assert!(requests[2].contains("v1"));
+        assert_eq!(text, "Found it");
     }
 
     #[tokio::test]
