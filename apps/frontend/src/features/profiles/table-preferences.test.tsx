@@ -16,6 +16,13 @@ vi.mock("@/lib/settings-provider", () => ({
   useSettingsContext: () => ({ settings: { baseCurrency: "USD" } }),
 }));
 
+// money-hub patch: the WheelTradr stats hook fetches through react-query; no WheelTradr
+// accounts here, so every row renders as Wealthfolio made it.
+vi.mock("@/lib/wheeltradr-holding", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/wheeltradr-holding")>()),
+  useWheeltradrStats: () => ({}),
+}));
+
 vi.mock("react-router-dom", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-router-dom")>()),
   useNavigate: () => vi.fn(),

@@ -140,6 +140,7 @@
     "account_type_portfolio": "投資組合",
     "account_type_securities": "證券帳戶",
     "account_type_cash": "現金帳戶",
+    "account_type_rental": "租賃帳戶",
     "account_type_credit_card": "信用卡帳戶",
     "account_type_cryptocurrency": "加密貨幣帳戶",
     "account_type_other": "其他帳戶",

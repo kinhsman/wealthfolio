@@ -137,6 +137,7 @@
   "accounts_form_type_sheet_description": "選取最符合的帳戶類型。",
   "accounts_form_type_securities": "有價證券",
   "accounts_form_type_cash": "現金",
+  "accounts_form_type_rental": "租賃",
   "accounts_form_type_crypto": "加密資產",
   "accounts_form_currency_label": "幣別",
   "accounts_form_default_label": "預設帳戶",
