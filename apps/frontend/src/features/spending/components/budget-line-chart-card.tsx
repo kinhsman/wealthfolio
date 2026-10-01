@@ -12,7 +12,12 @@ import {
   useDateFormatting,
 } from "@wealthfolio/ui";
 
-import { againstBudget, paceWithFixed, withoutCharges, type ForecastParts } from "../lib/budget-forecast";
+import {
+  againstBudget,
+  paceWithFixed,
+  withoutCharges,
+  type ForecastParts,
+} from "../lib/budget-forecast";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import { topCategoryId } from "../lib/category-rollup";
 import type { BudgetCategoryRow } from "../types/budget";
@@ -214,7 +219,9 @@ export function BudgetLineChartCard({
   // money-hub patch: fixed bills (Exclude from forecast) are left out of the usual month's shape; they
   // count on their own day (paceWithFixed).
   const fixedParts =
-    forecastParts && isCurrentMonth && forecastParts.fixedPaid.length + forecastParts.fixedDue.length > 0
+    forecastParts &&
+    isCurrentMonth &&
+    forecastParts.fixedPaid.length + forecastParts.fixedDue.length > 0
       ? forecastParts
       : null;
   const paceHistory = useMemo(
@@ -226,7 +233,10 @@ export function BudgetLineChartCard({
     [paceHistory, daysInMonth],
   );
   const paceAt = useMemo(
-    () => (fixedParts ? paceWithFixed(fixedParts, target, daysInMonth, historicalPace?.pctByDay ?? null) : null),
+    () =>
+      fixedParts
+        ? paceWithFixed(fixedParts, target, daysInMonth, historicalPace?.pctByDay ?? null)
+        : null,
     [fixedParts, target, daysInMonth, historicalPace],
   );
 
@@ -234,7 +244,10 @@ export function BudgetLineChartCard({
     if (paceAt && target > 0) {
       const xForDay = (day: number) => padL + ((day - 1) / Math.max(1, daysInMonth - 1)) * innerW;
       const yForVal = (v: number) => padT + (1 - v / yMax) * innerH;
-      const points = Array.from({ length: daysInMonth }, (_, i) => ({ day: i + 1, value: paceAt(i + 1) }));
+      const points = Array.from({ length: daysInMonth }, (_, i) => ({
+        day: i + 1,
+        value: paceAt(i + 1),
+      }));
       return toSvgPath(points, xForDay, yForVal);
     }
     if (!historicalPace || target <= 0) return "";
@@ -300,7 +313,11 @@ export function BudgetLineChartCard({
   // number that changes a moment later (owner, 10-01: "briefly show me the 9k value").
   if (isCurrentMonth && forecastPending) {
     return (
-      <DashboardCard title={t("spending:budgetChart.monthlyBudget")} subtitle={monthLabel} action={headerAction}>
+      <DashboardCard
+        title={t("spending:budgetChart.monthlyBudget")}
+        subtitle={monthLabel}
+        action={headerAction}
+      >
         <div className="space-y-3" aria-busy>
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-8 w-44" />
@@ -327,11 +344,34 @@ export function BudgetLineChartCard({
   const gapVsPace = spent - paceAtToday;
   const aheadOfPace = gapVsPace < 0;
 
-  const status: Status = isOver ? "over" : isCurrentMonth && !aheadOfPace ? "warn" : "ok";
+  // money-hub patch: ONE verdict, the month's end (owner, 10-01: "one said on track, one said under
+  // budget, one said over budget, i am totally lost"). With the bills apart, the status, the headline and
+  // the chart's bubble all follow the forecast; today's pace is no longer a second opinion.
+  // `perDay`: what everyday spending can be each day left and still land on budget.
+  const perDay =
+    sums && daysRemaining > 0 && forecastParts
+      ? (sums.room - sums.spentOthers - forecastParts.billsLeftTotal) / daysRemaining
+      : null;
+  const planStatus: Status | null = sums
+    ? sums.spentOthers + (forecastParts?.billsLeftTotal ?? 0) > sums.room
+      ? "over"
+      : sums.over > 0
+        ? "warn"
+        : "ok"
+    : null;
+  const status: Status =
+    planStatus ?? (isOver ? "over" : isCurrentMonth && !aheadOfPace ? "warn" : "ok");
   const a = STATUS_ACCENTS[status];
   const { Icon } = a;
-  const statusLabel =
-    !isCurrentMonth && !isOver ? t("spending:budgetChart.underBudget") : t(a.labelKey);
+  const statusLabel = planStatus
+    ? planStatus === "over"
+      ? "Over budget"
+      : planStatus === "warn"
+        ? "Heading over budget"
+        : "On track"
+    : !isCurrentMonth && !isOver
+      ? t("spending:budgetChart.underBudget")
+      : t(a.labelKey);
 
   const xForDay = (day: number) => padL + ((day - 1) / Math.max(1, daysInMonth - 1)) * innerW;
   const yForVal = (v: number) => padT + (1 - v / yMax) * innerH;
@@ -345,25 +385,27 @@ export function BudgetLineChartCard({
   const endY = cumulative.length ? yForVal(cumulative[cumulative.length - 1].value) : padT + innerH;
 
   const gapAbs = Math.abs(gapVsPace);
-  const gapLabel = isCurrentMonth
-    ? isOver
-      ? t("spending:budgetChart.overBudgetAmount", {
-          amount: amountFormatting.formatCompactAmount(overBy, currency),
-        })
-      : aheadOfPace
-        ? t("spending:budgetChart.underBudgetAmount", {
-            amount: amountFormatting.formatCompactAmount(gapAbs, currency),
+  const gapLabel = sums
+    ? `Spent ${amountFormatting.formatCompactAmount(spent, currency)}`
+    : isCurrentMonth
+      ? isOver
+        ? t("spending:budgetChart.overBudgetAmount", {
+            amount: amountFormatting.formatCompactAmount(overBy, currency),
           })
-        : t("spending:budgetChart.overPaceAmount", {
-            amount: amountFormatting.formatCompactAmount(gapAbs, currency),
+        : aheadOfPace
+          ? t("spending:budgetChart.underBudgetAmount", {
+              amount: amountFormatting.formatCompactAmount(gapAbs, currency),
+            })
+          : t("spending:budgetChart.overPaceAmount", {
+              amount: amountFormatting.formatCompactAmount(gapAbs, currency),
+            })
+      : isOver
+        ? t("spending:budgetChart.overBudgetAmount", {
+            amount: amountFormatting.formatCompactAmount(overBy, currency),
           })
-    : isOver
-      ? t("spending:budgetChart.overBudgetAmount", {
-          amount: amountFormatting.formatCompactAmount(overBy, currency),
-        })
-      : t("spending:budgetChart.leftAmount", {
-          amount: amountFormatting.formatCompactAmount(remaining, currency),
-        });
+        : t("spending:budgetChart.leftAmount", {
+            amount: amountFormatting.formatCompactAmount(remaining, currency),
+          });
 
   const pillLeftPctRaw = (endX / chartW) * 100;
   const pillLeftPct = Math.min(78, Math.max(8, pillLeftPctRaw - 4));
@@ -389,7 +431,34 @@ export function BudgetLineChartCard({
       </div>
 
       <div className="mt-3">
-        {isCurrentMonth && willOverspend && forecastDelta > target * 0.05 ? (
+        {sums && forecastParts ? (
+          <>
+            <div className="text-foreground text-2xl font-bold tabular-nums tracking-tight">
+              <PrivacyAmount value={Math.abs(sums.over)} currency={currency} />{" "}
+              <span className="text-muted-foreground/70 text-base font-medium">
+                {sums.over > 0 ? "over" : "to spare"} by{" "}
+                {((m) => m.charAt(0) + m.slice(1).toLowerCase())(
+                  monthMeta.shortLabel.split(" ")[0],
+                )}{" "}
+                {daysInMonth}
+              </span>
+            </div>
+            <div className="text-muted-foreground/80 mt-0.5 text-xs tabular-nums">
+              if you keep spending like your usual days
+            </div>
+            <div className="mt-1.5 text-xs font-semibold tabular-nums" style={{ color: a.accent }}>
+              {perDay === null ? null : perDay > 0 ? (
+                <>
+                  To land on budget: <PrivacyAmount value={perDay} currency={currency} /> a day or
+                  less on everyday spending (usually{" "}
+                  <PrivacyAmount value={forecastParts.everydayDaily} currency={currency} />)
+                </>
+              ) : (
+                <>Nothing left for everyday spending this month</>
+              )}
+            </div>
+          </>
+        ) : isCurrentMonth && willOverspend && forecastDelta > target * 0.05 ? (
           <>
             <div className="text-foreground text-2xl font-bold tabular-nums tracking-tight">
               <PrivacyAmount value={forecast} currency={currency} />{" "}
@@ -515,7 +584,7 @@ export function BudgetLineChartCard({
               left: `${pillFlip ? pillLeftPctRaw : pillLeftPct}%`,
               top: `${pillTopPx}px`,
               transform: pillFlip ? "translateX(calc(-100% - 6px))" : undefined,
-              backgroundColor: a.pillBg,
+              backgroundColor: sums ? "#57534e" : a.pillBg,
               color: "white",
             }}
           >
@@ -550,47 +619,63 @@ export function BudgetLineChartCard({
             <PrivacyAmount value={spent} currency={currency} />
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-muted-foreground/70 text-[11px] uppercase tracking-wide">
-            {isCurrentMonth
-              ? t("spending:budgetChart.forecastUpper")
-              : t("spending:budgetChart.result")}
-          </div>
-          {isCurrentMonth ? (
-            <div
-              className={cn(
-                "text-sm font-semibold tabular-nums",
-                forecastReliable
-                  ? willOverspend
-                    ? "text-destructive"
-                    : "text-foreground"
-                  : "text-muted-foreground/60",
-              )}
-            >
-              {forecastReliable ? <PrivacyAmount value={forecast} currency={currency} /> : "—"}
+        {sums ? (
+          // money-hub patch: what is left to spend this month once the fixed bills are paid (one verdict:
+          // no second forecast number down here).
+          <div className="text-right">
+            <div className="text-muted-foreground/70 text-[11px] uppercase tracking-wide">
+              Left to spend
             </div>
-          ) : (
-            <div
-              className={cn(
-                "text-sm font-semibold tabular-nums",
-                isOver ? "text-destructive" : "text-foreground",
-              )}
-            >
-              <PrivacyAmount value={isOver ? overBy : remaining} currency={currency} />
+            <div className="text-foreground text-sm font-semibold tabular-nums">
+              <PrivacyAmount value={sums.room - sums.spentOthers} currency={currency} />
             </div>
-          )}
-          <div className="text-muted-foreground/60 text-[10px]">
-            {isCurrentMonth
-              ? forecastReliable
-                ? haveHistory
-                  ? t("spending:budgetChart.vsLast3Months")
-                  : t("spending:budgetChart.atCurrentPace")
-                : t("spending:budgetChart.moreDataNeeded")
-              : isOver
-                ? t("spending:budgetChart.overBudgetLower")
-                : t("spending:budgetChart.leftLower")}
+            <div className="text-muted-foreground/60 text-[10px]">
+              {sums.fixed > 0 ? "after fixed bills" : "of the budget"}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="text-right">
+            <div className="text-muted-foreground/70 text-[11px] uppercase tracking-wide">
+              {isCurrentMonth
+                ? t("spending:budgetChart.forecastUpper")
+                : t("spending:budgetChart.result")}
+            </div>
+            {isCurrentMonth ? (
+              <div
+                className={cn(
+                  "text-sm font-semibold tabular-nums",
+                  forecastReliable
+                    ? willOverspend
+                      ? "text-destructive"
+                      : "text-foreground"
+                    : "text-muted-foreground/60",
+                )}
+              >
+                {forecastReliable ? <PrivacyAmount value={forecast} currency={currency} /> : "—"}
+              </div>
+            ) : (
+              <div
+                className={cn(
+                  "text-sm font-semibold tabular-nums",
+                  isOver ? "text-destructive" : "text-foreground",
+                )}
+              >
+                <PrivacyAmount value={isOver ? overBy : remaining} currency={currency} />
+              </div>
+            )}
+            <div className="text-muted-foreground/60 text-[10px]">
+              {isCurrentMonth
+                ? forecastReliable
+                  ? haveHistory
+                    ? t("spending:budgetChart.vsLast3Months")
+                    : t("spending:budgetChart.atCurrentPace")
+                  : t("spending:budgetChart.moreDataNeeded")
+                : isOver
+                  ? t("spending:budgetChart.overBudgetLower")
+                  : t("spending:budgetChart.leftLower")}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border-border mt-5 border-t pt-4">
@@ -876,7 +961,7 @@ function ForecastSums({
   const over = sums.over;
   const line = "flex items-baseline justify-between gap-2";
   return (
-    <div className="text-muted-foreground mt-3 space-y-1 text-[11px] leading-snug tabular-nums">
+    <div className="text-muted-foreground mt-3 space-y-1 text-[11px] tabular-nums leading-snug">
       {sums.fixed > 0 ? (
         <>
           <div className={line}>
@@ -896,18 +981,22 @@ function ForecastSums({
         </>
       ) : null}
       <div className={`${line} text-foreground/90 font-medium`}>
-        <span className="min-w-0 truncate">{sums.fixed > 0 ? "Everything else, forecast" : "Forecast"}</span>
+        <span className="min-w-0 truncate">
+          {sums.fixed > 0 ? "Everything else, forecast" : "Forecast"}
+        </span>
         <PrivacyAmount value={sums.others} currency={currency} />
       </div>
       <div className="text-muted-foreground/80">
-        Made of <PrivacyAmount value={sums.spentOthers} currency={currency} /> spent so far{sums.fixed > 0 ? " besides fixed bills" : ""},{" "}
-        <PrivacyAmount value={parts.billsLeftTotal} currency={currency} /> in {parts.billsLeft.length}{" "}
-        {parts.billsLeft.length === 1 ? "bill" : "bills"} still due, and{" "}
-        <PrivacyAmount value={parts.everydayDaily} currency={currency} /> a day of everyday spending for the{" "}
-        {daysRemaining} {daysRemaining === 1 ? "day" : "days"} left
+        Made of <PrivacyAmount value={sums.spentOthers} currency={currency} /> spent so far
+        {sums.fixed > 0 ? " besides fixed bills" : ""},{" "}
+        <PrivacyAmount value={parts.billsLeftTotal} currency={currency} /> in{" "}
+        {parts.billsLeft.length} {parts.billsLeft.length === 1 ? "bill" : "bills"} still due, and{" "}
+        <PrivacyAmount value={parts.everydayDaily} currency={currency} /> a day of everyday spending
+        for the {daysRemaining} {daysRemaining === 1 ? "day" : "days"} left
         {parts.cappedDays > 0 ? (
           <>
-            {" "}(your usual days of the last 3 months; {parts.cappedDays} one-off big{" "}
+            {" "}
+            (your usual days of the last 3 months; {parts.cappedDays} one-off big{" "}
             {parts.cappedDays === 1 ? "day counts" : "days count"} as{" "}
             <PrivacyAmount value={parts.everydayCap} currency={currency} />)
           </>
@@ -915,7 +1004,8 @@ function ForecastSums({
         .{" "}
         {over > 0 ? (
           <>
-            That is <PrivacyAmount value={over} currency={currency} /> {sums.fixed > 0 ? "more than is left" : "over the budget"}.
+            That is <PrivacyAmount value={over} currency={currency} />{" "}
+            {sums.fixed > 0 ? "more than is left" : "over the budget"}.
           </>
         ) : (
           <>
