@@ -434,16 +434,19 @@ mod transport_tests {
     #[tokio::test]
     async fn last_turn_turns_tools_off_so_the_run_answers() {
         // money-hub: a model that keeps searching used to end the run with
-        // MaxTurnsError and no answer. The last turn now has tools off.
+        // MaxTurnsError and no answer. The last turn now lists no tools, and a
+        // tool called anyway (Gemini behind 9Router does) is sent back once.
+        use crate::stream_hook::{WealthfolioStreamHook, FINAL_TURN_RETRY_NOTE};
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let mut requests = Vec::new();
-            for round in 0..3 {
+            for round in 0..4 {
                 let (mut socket, _) = listener.accept().await.unwrap();
                 let request = read_request(&mut socket).await;
-                // The fixture model calls the tool whenever it is allowed to.
-                let body = if request.contains("\"tool_choice\":\"none\"") {
+                // The fixture model calls the tool in every round but the last,
+                // even when no tools are listed (round 2).
+                let body = if round == 3 {
                     sse(
                         serde_json::json!({"role":"assistant","content":"Found it"}),
                         Some("stop"),
@@ -478,11 +481,9 @@ mod transport_tests {
             .build();
         let mut stream = agent
             .runner("Find it")
-            .add_hook(
-                crate::stream_hook::WealthfolioStreamHook::new()
-                    .with_final_turn(3, "Fixture preamble"),
-            )
-            .max_turns(3)
+            .add_hook(WealthfolioStreamHook::new().with_final_turn(3, "Fixture preamble"))
+            .max_turns(4)
+            .max_invalid_tool_call_retries(1)
             .stream()
             .await;
         let mut text = String::new();
@@ -498,13 +499,18 @@ mod transport_tests {
         .await
         .unwrap();
         let requests = server.await.unwrap();
+        // Only the first two rounds ran the tool.
         assert_eq!(calls.load(Ordering::SeqCst), 2);
-        assert!(requests[1].contains("\"tool_choice\":\"auto\""));
+        assert!(requests[1].contains("\"tools\""));
         assert!(!requests[1].contains("FINAL TURN"));
-        assert!(requests[2].contains("\"tool_choice\":\"none\""));
-        assert!(requests[2].contains("Fixture preamble"));
-        assert!(requests[2].contains("FINAL TURN"));
+        for last in &requests[2..] {
+            assert!(!last.contains("\"tools\""));
+            assert!(last.contains("\"tool_choice\":\"none\""));
+            assert!(last.contains("Fixture preamble"));
+            assert!(last.contains("FINAL TURN"));
+        }
         assert!(requests[2].contains("v1"));
+        assert!(requests[3].contains(&FINAL_TURN_RETRY_NOTE[..30]));
         assert_eq!(text, "Found it");
     }
 
