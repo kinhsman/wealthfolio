@@ -17,7 +17,7 @@ import { ActionPalette } from "@/components/action-palette";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
 import { SelectionCheckbox } from "./selection-checkbox";
 import { QuickEventPopover } from "./quick-event-popover";
-import { bankLineFor, useBankLines } from "../lib/bank-lines";
+import { bankLineFor, bankWordsFor, useBankLines } from "../lib/bank-lines";
 import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
@@ -80,8 +80,8 @@ function TransactionCardImpl({
 
   const { t } = useTranslation();
   const a = row.activity;
-  const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a));
   const { data: bankLines } = useBankLines();
+  const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id));
   const bankLine = bankLineFor(bankLines, a);
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,

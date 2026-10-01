@@ -29,6 +29,7 @@ import { searchCashActivities } from "../adapters/cash-activities";
 
 import { matchLength, merchantsApi, useMerchantFor, useSetMerchants, wordsOf, type MerchantDraft } from "../lib/merchants";
 import { KeywordChips, withTyped } from "./keyword-chips";
+import { bankWordsFor, useBankLines } from "../lib/bank-lines";
 import { rulePatternFrom } from "../lib/rule-offer";
 import { MerchantLogo } from "./merchant-logo";
 
@@ -39,12 +40,15 @@ export function MerchantShortcut({
   notes,
   account,
   activityType,
+  activityId,
 }: {
   notes?: string | null;
   account?: Account | null;
   activityType?: string | null;
+  activityId?: string;
 }) {
-  const merchant = useMerchantFor(notes, account, activityType);
+  const { data: bankLines } = useBankLines();
+  const merchant = useMerchantFor(notes, account, activityType, activityId ? bankWordsFor(bankLines, activityId) : null);
   const [draft, setDraft] = useState<MerchantDraft | null>(null);
   const words = rulePatternFrom(notes);
   if (!merchant && !words) return null;
@@ -156,14 +160,21 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
   }, [key]);
   // One search per word, joined; then the same whole-word test the logos use (a short word must
   // not count a transaction it would not light up).
+  const { data: bankLines } = useBankLines();
   const matches = useQuery({
-    queryKey: ["money-hub", "merchant-matches", debounced],
+    queryKey: ["money-hub", "merchant-matches", debounced, !!bankLines],
     queryFn: async () => {
       const ws = debounced.split("\u0001").filter(Boolean);
       const pages = await Promise.all(
         ws.map((w) => searchCashActivities({ search: w, status: "all", sortBy: "date", sortDir: "desc", offset: 0, limit: 200 })),
       );
-      const byId = new Map(pages.flatMap((p) => p.items).filter((x) => matchLength(x.notes, ws) > 0).map((x) => [x.id, x]));
+      // money-hub patch: the payee or what the bank wrote, as the logos match (lib/bank-lines.ts).
+      const byId = new Map(
+        pages
+          .flatMap((p) => p.items)
+          .filter((x) => matchLength(x.notes, ws) > 0 || matchLength(bankWordsFor(bankLines, x.id), ws) > 0)
+          .map((x) => [x.id, x]),
+      );
       const items = [...byId.values()].sort((a, b) => (a.activityDate < b.activityDate ? 1 : -1));
       return { items, more: pages.some((p) => p.totalCount > p.items.length) };
     },

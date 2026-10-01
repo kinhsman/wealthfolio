@@ -8,7 +8,7 @@ const row = (id: string, notes: string, netAmount: number, currency = "USD", net
 
 describe("bank lines", () => {
   it("hides a bank line that only repeats the payee", () => {
-    const lines = { a: "CITY OF CHICAGO WATER BILL 1364743", b: "Costco  " };
+    const lines = { a: ["CITY OF CHICAGO WATER BILL 1364743", ""], b: ["Costco  ", ""] } as Record<string, [string, string]>;
     expect(bankLineFor(lines, row("a", "City Of Chicago", -1))).toBe("CITY OF CHICAGO WATER BILL 1364743");
     expect(bankLineFor(lines, row("b", "costco", -1))).toBeNull();
     expect(bankLineFor(lines, row("c", "x", -1))).toBeNull();

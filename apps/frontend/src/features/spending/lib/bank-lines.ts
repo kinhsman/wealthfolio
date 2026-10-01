@@ -16,10 +16,13 @@ import type {
 
 const BASE = "/api/money-hub/plaid";
 
+/** Entry id -> [the bank's own line, every word the bank wrote] (server: plaidSync.js bankLines). */
+export type BankLines = Record<string, [string, string]>;
+
 export function useBankLines() {
   return useQuery({
-    queryKey: ["money-hub", "plaid", "lines"],
-    queryFn: async (): Promise<Record<string, string>> => {
+    queryKey: ["money-hub", "plaid", "lines", 2],
+    queryFn: async (): Promise<BankLines> => {
       const res = await fetch(`${BASE}/lines`, { credentials: "include" });
       if (!res.ok) return {};
       return res.json();
@@ -31,11 +34,14 @@ export function useBankLines() {
 const squash = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
 /** The bank line worth showing under a payee: none when it only repeats the payee. */
-export function bankLineFor(lines: Record<string, string> | undefined, activity: CashActivity) {
-  const line = lines?.[activity.id];
+export function bankLineFor(lines: BankLines | undefined, activity: CashActivity) {
+  const line = lines?.[activity.id]?.[0];
   if (!line) return null;
   return squash(line) === squash(activity.notes ?? "") ? null : line;
 }
+
+/** Every word the bank wrote for one entry (merchant logos match these when the payee matches none). */
+export const bankWordsFor = (lines: BankLines | undefined, id: string) => lines?.[id]?.[1] ?? null;
 
 async function bankHits(q: string): Promise<Set<string>> {
   try {

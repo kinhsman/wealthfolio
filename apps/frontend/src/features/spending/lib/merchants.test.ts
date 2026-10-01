@@ -60,3 +60,14 @@ describe("merchantFor", () => {
     expect(merchantFor("ATM WITHDRAWAL CASH 1234", [atm, shop], chase)?.source).toBe("bank");
   });
 });
+
+describe("merchantFor with the bank's words", () => {
+  const water = { id: "w", name: "Water", pattern: "WATER BILL", logoUrl: "x" } as Merchant;
+  const city = { id: "c", name: "City", pattern: "CITY OF CHICAGO", logoUrl: "y" } as Merchant;
+  it("uses the bank's words only when the payee matches none", () => {
+    const bank = "CITY OF CHICAGO WATER BILL 1364743-375285 WEB ID: 1366005820";
+    expect(merchantFor("City Of Chicago", [water, city], null, "WITHDRAWAL", bank)?.id).toBe("c");
+    expect(merchantFor("City Of Chicago", [water], null, "WITHDRAWAL", bank)?.id).toBe("w");
+    expect(merchantFor("City Of Chicago", [water], null, "WITHDRAWAL", null)).toBeNull();
+  });
+});

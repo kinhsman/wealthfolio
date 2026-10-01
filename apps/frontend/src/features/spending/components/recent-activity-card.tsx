@@ -16,6 +16,7 @@ import {
   isCashActivityIncome,
 } from "../lib/constants";
 import { CategoryBadge, ReviewPill, type CategoryMetaMap } from "./category-chips";
+import { bankWordsFor, useBankLines } from "../lib/bank-lines";
 import { merchantFor, useMerchants } from "../lib/merchants";
 import { MerchantLogo } from "./merchant-logo";
 import { usePendingTransactions, type PendingTransaction } from "./pending-transactions";
@@ -43,6 +44,7 @@ export function RecentActivityCard({
   const formatting = useDateFormatting();
   const { t } = useTranslation();
   const { data: merchants } = useMerchants();
+  const { data: bankLines } = useBankLines();
   const { data: pendingAll = [] } = usePendingTransactions();
   const pending = useMemo(
     () =>
@@ -193,7 +195,7 @@ export function RecentActivityCard({
               }
               const a = row.a;
               const payee = (a.notes ?? "").trim();
-              const merchant = merchantFor(payee, merchants, accountById?.get(a.accountId), getEffectiveCashActivityType(a));
+              const merchant = merchantFor(payee, merchants, accountById?.get(a.accountId), getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id));
               const spendingAmount = getActivitySpendingAmount(
                 a,
                 accountTypeById?.get(a.accountId),

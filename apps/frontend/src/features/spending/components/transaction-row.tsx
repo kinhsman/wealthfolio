@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { Account } from "@/lib/types";
 import { TruncatedText } from "@/components/truncated-text";
 
-import { bankLineFor, useBankLines } from "../lib/bank-lines";
+import { bankLineFor, bankWordsFor, useBankLines } from "../lib/bank-lines";
 import { HOVER_SLOT } from "@/lib/hover-slot";
 import { cn } from "@/lib/utils";
 import {
@@ -90,8 +90,8 @@ function TransactionRowImpl({
 
   const { t } = useTranslation();
   const a = row.activity;
-  const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a));
   const { data: bankLines } = useBankLines();
+  const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id));
   const bankLine = bankLineFor(bankLines, a);
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,

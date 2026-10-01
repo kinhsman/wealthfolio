@@ -851,6 +851,7 @@ export function CashActivityForm({
                           {isEditing ? (
                             <MerchantShortcut
                               notes={field.value}
+                              activityId={activity?.id}
                               account={spendingAccounts.find((a) => a.id === watchAccountId)}
                               activityType={watchType}
                             />

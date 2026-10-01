@@ -141,9 +141,20 @@ export function merchantFor(
   merchants: Merchant[] | undefined,
   account?: AccountLike | null,
   activityType?: string | null,
+  bankWords?: string | null,
 ): Merchant | null {
   const bank = bankFor(account, activityType);
   if (bank) return bank;
+  // money-hub patch: the payee's merchant first; else one named anywhere in what the bank wrote
+  // (owner, 2026-10-01: "widen all three"; lib/bank-lines.ts).
+  return matchIn(notes, merchants, account) ?? matchIn(bankWords, merchants, account);
+}
+
+function matchIn(
+  notes: string | null | undefined,
+  merchants: Merchant[] | undefined,
+  account?: AccountLike | null,
+): Merchant | null {
   if (!notes || !merchants?.length) return null;
   // A merchant with its own picture wins over a "Use the bank's logo" one, whatever the words'
   // length (owner, 2026-09-30); among each kind the longest matching words win.
@@ -175,9 +186,10 @@ export function useMerchantFor(
   notes: string | null | undefined,
   account?: AccountLike | null,
   activityType?: string | null,
+  bankWords?: string | null,
 ): Merchant | null {
   const { data } = useMerchants();
-  return merchantFor(notes, data, account, activityType);
+  return merchantFor(notes, data, account, activityType, bankWords);
 }
 
 export interface MerchantDraft {
