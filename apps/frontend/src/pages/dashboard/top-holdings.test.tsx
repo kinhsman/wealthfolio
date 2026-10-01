@@ -22,6 +22,13 @@ vi.mock("@/components/ticker-avatar", () => ({
 
 const privacy = vi.hoisted(() => ({ isBalanceHidden: false }));
 
+// money-hub patch: the WheelTradr stats hook fetches through react-query; no WheelTradr
+// accounts here, so every row renders as Wealthfolio made it.
+vi.mock("@/lib/wheeltradr-holding", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/wheeltradr-holding")>()),
+  useWheeltradrStats: () => ({}),
+}));
+
 vi.mock("@/hooks/use-balance-privacy", () => ({
   useBalancePrivacy: () => ({ isBalanceHidden: privacy.isBalanceHidden }),
 }));
