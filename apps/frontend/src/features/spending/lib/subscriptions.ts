@@ -37,6 +37,8 @@ export interface Stream {
   categoryId: string | null;
   accountId: string | null;
   ids: string[];
+  /** What the transactions search needs to find its charges: the word that matched the bank's text. */
+  search?: string;
   manualId: string | null;
   confirmed?: boolean;
   hidden?: boolean;
@@ -207,9 +209,10 @@ export function dueLabel(s: Pick<Stream, "status" | "dueInDays" | "next" | "last
   return `Was due ${date}, ${-s.dueInDays} days ago`;
 }
 
-/** The transactions list filtered to this stream's payee. */
-export function transactionsHref(s: Pick<Stream, "name" | "last">): string {
-  const q = s.last ? payeeSearch(s.name) : s.name;
+/** The transactions list filtered to this stream's charges: by the words in the bank's text (owner,
+ *  10-01: City Sticker's link searched its name, the bank says CTYCHGO), else by its name. */
+export function transactionsHref(s: Pick<Stream, "name" | "last" | "search">): string {
+  const q = s.search || (s.last ? payeeSearch(s.name) : s.name);
   return `/activities?tab=spending&q=${encodeURIComponent(q)}`;
 }
 /** The first word of the name is what the bank text has in common ("Youtube" for "Youtube Premium Ca"). */

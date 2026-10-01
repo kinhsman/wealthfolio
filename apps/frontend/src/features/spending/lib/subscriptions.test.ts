@@ -43,7 +43,8 @@ describe("subscriptions wording", () => {
     expect(upcoming(list).map((s) => s.key)).toEqual(["c", "b", "a"]);
     expect(upcoming(list, 5).map((s) => s.key)).toEqual(["c", "b", "a", "f"]);
   });
-  it("the transactions link searches the payee's first words", () => {
+  it("the transactions link searches the bank's own words, else the payee's first words", () => {
+    expect(transactionsHref(mk({ name: "City Sticker", search: "Ctychgo" }))).toBe("/activities?tab=spending&q=Ctychgo");
     expect(transactionsHref(base)).toBe("/activities?tab=spending&q=Youtube%20Premium");
     expect(transactionsHref(mk({ name: "Rose Pest Solutions Il", last: null }))).toBe("/activities?tab=spending&q=Rose%20Pest%20Solutions%20Il");
   });
