@@ -540,7 +540,7 @@ export default function SpendingTabContent() {
 
   // money-hub patch: the budget forecast with the bills apart (lib/budget-forecast.ts): the 3 months'
   // average less their bills is the everyday day; the bills still due this month come by date.
-  const { data: subscriptionsView } = useSubscriptions();
+  const { data: subscriptionsView, isPending: subscriptionsPending } = useSubscriptions();
   const budgetForecastParts = useMemo(() => {
     if (!subscriptionsView || !historyReport) return null;
     const month = parseMonthKey(budgetMonthKey) ?? todayParts;
@@ -1277,6 +1277,7 @@ export default function SpendingTabContent() {
                   currency={budgetCardBudget?.computed.currency ?? currency}
                   historicalDailyAvg={historicalDailyAvg}
                   forecastParts={budgetForecastParts}
+                  forecastPending={subscriptionsPending || !historyReport || !monthReport}
                   allocations={
                     budgetCardBudget?.computed.groupRows.flatMap((row) => row.categories) ?? []
                   }

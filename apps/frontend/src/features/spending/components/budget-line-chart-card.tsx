@@ -12,7 +12,8 @@ import {
   useDateFormatting,
 } from "@wealthfolio/ui";
 
-import { againstBudget, type ForecastParts } from "../lib/budget-forecast";
+import { againstBudget, paceWithFixed, withoutCharges, type ForecastParts } from "../lib/budget-forecast";
+import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import { topCategoryId } from "../lib/category-rollup";
 import type { BudgetCategoryRow } from "../types/budget";
 import type { DayBucket } from "../types/report";
@@ -83,6 +84,7 @@ export function BudgetLineChartCard({
   currency,
   historicalDailyAvg,
   forecastParts,
+  forecastPending,
   allocations,
   spendingBreakdown,
   categoriesMeta,
@@ -102,6 +104,8 @@ export function BudgetLineChartCard({
   historicalDailyAvg: number;
   /** money-hub patch: the bills apart (lib/budget-forecast.ts); without it, Wealthfolio's own forecast. */
   forecastParts?: ForecastParts | null;
+  /** money-hub patch: what the forecast needs is still loading; show a placeholder, not a passing number. */
+  forecastPending?: boolean;
   allocations: BudgetCategoryRow[];
   spendingBreakdown: { categoryId: string; amount: number; count: number }[];
   categoriesMeta: CategoryMetaMap;
@@ -207,12 +211,32 @@ export function BudgetLineChartCard({
     );
   }, [cumulative, daysInMonth, innerW, innerH, padL, padT, yMax]);
 
+  // money-hub patch: fixed bills (Exclude from forecast) are left out of the usual month's shape; they
+  // count on their own day (paceWithFixed).
+  const fixedParts =
+    forecastParts && isCurrentMonth && forecastParts.fixedPaid.length + forecastParts.fixedDue.length > 0
+      ? forecastParts
+      : null;
+  const paceHistory = useMemo(
+    () => (fixedParts ? withoutCharges(historicalByDay, fixedParts.fixedHistory) : historicalByDay),
+    [historicalByDay, fixedParts],
+  );
   const historicalPace = useMemo(
-    () => buildHistoricalPaceCurve(historicalByDay, daysInMonth),
-    [historicalByDay, daysInMonth],
+    () => buildHistoricalPaceCurve(paceHistory, daysInMonth),
+    [paceHistory, daysInMonth],
+  );
+  const paceAt = useMemo(
+    () => (fixedParts ? paceWithFixed(fixedParts, target, daysInMonth, historicalPace?.pctByDay ?? null) : null),
+    [fixedParts, target, daysInMonth, historicalPace],
   );
 
   const targetPacePath = useMemo(() => {
+    if (paceAt && target > 0) {
+      const xForDay = (day: number) => padL + ((day - 1) / Math.max(1, daysInMonth - 1)) * innerW;
+      const yForVal = (v: number) => padT + (1 - v / yMax) * innerH;
+      const points = Array.from({ length: daysInMonth }, (_, i) => ({ day: i + 1, value: paceAt(i + 1) }));
+      return toSvgPath(points, xForDay, yForVal);
+    }
     if (!historicalPace || target <= 0) return "";
     const xForDay = (day: number) => padL + ((day - 1) / Math.max(1, daysInMonth - 1)) * innerW;
     const yForVal = (v: number) => padT + (1 - v / yMax) * innerH;
@@ -224,7 +248,7 @@ export function BudgetLineChartCard({
       xForDay,
       yForVal,
     );
-  }, [historicalPace, target, daysInMonth, innerW, innerH, padL, padT, yMax]);
+  }, [historicalPace, paceAt, target, daysInMonth, innerW, innerH, padL, padT, yMax]);
 
   const haveHistory = historicalDailyAvg > 0;
   // money-hub patch: with the bills apart (lib/budget-forecast.ts), the forecast is everything but the
@@ -272,6 +296,22 @@ export function BudgetLineChartCard({
     );
   }
 
+  // money-hub patch: on a reload the bills arrive after the spending; wait for them rather than show a
+  // number that changes a moment later (owner, 10-01: "briefly show me the 9k value").
+  if (isCurrentMonth && forecastPending) {
+    return (
+      <DashboardCard title={t("spending:budgetChart.monthlyBudget")} subtitle={monthLabel} action={headerAction}>
+        <div className="space-y-3" aria-busy>
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-8 w-44" />
+          <Skeleton className="h-3 w-56" />
+          <Skeleton className="h-[150px] w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-lg" />
+        </div>
+      </DashboardCard>
+    );
+  }
+
   const remaining = Math.max(0, target - spent);
   const overBy = spent - target;
   const isOver = overBy > 0;
@@ -280,9 +320,10 @@ export function BudgetLineChartCard({
   const willOverspend = forecastReliable && forecastDelta > 0;
 
   const historicalPaceAtToday = historicalPace?.pctByDay[dayOfMonth];
-  const paceAtToday =
-    target *
-    (historicalPaceAtToday !== undefined ? historicalPaceAtToday : dayOfMonth / daysInMonth);
+  const paceAtToday = paceAt
+    ? paceAt(dayOfMonth)
+    : target *
+      (historicalPaceAtToday !== undefined ? historicalPaceAtToday : dayOfMonth / daysInMonth);
   const gapVsPace = spent - paceAtToday;
   const aheadOfPace = gapVsPace < 0;
 

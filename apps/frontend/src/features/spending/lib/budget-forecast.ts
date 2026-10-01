@@ -46,6 +46,8 @@ export interface ForecastParts {
   fixedPaid: BillDue[];
   fixedDue: BillDue[];
   fixedNames: string[];
+  /** Their charges in the 3 months before: the budget's pace leaves them out of its usual month. */
+  fixedHistory: BillDue[];
 }
 
 /**
@@ -69,13 +71,23 @@ export function forecastParts(
   const fixedPaid: BillDue[] = [];
   const fixedDue: BillDue[] = [];
   const fixedNames: string[] = [];
+  const fixedHistory: BillDue[] = [];
   let billsInHistory = 0;
   for (const s of streams) {
     if (s.hidden || s.escrow) continue;
     const fixed = !!s.excludeFromForecast;
     if (fixed) fixedNames.push(s.name);
     for (const c of s.charges ?? []) {
-      if (c.date >= opts.histStart && c.date <= opts.histEnd) billsInHistory += myPart(s, c.amount);
+      if (c.date >= opts.histStart && c.date <= opts.histEnd) {
+        billsInHistory += myPart(s, c.amount);
+        if (fixed)
+          fixedHistory.push({
+            key: s.key,
+            name: s.name,
+            date: c.date,
+            amount: myPart(s, c.amount),
+          });
+      }
       if (fixed && c.date >= opts.monthStart && c.date <= opts.monthEnd)
         fixedPaid.push({ key: s.key, name: s.name, date: c.date, amount: myPart(s, c.amount) });
     }
@@ -98,6 +110,7 @@ export function forecastParts(
     fixedPaid,
     fixedDue,
     fixedNames,
+    fixedHistory,
   };
 }
 
@@ -123,4 +136,42 @@ export function againstBudget(
   const others = spentOthers + parts.billsLeftTotal + parts.everydayDaily * daysRemaining;
   const room = target - fixed;
   return { fixed, room, others, spentOthers, over: others - room };
+}
+
+/**
+ * The budget's pace with fixed bills (owner, 10-01: "$866 over pace" on the 1st with only the mortgage
+ * paid): each fixed bill counts on its own day, and the rest of the budget follows the usual month's
+ * shape of everything else. `pctOthers[day]`: the share of the usual month's other spending done by
+ * that day (null: an even spread).
+ */
+export function paceWithFixed(
+  parts: ForecastParts,
+  target: number,
+  daysInMonth: number,
+  pctOthers: number[] | null,
+): (day: number) => number {
+  const fixed = [...parts.fixedPaid, ...parts.fixedDue].map((b) => ({
+    day: Number(b.date.slice(8, 10)),
+    amount: b.amount,
+  }));
+  const room = Math.max(0, target - sumOf(fixed));
+  return (day: number) => {
+    const upTo = fixed.reduce((sum, f) => (f.day <= day ? sum + f.amount : sum), 0);
+    const pct = pctOthers?.[day] ?? day / daysInMonth;
+    return upTo + room * pct;
+  };
+}
+
+/** Days of spending with the given charges taken off (never below zero). */
+export function withoutCharges<T extends { date: string; outflow: number }>(
+  days: T[],
+  charges: BillDue[],
+): T[] {
+  if (!charges.length) return days;
+  const off = new Map<string, number>();
+  for (const c of charges) off.set(c.date, (off.get(c.date) ?? 0) + c.amount);
+  return days.map((d) => {
+    const x = off.get(d.date.slice(0, 10)) ?? 0;
+    return x ? { ...d, outflow: Math.max(0, d.outflow - x) } : d;
+  });
 }

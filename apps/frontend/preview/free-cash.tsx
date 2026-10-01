@@ -126,7 +126,22 @@ function OpenBills() {
 /** The Monthly budget card on Oct 1 as the owner saw it: $4,000 budget, the mortgage paid that day,
  *  $19,953.76 spent over Jul to Sep (?view=budget; &old=1 = Wealthfolio's own forecast). */
 function BudgetPreview() {
-  const parts = forecastParts((subsFixture as unknown as SubscriptionsView).items, {
+  const items = (subsFixture as unknown as SubscriptionsView).items;
+  // Jul to Sep: $105.28 a day of everyday spending plus each bill's charges on its day (?pending=1:
+  // as on a reload, before the bills have come).
+  const historicalByDay: { date: string; income: number; outflow: number }[] = [];
+  for (let t = Date.UTC(2026, 6, 1); t <= Date.UTC(2026, 8, 30); t += 86_400_000) {
+    const date = new Date(t).toISOString().slice(0, 10);
+    const bills = items
+      .filter((x) => !x.hidden && !x.escrow)
+      .flatMap((x) => (x.charges ?? []).filter((c) => c.date === date));
+    historicalByDay.push({
+      date,
+      income: 0,
+      outflow: 105.28 + bills.reduce((sum, c) => sum + c.amount, 0),
+    });
+  }
+  const parts = forecastParts(items, {
     monthStart: "2026-10-01",
     monthEnd: "2026-10-31",
     histStart: "2026-07-01",
@@ -155,7 +170,8 @@ function BudgetPreview() {
           spendingBreakdown={[]}
           categoriesMeta={{}}
           monthByDay={[{ date: "2026-10-01", income: 0, outflow: 2505.76 }]}
-          historicalByDay={[]}
+          historicalByDay={historicalByDay}
+          forecastPending={params.get("pending") === "1"}
         />
       </div>
     </div>

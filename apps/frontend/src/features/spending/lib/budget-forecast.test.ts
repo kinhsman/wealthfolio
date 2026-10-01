@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { addMonthsISO, againstBudget, forecastParts } from "./budget-forecast";
+import {
+  addMonthsISO,
+  againstBudget,
+  forecastParts,
+  paceWithFixed,
+  withoutCharges,
+} from "./budget-forecast";
 import type { Stream } from "./subscriptions";
 
 const stream = (name: string, extra: Partial<Stream> = {}): Stream =>
@@ -164,5 +170,55 @@ describe("budget forecast, bills apart", () => {
   it("month steps keep the day, or the month's last", () => {
     expect(addMonthsISO("2026-01-31", 1)).toBe("2026-02-28");
     expect(addMonthsISO("2026-10-03", 12)).toBe("2027-10-03");
+  });
+});
+
+describe("pace with fixed bills", () => {
+  const fixedParts = forecastParts(
+    [
+      stream("US Bank", {
+        usual: 2505.76,
+        next: "2026-11-01",
+        excludeFromForecast: true,
+        charges: mortgageCharges,
+      }),
+    ],
+    { ...OCT, historyOutflow: 19954 },
+  );
+
+  it("the mortgage counts on its day; the rest of the budget follows the usual month", () => {
+    expect(fixedParts.fixedHistory.map((b) => b.date)).toEqual([
+      "2026-07-01",
+      "2026-08-01",
+      "2026-09-01",
+    ]);
+    const even = paceWithFixed(fixedParts, 4000, 31, null);
+    // Oct 1: the mortgage plus a 31st of what is left; Oct 31: the whole budget.
+    expect(even(1)).toBeCloseTo(2505.76 + 1494.24 / 31, 6);
+    expect(even(31)).toBeCloseTo(4000, 6);
+    // With nothing else spent yet, the 1st is under pace, not $866 over.
+    expect(2505.76 - even(1)).toBeLessThan(0);
+    const shaped = paceWithFixed(
+      fixedParts,
+      4000,
+      31,
+      Array.from({ length: 32 }, (_, d) => (d >= 15 ? 1 : 0)),
+    );
+    expect(shaped(14)).toBeCloseTo(2505.76, 6);
+    expect(shaped(15)).toBeCloseTo(4000, 6);
+  });
+
+  it("the usual month's shape leaves the fixed bills out", () => {
+    const days = [
+      { date: "2026-07-01", income: 0, outflow: 2550 },
+      { date: "2026-07-02", income: 0, outflow: 30 },
+      { date: "2026-08-01", income: 0, outflow: 100 },
+    ];
+    expect(withoutCharges(days, fixedParts.fixedHistory).map((d) => d.outflow)).toEqual([
+      2550 - 2505.76,
+      30,
+      0,
+    ]);
+    expect(withoutCharges(days, [])).toBe(days);
   });
 });
