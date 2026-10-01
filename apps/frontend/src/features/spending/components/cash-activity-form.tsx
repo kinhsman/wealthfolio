@@ -15,6 +15,7 @@ import { QueryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { invalidateSpendingCaches } from "../lib/invalidation";
 import { offerRule } from "../lib/rule-offer";
+import { askWhichOne } from "../lib/track-charge";
 import { BankDescription } from "./bank-description";
 import { MerchantShortcut } from "./merchant-dialog";
 import type { Account, Activity, ActivityCreate, ActivityUpdate } from "@/lib/types";
@@ -433,7 +434,7 @@ export function CashActivityForm({
 
       return saved;
     },
-    onSuccess: (_saved, values) => {
+    onSuccess: (saved, values) => {
       invalidateSpendingCaches(qc);
       qc.invalidateQueries({ queryKey: [QueryKeys.ACTIVITIES] });
       qc.invalidateQueries({ queryKey: [QueryKeys.ACTIVITY_DATA] });
@@ -445,14 +446,19 @@ export function CashActivityForm({
         activity?.categoryTaxonomyId && activity?.categoryId
           ? `${activity.categoryTaxonomyId}:${activity.categoryId}`
           : "";
+      // A subscription or bill category first asks which one it is (lib/track-charge.ts).
       if (isEditing && values.category && values.category !== oldCategory) {
         const [taxonomyId, categoryId] = values.category.split(":");
-        void offerRule({
-          notes: values.notes,
-          taxonomyId,
+        const categoryName = allCategoriesById.get(categoryId)?.name ?? "that category";
+        const rule = () => void offerRule({ notes: values.notes, taxonomyId, categoryId, categoryName });
+        const asked = askWhichOne({
+          activity: { ...saved, notes: values.notes ?? saved.notes },
           categoryId,
-          categoryName: allCategoriesById.get(categoryId)?.name ?? "that category",
+          categories: spending.data?.categories ?? [],
+          categoryName,
+          after: rule,
         });
+        if (!asked) rule();
       }
       onOpenChange(false);
     },

@@ -89,6 +89,7 @@ import { useEventTypes, useSpendingEvents } from "../hooks/use-spending-events";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { invalidateSpendingCaches } from "../lib/invalidation";
 import { offerRule } from "../lib/rule-offer";
+import { askWhichOne } from "../lib/track-charge";
 import type {
   CashActivitySearchRequest,
   CashActivityStatusFilter,
@@ -796,15 +797,20 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
         assignMutation.mutate(
           { activityId, taxonomyId, categoryId },
           {
-            // money-hub patch: a category picked by hand offers a rule for transactions like it.
+            // money-hub patch: a category picked by hand offers a rule for transactions like it;
+            // a subscription or bill category first asks which one it is (lib/track-charge.ts).
             onSuccess: () => {
-              const notes = rows.find((r) => r.activity.id === activityId)?.activity.notes;
-              void offerRule({
-                notes,
-                taxonomyId,
+              const activity = rows.find((r) => r.activity.id === activityId)?.activity;
+              const categoryName = allCategories.get(categoryId)?.name ?? "that category";
+              const rule = () => void offerRule({ notes: activity?.notes, taxonomyId, categoryId, categoryName });
+              const asked = askWhichOne({
+                activity,
                 categoryId,
-                categoryName: allCategories.get(categoryId)?.name ?? "that category",
+                categories: Array.from(allCategories.values()),
+                categoryName,
+                after: rule,
               });
+              if (!asked) rule();
             },
           },
         );

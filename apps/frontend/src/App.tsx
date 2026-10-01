@@ -10,6 +10,8 @@ import { EventDialogProvider } from "@/features/spending/components/event-dialog
 // money-hub patch: the Make a rule preview, opened from the rule offer toast.
 import { RuleOfferHost } from "@/features/spending/components/rule-offer-dialog";
 import { CountsAsHost } from "@/features/spending/components/counts-as-dialog";
+// money-hub patch: "which subscription or bill is this?", opened when a charge is filed as one.
+import { TrackChargeHost } from "@/features/spending/components/track-charge-dialog";
 import { WealthfolioConnectProvider } from "@/features/wealthfolio-connect";
 import { SettingsProvider } from "@/lib/settings-provider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -48,6 +50,7 @@ function App() {
               <AssetLogoRegistrySync />
               <RuleOfferHost />
               <CountsAsHost />
+              <TrackChargeHost />
               <AppRoutes />
             </EventDialogProvider>
           </TooltipProvider>

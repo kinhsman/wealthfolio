@@ -59,6 +59,10 @@ export interface Stream {
   sendTotal?: boolean;
   /** What was last sent to Owly as this bill's total, or why Owly refused. */
   owlyTotal?: { chargeId: string; amount: number | null; from: string | null; at: string; error: string | null } | null;
+  /** Every charge in it. */
+  charges?: { id: string; date: string; amount: number }[];
+  /** The charges the owner put in it by hand (owner, 10-01). */
+  linkedIds?: string[];
 }
 
 export interface SharedCharge {
@@ -109,6 +113,15 @@ export interface ManualInput {
   every: Every;
   nextDate?: string | null;
   group: StreamGroup;
+  /** Charges that are its own whatever their words (the one it was made from). */
+  linkIds?: string[];
+}
+
+/** Which stream a charge is in, which it looks like, and a new one drafted from it. */
+export interface WhichOne {
+  member: string | null;
+  likely: string | null;
+  draft: { name: string; words: string[]; amount: number; every: Every; nextDate: string };
 }
 
 const BASE = "/api/money-hub/subscriptions";
@@ -148,6 +161,10 @@ export const subscriptionsApi = {
   /** A sample of one kind of alert from the owner's own list, sent the way the real one goes. */
   testAlert: (kind: AlertKind) =>
     call<SubscriptionsView & { went: { discord: boolean; ntfy: boolean }; sample: string }>("POST", "/alerts/test", { kind }),
+  /** For a charge just filed as a subscription or a bill: the one it is in or looks like. */
+  which: (charge: { id: string; notes: string; amount: number; date: string }) => call<WhichOne>("POST", "/which", charge),
+  /** Put a charge in a stream by hand (null: back to where its words put it). */
+  link: (activityId: string, key: string | null) => call<SubscriptionsView>("PUT", `/links/${encodeURIComponent(activityId)}`, { key }),
 };
 
 export function useSubscriptions() {
