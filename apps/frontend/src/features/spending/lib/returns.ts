@@ -63,7 +63,8 @@ export interface ReturnItem {
 export interface ReturnsView {
   items: ReturnItem[];
   totals: { waiting: number; count: number; late: number; toConfirm: number; back: number; backCount: number };
-  alerts: Record<ReturnAlertKind, boolean>;
+  /** Each kind's switch, and `on` for the whole group (Settings, Alerts). */
+  alerts: Record<ReturnAlertKind, boolean> & { on?: boolean };
   last: { at: string; scanned: number; open: number } | null;
   currency: string;
 }
@@ -119,7 +120,7 @@ export const returnsApi = {
   candidates: (id: string) => call<RefundOffer[]>("GET", `${one(id)}/candidates`),
   /** Recent purchases, by the words typed. */
   purchases: (q: string) => call<PurchaseOption[]>("GET", `/purchases?q=${encodeURIComponent(q)}`),
-  setAlerts: (alerts: Partial<Record<ReturnAlertKind, boolean>>) => call<ReturnsView>("PUT", "/alerts", alerts),
+  setAlerts: (alerts: Partial<Record<ReturnAlertKind | "on", boolean>>) => call<ReturnsView>("PUT", "/alerts", alerts),
   /** A sample of one kind of alert, sent the way the real one goes. */
   testAlert: (kind: ReturnAlertKind) =>
     call<ReturnsView & { went: { discord: boolean; ntfy: boolean }; sample: string }>("POST", "/alerts/test", { kind }),

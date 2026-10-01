@@ -120,7 +120,8 @@ export interface SubscriptionsView {
   manual: ManualEntry[];
   /** Taken out by hand from a subscription that is gone since: put back from the page. */
   leftOut?: (ExcludedCharge & { key: string })[];
-  alerts: Record<AlertKind, boolean>;
+  /** Each kind's switch, and `on` for the whole group (Settings, Alerts). */
+  alerts: Record<AlertKind, boolean> & { on?: boolean };
   last: { at: string; scanned: number; found: number } | null;
   /** The money app's base currency, for the amounts. */
   currency: string;
@@ -177,7 +178,7 @@ export const subscriptionsApi = {
   addManual: (input: ManualInput) => call<SubscriptionsView>("POST", "/manual", input),
   updateManual: (id: string, input: ManualInput) => call<SubscriptionsView>("PUT", `/manual/${encodeURIComponent(id)}`, input),
   removeManual: (id: string) => call<SubscriptionsView>("DELETE", `/manual/${encodeURIComponent(id)}`),
-  setAlerts: (alerts: Partial<Record<AlertKind, boolean>>) => call<SubscriptionsView>("PUT", "/alerts", alerts),
+  setAlerts: (alerts: Partial<Record<AlertKind | "on", boolean>>) => call<SubscriptionsView>("PUT", "/alerts", alerts),
   /** A sample of one kind of alert from the owner's own list, sent the way the real one goes. */
   testAlert: (kind: AlertKind) =>
     call<SubscriptionsView & { went: { discord: boolean; ntfy: boolean }; sample: string }>("POST", "/alerts/test", { kind }),

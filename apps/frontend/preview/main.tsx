@@ -65,7 +65,8 @@ window.fetch = (input, init) => {
   if (url.includes("/candidates")) return json(returnsFixture.moneyIn);
   if (url.startsWith("/api/money-hub/alerts")) {
     const body = {
-      discord: { on: true, shown: "…Ux9tq" },
+      // ?discord=off: as the owner's money app has it today (no webhook).
+      discord: params.get("discord") === "off" ? { on: false, shown: null } : { on: true, shown: "…Ux9tq" },
       ntfy: params.get("ntfy") === "on"
         ? { on: true, server: "https://ntfy.sh", topic: "money-4a0d2r4x2o2b5u0c28", hasToken: false, priority: 4 }
         : { on: false, server: "https://ntfy.sh", topic: "", hasToken: false, priority: 3 },

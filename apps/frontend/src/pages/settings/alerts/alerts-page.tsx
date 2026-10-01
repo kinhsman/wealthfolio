@@ -2,7 +2,7 @@
 // "where is ntfy config in the settings page?"): Discord and the phone through ntfy. Every alert goes
 // to every place set up here, the same message. The money-hub service keeps it
 // (/api/money-hub/alerts, server/drive-backup/lib/alerts.js); secrets never come back to the page.
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Checkbox } from "@wealthfolio/ui/components/ui/checkbox";
@@ -18,6 +18,14 @@ import {
   type PendingAlerts,
   type PendingChangesView,
 } from "@/features/spending/lib/pending-changes";
+import {
+  ALERT_LABELS,
+  SUBSCRIPTIONS_KEY,
+  subscriptionsApi,
+  useSubscriptions,
+  type AlertKind,
+} from "@/features/spending/lib/subscriptions";
+import { RETURN_ALERT_LABELS, RETURNS_KEY, returnsApi, useReturns, type ReturnAlertKind } from "@/features/spending/lib/returns";
 import { SettingsHeader } from "../settings-header";
 
 const BASE = "/api/money-hub/alerts";
@@ -50,6 +58,14 @@ const api = {
   status: () => call<AlertsStatus>("GET", ""),
   update: (body: { discordWebhook?: string | null; ntfy?: NtfyInput | null }) => call<AlertsStatus>("PUT", "", body),
   test: (only?: "discord" | "ntfy") => call<AlertsStatus>("POST", "/test", only ? { only } : {}),
+  /** A sample of the backup failure alert. */
+  testBackup: () => call<AlertsStatus>("POST", "/test/backup"),
+};
+
+type Went = { discord: boolean; ntfy: boolean } | undefined;
+const sentTo = (went: Went, sample?: string) => {
+  const where = [went?.discord && "Discord", went?.ntfy && "your phone"].filter(Boolean).join(" and ");
+  return `Sample sent to ${where}${sample ? `, using ${sample}` : ""}.`;
 };
 
 const PRIORITIES: { value: number; label: string }[] = [
@@ -93,6 +109,75 @@ function SectionTitle({ title, hint }: { title: string; hint: string }) {
     </div>
   );
 }
+/**
+ * One feature's alerts, laid out like Pending vs posted (owner, 10-01: "put them all in settings
+ * page"): its name (a link to its page), one switch for the whole group, and when on, each kind
+ * with its own tick and a Test that sends a real-looking sample the way the real one goes.
+ */
+function GroupAlerts<K extends string>({
+  icon,
+  title,
+  to,
+  text,
+  on,
+  kinds,
+  labels,
+  busyKey,
+  busy,
+  onSwitch,
+  onTest,
+}: {
+  icon: ReactNode;
+  title: string;
+  to: string;
+  text: string;
+  on: boolean;
+  kinds: Record<K, boolean>;
+  labels: Record<K, { title: string; text: string }>;
+  busyKey: string;
+  busy: string | null;
+  onSwitch: (patch: Partial<Record<K | "on", boolean>>) => void;
+  onTest: (kind: K) => void;
+}) {
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-center gap-3">
+        {icon}
+        <Link to={to} className="min-w-0 flex-1 truncate text-sm font-medium underline-offset-4 hover:underline">
+          {title}
+        </Link>
+        <Switch aria-label={`${title} alerts`} checked={on} disabled={!!busy} onCheckedChange={(v) => onSwitch({ on: v } as Partial<Record<K | "on", boolean>>)} />
+      </div>
+      <p className="text-muted-foreground mt-0.5 pl-7 text-xs">{text}</p>
+      {on ? (
+        <div className="mt-3 space-y-2.5 pl-7 text-xs">
+          {(Object.keys(labels) as K[]).map((k) => (
+            <div key={k} className="flex items-start gap-2">
+              <Checkbox
+                id={`${busyKey}-${k}`}
+                checked={kinds[k] !== false}
+                disabled={!!busy}
+                onCheckedChange={(v) => onSwitch({ [k]: v === true } as Partial<Record<K | "on", boolean>>)}
+                className="mt-0.5"
+              />
+              <label htmlFor={`${busyKey}-${k}`} className="min-w-0 flex-1 cursor-pointer">
+                <span className="block">{labels[k].title}</span>
+                {/* No full stop, like the Pending vs posted lines above. */}
+                <span className="text-muted-foreground block text-[11px]">{labels[k].text.replace(/\.$/, "")}</span>
+              </label>
+              {kinds[k] !== false ? (
+                <button type="button" className="text-primary shrink-0 underline-offset-4 hover:underline disabled:opacity-50" disabled={!!busy} onClick={() => onTest(k)}>
+                  {busy === `${busyKey}-test-${k}` ? "Sending" : "Test"}
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 const btn = "inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border bg-background px-3 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50";
 const cta = "!border-primary/50 !text-primary";
 const field = "h-9 w-full min-w-0 rounded-md border bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50";
@@ -163,6 +248,28 @@ export default function AlertsSettingsPage() {
       const where = [v.went?.discord && "Discord", v.went?.ntfy && "your phone"].filter(Boolean).join(" and ");
       return `Sample sent to ${where}, using ${v.sample}.`;
     });
+
+  // Subscriptions & bills and Returns (money-hub lib/subscriptions.js, lib/returns.js): their switches
+  // and tests live here too; each page points back to this one.
+  const { data: subs } = useSubscriptions();
+  const { data: returns } = useReturns();
+  const runGroup = async <V,>(what: string, key: readonly unknown[], fn: () => Promise<V>, ok?: (v: V) => string) => {
+    setBusy(what);
+    setNote(null);
+    try {
+      const v = await fn();
+      qc.setQueryData(key, v);
+      if (ok) {
+        setNote({ tone: "ok", text: ok(v) });
+        api.status().then(take).catch(() => {});        // "Last alert" below
+      }
+    } catch (e) {
+      setNote({ tone: "bad", text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+  const testBackup = () => run("test-backup", api.testBackup, (s) => sentTo(s.went));
 
   const ntfyOn = !!status?.ntfy.on;
   const ntfyDirty = !!status && (server !== status.ntfy.server || topic !== status.ntfy.topic || priority !== status.ntfy.priority || token !== "");
@@ -390,30 +497,49 @@ export default function AlertsSettingsPage() {
               ) : null}
             </div>
           ) : null}
-          <Link to="/spending/subscriptions" className="hover:bg-muted/40 flex items-center gap-3 px-4 py-3 transition-colors">
-            <Icons.RotateCcw className="text-muted-foreground size-4 shrink-0" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium">Subscriptions &amp; bills</span>
-              <span className="text-muted-foreground block text-xs">New ones, price changes, double charges, stopped ones, your cancel reminders</span>
-            </span>
-            <Icons.ChevronRight className="text-muted-foreground size-4 shrink-0" />
-          </Link>
-          <Link to="/spending/returns" className="hover:bg-muted/40 flex items-center gap-3 px-4 py-3 transition-colors">
-            <Icons.Undo className="text-muted-foreground size-4 shrink-0" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium">Returns</span>
-              <span className="text-muted-foreground block text-xs">A refund landed, money in that could be one, a refund running late</span>
-            </span>
-            <Icons.ChevronRight className="text-muted-foreground size-4 shrink-0" />
-          </Link>
-          <Link to="/settings/exports" className="hover:bg-muted/40 flex items-center gap-3 px-4 py-3 transition-colors">
-            <Icons.Download className="text-muted-foreground size-4 shrink-0" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium">Backups</span>
-              <span className="text-muted-foreground block text-xs">When a Google Drive backup fails</span>
-            </span>
-            <Icons.ChevronRight className="text-muted-foreground size-4 shrink-0" />
-          </Link>
+          {subs ? (
+            <GroupAlerts<AlertKind>
+              icon={<Icons.RotateCcw className="text-muted-foreground size-4 shrink-0" />}
+              title="Subscriptions & bills"
+              to="/spending/subscriptions"
+              text="Charges that repeat: what changed, and a heads-up before a charge"
+              on={subs.alerts.on !== false}
+              kinds={subs.alerts}
+              labels={ALERT_LABELS}
+              busyKey="subs"
+              busy={busy}
+              onSwitch={(patch) => runGroup("subs-set", SUBSCRIPTIONS_KEY, () => subscriptionsApi.setAlerts(patch))}
+              onTest={(k) => runGroup(`subs-test-${k}`, SUBSCRIPTIONS_KEY, () => subscriptionsApi.testAlert(k), (v) => sentTo(v.went, v.sample))}
+            />
+          ) : null}
+          {returns ? (
+            <GroupAlerts<ReturnAlertKind>
+              icon={<Icons.Undo className="text-muted-foreground size-4 shrink-0" />}
+              title="Returns"
+              to="/spending/returns"
+              text="Something you sent back, and the refund it is waiting for"
+              on={returns.alerts.on !== false}
+              kinds={returns.alerts}
+              labels={RETURN_ALERT_LABELS}
+              busyKey="returns"
+              busy={busy}
+              onSwitch={(patch) => runGroup("returns-set", RETURNS_KEY, () => returnsApi.setAlerts(patch))}
+              onTest={(k) => runGroup(`returns-test-${k}`, RETURNS_KEY, () => returnsApi.testAlert(k), (v) => sentTo(v.went, v.sample))}
+            />
+          ) : null}
+          <div className="px-4 py-3">
+            <div className="flex items-center gap-3">
+              <Icons.Download className="text-muted-foreground size-4 shrink-0" />
+              <Link to="/settings/exports" className="min-w-0 flex-1 truncate text-sm font-medium underline-offset-4 hover:underline">
+                Backups
+              </Link>
+              <button type="button" className={`${btn} h-7`} disabled={!!busy} onClick={testBackup}>
+                {busy === "test-backup" ? <Icons.Spinner className="size-3.5 animate-spin" /> : null}
+                Test
+              </button>
+            </div>
+            <p className="text-muted-foreground mt-0.5 pl-7 text-xs">When a Google Drive backup fails. Always on.</p>
+          </div>
         </div>
       </section>
 

@@ -5,8 +5,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
-import { Button, Icons, Label, Page, PageContent, PageHeader, PrivacyAmount } from "@wealthfolio/ui";
-import { Switch } from "@wealthfolio/ui/components/ui/switch";
+import { Button, Icons, Page, PageContent, PageHeader, PrivacyAmount } from "@wealthfolio/ui";
 
 import { useAccounts } from "@/hooks/use-accounts";
 import { cn } from "@/lib/utils";
@@ -14,7 +13,6 @@ import { cn } from "@/lib/utils";
 import { StreamLogo } from "../components/stream-logo";
 import { MoneyInRow } from "../components/track-return-dialog";
 import {
-  RETURN_ALERT_LABELS,
   closedReturns,
   offerHint,
   openReturns,
@@ -24,7 +22,6 @@ import {
   trackReturnStore,
   useReturns,
   useSetReturns,
-  type ReturnAlertKind,
   type ReturnItem,
   type ReturnsView,
 } from "../lib/returns";
@@ -141,62 +138,16 @@ export default function SpendingReturnsPage() {
               </div>
             ) : null}
 
-            <Section title="Alerts" blurb="Which of these to tell you about.">
-              {(Object.keys(RETURN_ALERT_LABELS) as ReturnAlertKind[]).map((k) => (
-                <div key={k} className="flex items-center justify-between gap-4 px-4 py-3">
-                  <div className="min-w-0">
-                    <Label htmlFor={`return-alert-${k}`} className="text-sm">
-                      {RETURN_ALERT_LABELS[k].title}
-                    </Label>
-                    <p className="text-muted-foreground text-xs">{RETURN_ALERT_LABELS[k].text}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      disabled={busy !== null}
-                      onClick={async () => {
-                        setBusy(`test-${k}`);
-                        try {
-                          const r = await returnsApi.testAlert(k);
-                          set(r);
-                          const where = [r.went.discord && "Discord", r.went.ntfy && "your phone"].filter(Boolean).join(" and ");
-                          toast.success(`Sample sent to ${where}, using ${r.sample}.`);
-                        } catch (e) {
-                          toast.error(errorText(e));
-                        } finally {
-                          setBusy(null);
-                        }
-                      }}
-                    >
-                      {busy === `test-${k}` ? <Icons.Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
-                      Test
-                    </Button>
-                    <Switch
-                      id={`return-alert-${k}`}
-                      checked={data.alerts[k] !== false}
-                      disabled={busy !== null}
-                      onCheckedChange={(on) => act(`alert-${k}`, () => returnsApi.setAlerts({ [k]: on }))}
-                    />
-                  </div>
-                </div>
-              ))}
-            </Section>
-
-            <p className="text-muted-foreground -mt-3 text-xs">
-              They go to Discord and your phone, as set in{" "}
-              <Link to="/settings/alerts" className="text-foreground underline-offset-4 hover:underline">
-                Settings, Alerts
-              </Link>
-              .
-            </p>
-
-            {data.last ? (
-              <p className="text-muted-foreground text-xs">
-                Last checked {new Date(data.last.at).toLocaleString()}. It checks every hour, and nothing in your transactions is changed.
+            {/* Which alerts go out, and their tests, live on Settings, Alerts with every other alert (owner, 10-01). */}
+            <div className="text-muted-foreground space-y-1 text-xs">
+              {data.last ? <p>Last checked {new Date(data.last.at).toLocaleString()}. It checks every hour, and nothing in your transactions is changed.</p> : null}
+              <p>
+                {data.alerts.on === false ? "Alerts for these are off. " : "Which alerts go out, and where: "}
+                <Link to="/settings/alerts" className="text-foreground underline-offset-4 hover:underline">
+                  Settings, Alerts
+                </Link>
               </p>
-            ) : null}
+            </div>
           </>
         )}
       </PageContent>
