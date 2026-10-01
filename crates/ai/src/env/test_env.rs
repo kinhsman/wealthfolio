@@ -432,14 +432,20 @@ impl ActivityServiceTrait for MockActivityService {
         _date_from: Option<chrono::NaiveDate>,
         _date_to: Option<chrono::NaiveDate>,
         _instrument_type_filter: Option<Vec<String>>,
-        _activity_id_filter: Option<Vec<String>>,
+        activity_id_filter: Option<Vec<String>>,
     ) -> CoreResult<ActivitySearchResponse> {
+        let in_ids = |a: &&ActivityDetails| {
+            activity_id_filter
+                .as_ref()
+                .is_none_or(|ids| ids.contains(&a.id))
+        };
         // Same fields and case-insensitive substring match as the SQLite search.
         let data: Vec<ActivityDetails> = match asset_id_keyword.map(|k| k.to_lowercase()) {
-            None => self.activities.clone(),
+            None => self.activities.iter().filter(in_ids).cloned().collect(),
             Some(keyword) => self
                 .activities
                 .iter()
+                .filter(in_ids)
                 .filter(|a| {
                     [
                         Some(a.asset_id.as_str()),
@@ -1560,6 +1566,8 @@ pub struct MockEnvironment {
     pub taxonomy_service: Arc<dyn TaxonomyServiceTrait>,
     pub cash_activity_service: Arc<dyn CashActivityServiceTrait>,
     pub categorization_rules_service: Arc<dyn CategorizationRulesServiceTrait>,
+    /// money-hub: the owner's notes, bank text and bills (None = no service).
+    pub entry_lookup: Option<Arc<dyn wealthfolio_agent_tools::EntryLookup>>,
 }
 
 /// Mock cash-activity service for testing. Seed `items` to control both
@@ -1649,6 +1657,7 @@ impl MockEnvironment {
             taxonomy_service: Arc::new(MockTaxonomyService::default()),
             cash_activity_service: Arc::new(MockCashActivityService::default()),
             categorization_rules_service: Arc::new(MockCategorizationRulesService::default()),
+            entry_lookup: None,
         }
     }
 
@@ -1737,6 +1746,10 @@ impl AgentEnvironment for MockEnvironment {
 
     fn categorization_rules_service(&self) -> Arc<dyn CategorizationRulesServiceTrait> {
         self.categorization_rules_service.clone()
+    }
+
+    fn entry_lookup(&self) -> Option<Arc<dyn wealthfolio_agent_tools::EntryLookup>> {
+        self.entry_lookup.clone()
     }
 }
 

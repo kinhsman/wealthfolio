@@ -5,6 +5,7 @@
 
 use std::sync::{Arc, RwLock};
 
+use wealthfolio_agent_tools::EntryLookup;
 use wealthfolio_ai::{AgentEnvironment, AiEnvironment, ChatRepositoryTrait};
 use wealthfolio_core::{
     accounts::AccountServiceTrait, activities::ActivityServiceTrait,
@@ -48,6 +49,8 @@ pub struct ServerAiEnvironment {
     cash_activity_service: Arc<CashActivityService>,
     activity_taxonomy_assignment_service: Arc<ActivityTaxonomyAssignmentService>,
     categorization_rules_service: Arc<CategorizationRulesService>,
+    /// money-hub: the owner's notes, bank text and bills (MONEY_HUB_LOOKUP_URL/_TOKEN).
+    entry_lookup: Option<Arc<dyn EntryLookup>>,
 }
 
 impl ServerAiEnvironment {
@@ -100,6 +103,7 @@ impl ServerAiEnvironment {
             cash_activity_service,
             activity_taxonomy_assignment_service,
             categorization_rules_service,
+            entry_lookup: wealthfolio_ai::money_hub::MoneyHubLookup::from_env(),
         }
     }
 }
@@ -179,6 +183,10 @@ impl AgentEnvironment for ServerAiEnvironment {
 
     fn categorization_rules_service(&self) -> Arc<dyn CategorizationRulesServiceTrait> {
         self.categorization_rules_service.clone()
+    }
+
+    fn entry_lookup(&self) -> Option<Arc<dyn EntryLookup>> {
+        self.entry_lookup.clone()
     }
 }
 
