@@ -426,7 +426,7 @@ impl ActivityServiceTrait for MockActivityService {
         _page_size: i64,
         _account_id_filter: Option<Vec<String>>,
         _activity_type_filter: Option<Vec<String>>,
-        _asset_id_keyword: Option<String>,
+        asset_id_keyword: Option<String>,
         _sort: Option<Sort>,
         _needs_review_filter: Option<bool>,
         _date_from: Option<chrono::NaiveDate>,
@@ -434,11 +434,31 @@ impl ActivityServiceTrait for MockActivityService {
         _instrument_type_filter: Option<Vec<String>>,
         _activity_id_filter: Option<Vec<String>>,
     ) -> CoreResult<ActivitySearchResponse> {
+        // Same fields and case-insensitive substring match as the SQLite search.
+        let data: Vec<ActivityDetails> = match asset_id_keyword.map(|k| k.to_lowercase()) {
+            None => self.activities.clone(),
+            Some(keyword) => self
+                .activities
+                .iter()
+                .filter(|a| {
+                    [
+                        Some(a.asset_id.as_str()),
+                        a.asset_name.as_deref(),
+                        Some(a.asset_symbol.as_str()),
+                        a.subtype.as_deref(),
+                        a.comment.as_deref(),
+                    ]
+                    .into_iter()
+                    .flatten()
+                    .any(|text| text.to_lowercase().contains(&keyword))
+                })
+                .cloned()
+                .collect(),
+        };
+        let total_row_count = data.len() as i64;
         Ok(ActivitySearchResponse {
-            data: self.activities.clone(),
-            meta: ActivitySearchResponseMeta {
-                total_row_count: self.activities.len() as i64,
-            },
+            data,
+            meta: ActivitySearchResponseMeta { total_row_count },
         })
     }
 
