@@ -36,6 +36,7 @@ import { MerchantLogo } from "./merchant-logo";
 import { useNotes } from "../lib/notes";
 import { PendingChangeTag } from "./pending-change-tag";
 import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
+import { canLinkCharge, linkCharge } from "../lib/track-charge";
 import { ReturnBadge } from "./return-badge";
 
 interface TransactionRowProps {
@@ -325,6 +326,12 @@ function TransactionRowImpl({
               <DropdownMenuItem onClick={() => trackReturnStore.open(returnMark ? { returnId: returnMark.item.id } : { purchase: purchaseOf(a) })}>
                 <Icons.Undo className="mr-2 h-4 w-4" aria-hidden="true" />
                 {returnMark ? "See the return" : "Track a return…"}
+              </DropdownMenuItem>
+            )}
+            {canLinkCharge(activityType) && (
+              <DropdownMenuItem onClick={() => linkCharge(row)}>
+                <Icons.RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+                Link to a subscription or bill…
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={() => onDuplicate(row)}>

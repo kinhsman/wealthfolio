@@ -91,7 +91,7 @@ function TrackChargeDialog({ charge, onClose }: { charge: TrackCharge; onClose: 
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium">{merchant?.name || charge.notes || "This charge"}</div>
             <div className="text-muted-foreground truncate text-xs">
-              {[shortDate(charge.date), account?.name, `Filed as ${charge.categoryName}`].filter(Boolean).join(" · ")}
+              {[shortDate(charge.date), account?.name, charge.categoryName ? `Filed as ${charge.categoryName}` : null].filter(Boolean).join(" · ")}
             </div>
           </div>
           <div className="shrink-0 text-sm font-medium tabular-nums">

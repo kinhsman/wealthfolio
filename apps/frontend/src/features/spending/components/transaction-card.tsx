@@ -21,6 +21,7 @@ import { bankLineFor, bankWordsFor, useBankLines } from "../lib/bank-lines";
 import { useNotes } from "../lib/notes";
 import { PendingChangeTag } from "./pending-change-tag";
 import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
+import { canLinkCharge, linkCharge } from "../lib/track-charge";
 import { ReturnBadge } from "./return-badge";
 import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
@@ -331,6 +332,15 @@ function TransactionCardImpl({
                         icon: Icons.Undo,
                         label: returnMark ? "See the return" : "Track a return…",
                         onClick: () => trackReturnStore.open(returnMark ? { returnId: returnMark.item.id } : { purchase: purchaseOf(a) }),
+                      },
+                    ]
+                  : []),
+                ...(canLinkCharge(activityType)
+                  ? [
+                      {
+                        icon: Icons.RotateCcw,
+                        label: "Link to a subscription or bill…",
+                        onClick: () => linkCharge(row),
                       },
                     ]
                   : []),

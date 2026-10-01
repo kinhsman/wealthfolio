@@ -117,3 +117,28 @@ export function askWhichOne({
   setTimeout(() => trackChargeStore.open(charge), 0);
   return true;
 }
+
+/**
+ * The same window from a charge's "…" menu (owner, 10-01: "how do i tie it to a subscription? I cant
+ * see the option"): for a charge the app did not put in one by its words, whatever it is filed under.
+ * Money out and fees (a fee joins a subscription only when linked by hand or by a rule).
+ */
+export const canLinkCharge = (activityType?: string | null) => activityType === "WITHDRAWAL" || activityType === "FEE";
+
+export function linkCharge(row: {
+  activity: { id: string; notes?: string | null; amount?: string | number | null; activityDate: string | Date; accountId: string; activityType?: string | null };
+  category: { id: string; name: string } | null;
+}): void {
+  const a = row.activity;
+  const date = a.activityDate instanceof Date ? a.activityDate.toISOString() : String(a.activityDate);
+  trackChargeStore.open({
+    id: a.id,
+    notes: a.notes ?? "",
+    amount: Math.abs(Number(a.amount) || 0),
+    date: date.slice(0, 10),
+    accountId: a.accountId,
+    activityType: a.activityType,
+    group: (row.category && cachedCategoryGroup(row.category.id)) || "subscriptions",
+    categoryName: row.category?.name ?? "",
+  });
+}
