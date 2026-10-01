@@ -10,6 +10,7 @@ import { SyncButton } from "@/features/wealthfolio-connect/components/sync-butto
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { usePortfolios } from "@/hooks/use-portfolios";
 import { useIsCompactTableViewport, useIsMobileViewport } from "@/hooks/use-platform";
+import { isOwlyAccount } from "@/lib/account-display";
 import { getActivityRestrictionLevel } from "@/lib/activity-restrictions";
 import { ActivityType } from "@/lib/constants";
 import { debounce } from "@/lib/debounce";
@@ -382,11 +383,18 @@ const ActivityPage = () => {
 
   // Accounts opted into the Spending module are shown on the Spending tab; the
   // Investments tab must exclude them so cash/credit-card activity doesn't double-up.
+  // money-hub: Owly's "Owed to me" is not an investment either, so it stays off the tab
+  // (a link to that account by id still opens its entries, see below).
   const investmentAccounts = useMemo(() => {
-    if (!isSpendingEnabled || spendingAccountIds.length === 0) return accounts;
+    if (!isSpendingEnabled) return accounts;
     const excluded = new Set(spendingAccountIds);
-    return accounts.filter((a) => !excluded.has(a.id));
+    return accounts.filter((a) => !excluded.has(a.id) && !isOwlyAccount(a));
   }, [accounts, spendingAccountIds, isSpendingEnabled]);
+
+  const owlyAccountIds = useMemo(
+    () => accounts.filter(isOwlyAccount).map((a) => a.id),
+    [accounts],
+  );
 
   const investmentAccountIds = useMemo(
     () => investmentAccounts.map((a) => a.id),
@@ -442,15 +450,18 @@ const ActivityPage = () => {
     // accounts normally stay on the Spending tab, but hiding their flagged
     // activity rows here would make migration review impossible.
     if (statusFilter === "pending") return effectiveAccountIds;
-    if (!isSpendingEnabled || spendingAccountIds.length === 0) return effectiveAccountIds;
+    if (!isSpendingEnabled) return effectiveAccountIds;
     if (!effectiveAccountIds || effectiveAccountIds.length === 0) return investmentAccountIds;
     const allowed = new Set(investmentAccountIds);
+    // A link to one account (?account=<id>) still opens "Owed to me".
+    if (activityUrlFilters.accountScope) owlyAccountIds.forEach((id) => allowed.add(id));
     return effectiveAccountIds.filter((id) => allowed.has(id));
   }, [
+    activityUrlFilters.accountScope,
     effectiveAccountIds,
     investmentAccountIds,
     isSpendingEnabled,
-    spendingAccountIds,
+    owlyAccountIds,
     statusFilter,
   ]);
 

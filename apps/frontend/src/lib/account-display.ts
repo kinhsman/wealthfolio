@@ -29,3 +29,9 @@ export function setDisplayTypeInMeta(meta: string | null | undefined, displayTyp
   else delete parsed.displayType;
   return JSON.stringify(parsed);
 }
+
+/** Owly's "Owed to me" account (money-hub lib/owly.js sets `meta.source = "owly"`): money friends
+ *  owe, so it is neither an investment nor spending. */
+export function isOwlyAccount(account: { meta?: string | null }): boolean {
+  return parseMeta(account.meta).source === "owly";
+}
