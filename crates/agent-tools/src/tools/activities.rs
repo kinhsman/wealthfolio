@@ -374,6 +374,7 @@ impl AgentTool for SearchActivities {
                 let fee = a.fee.as_ref().and_then(|v| v.parse::<f64>().ok());
                 let fx_rate = a.fx_rate.as_ref().and_then(|v| v.parse::<f64>().ok());
                 let amount = a.amount.as_ref().and_then(|s| s.parse::<f64>().ok());
+                let extra = extras.get(&a.id);
 
                 ActivityDto {
                     id: a.id,
@@ -392,12 +393,9 @@ impl AgentTool for SearchActivities {
                     currency: a.currency,
                     account_id: a.account_id.clone(),
                     account_name: Some(a.account_name),
-                    my_note: extras.get(&a.id).and_then(|x| x.my_note.clone()),
-                    bank_text: extras.get(&a.id).and_then(|x| x.bank_text.clone()),
-                    bills: extras
-                        .get(&a.id)
-                        .map(|x| x.bills.clone())
-                        .unwrap_or_default(),
+                    my_note: extra.and_then(|x| x.my_note.clone()),
+                    bank_text: extra.and_then(|x| x.bank_text.clone()),
+                    bills: extra.map(|x| x.bills.clone()).unwrap_or_default(),
                     notes: a.comment,
                 }
             })
