@@ -19,6 +19,7 @@ import { SelectionCheckbox } from "./selection-checkbox";
 import { QuickEventPopover } from "./quick-event-popover";
 import { bankLineFor, bankWordsFor, useBankLines } from "../lib/bank-lines";
 import { useNotes } from "../lib/notes";
+import { PendingChangeTag } from "./pending-change-tag";
 import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
@@ -164,10 +165,16 @@ function TransactionCardImpl({
             </span>
           </div>
 
-          {/* money-hub patch: the bank's own line under the payee (lib/bank-lines.ts). */}
+          {/* money-hub patch: the bank's own line under the payee (lib/bank-lines.ts), and the tag when it
+              posted at another amount than it was pending (lib/pending-changes.ts). */}
           {bankLine ? (
-            <div className="text-muted-foreground mt-0.5 truncate text-[11px]">{bankLine}</div>
-          ) : null}
+            <div className="text-muted-foreground mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px]">
+              <span className="min-w-0 truncate">{bankLine}</span>
+              <PendingChangeTag activityId={a.id} />
+            </div>
+          ) : (
+            <PendingChangeTag activityId={a.id} className="mt-0.5" />
+          )}
           {/* money-hub patch: the owner's own note, its own line (lib/notes.ts). */}
           {note ? (
             <div className="text-muted-foreground mt-0.5 flex min-w-0 items-center gap-1 text-[11px]">

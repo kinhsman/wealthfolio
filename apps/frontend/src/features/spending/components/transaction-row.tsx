@@ -34,6 +34,7 @@ import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
 import { useNotes } from "../lib/notes";
+import { PendingChangeTag } from "./pending-change-tag";
 
 interface TransactionRowProps {
   row: TransactionRowVM;
@@ -166,6 +167,8 @@ function TransactionRowImpl({
               <span className="sr-only">Note: {note}</span>
             </span>
           ) : null}
+          {/* money-hub patch: posted at another amount than it was pending, e.g. a tip (lib/pending-changes.ts). */}
+          <PendingChangeTag activityId={a.id} />
           {/* money-hub patch: the bank's own line after the payee (lib/bank-lines.ts). */}
           {bankLine ? <TruncatedText text={bankLine} className="text-muted-foreground flex-1 text-xs" /> : null}
           {showAccount && (

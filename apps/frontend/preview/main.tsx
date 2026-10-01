@@ -1,5 +1,5 @@
 // money-hub patch: the Subscriptions & bills screens with fixture data, for a picture before shipping
-// (vite.preview.config.ts). ?view=page|card|alerts|track, ?theme=light|dark; track: ?case=likely|member|new. The fixture is the helper's view
+// (vite.preview.config.ts). ?view=page|card|alerts|track|pending|rows, ?theme=light|dark; track: ?case=likely|member|new. The fixture is the helper's view
 // over the owner's real transactions (preview/subscriptions.fixture.json, not committed).
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
@@ -17,6 +17,16 @@ import { MERCHANTS_KEY, type Merchant } from "../src/features/spending/lib/merch
 import { trackChargeStore } from "../src/features/spending/lib/track-charge";
 import AlertsSettingsPage from "../src/pages/settings/alerts/alerts-page";
 import fixture from "./subscriptions.fixture.json";
+import pendingFixture from "./pending.fixture.json";
+import SpendingPendingChangesPage from "../src/features/spending/pages/spending-pending-changes-page";
+import { PENDING_CHANGES_KEY, type PendingChangesView } from "../src/features/spending/lib/pending-changes";
+import { PendingTransactions } from "../src/features/spending/components/pending-transactions";
+import { TransactionRow } from "../src/features/spending/components/transaction-row";
+import { TransactionCard } from "../src/features/spending/components/transaction-card";
+import type { TransactionRowVM } from "../src/features/spending/lib/transactions-helpers";
+import { Table, TableBody, TooltipProvider } from "@wealthfolio/ui";
+import { PrivacyProvider } from "../src/context/privacy-context";
+import { EventDialogProvider } from "../src/features/spending/components/event-dialog-provider";
 
 const params = new URLSearchParams(location.search);
 const view = params.get("view") || "page";
@@ -37,6 +47,9 @@ window.fetch = (input, init) => {
         : { name: "YouTube Premium", words: ["YouTube"], amount: 9.92, every: "month", nextDate: "2026-10-26" },
     };
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+  }
+  if (url.startsWith("/api/money-hub/plaid/pending-changes")) {
+    return Promise.resolve(new Response(JSON.stringify(pendingFixture.view), { status: 200, headers: { "Content-Type": "application/json" } }));
   }
   if (url.startsWith("/api/money-hub/alerts")) {
     const body = {
@@ -63,6 +76,55 @@ qc.setQueryData(
     .map((s): Merchant => ({ id: s.merchantId!, name: s.name, pattern: s.name, patterns: [s.name], logoUrl: s.logoUrl })),
 );
 
+qc.setQueryData(PENDING_CHANGES_KEY, pendingFixture.view as unknown as PendingChangesView);
+if (view === "pending" || view === "rows") {
+  qc.setQueryData(MERCHANTS_KEY, [
+    ...(qc.getQueryData<Merchant[]>(MERCHANTS_KEY) ?? []),
+    ...(pendingFixture.merchants as unknown as Merchant[]).filter((m) => m.logoUrl),
+  ]);
+}
+
+/** Three Spending list rows (a tip, a gas hold, an unchanged one) and the pending box, desktop and phone. */
+function RowsPreview() {
+  const noop = () => {};
+  const items = (pendingFixture.view as unknown as PendingChangesView).items;
+  const rows: TransactionRowVM[] = ["p-pho", "p-shell", "p-costco"].map((id) => {
+    const c = items.find((x) => x.id === id)!;
+    return {
+      activity: {
+        id: c.activityId ?? `act-${id}`, accountId: c.accountId, activityType: "WITHDRAWAL", activityDate: `${c.postedDate}T17:00:00Z`,
+        amount: String(c.posted), currency: "USD", notes: c.name, cashFlowBucket: "spending", netAmount: String(-(c.posted ?? 0)),
+      } as unknown as TransactionRowVM["activity"],
+      category: { assignmentId: "a", taxonomyId: "t", id: "c", name: id === "p-shell" ? "Gas" : id === "p-pho" ? "Restaurants" : "Groceries", color: "#e07a5f", parentName: null },
+      splitCount: 0,
+      needsReview: false,
+    };
+  });
+  // The tag reads the posted entry's id: point the fixture's Costco at its row (unchanged, so no tag).
+  const handlers = {
+    event: null, eventTypeColor: null, showAccount: true, isSelected: false, onToggleSelect: noop, onAssignCategory: noop, onClearCategory: noop,
+    onSetEvent: noop, onMarkReimbursement: noop, onEditSplits: noop, onEdit: noop, onDuplicate: noop, onDelete: noop,
+  };
+  const pending = items.filter((c) => c.status === "pending").map((c) => ({ id: c.id, accountId: c.accountId, date: c.date, notes: c.name, bankText: c.bankText, amount: -c.lastPending, currency: "USD" }));
+  const mobile = params.get("mobile") === "1";
+  return (
+    <div className="bg-background text-foreground min-h-screen space-y-4 px-4 py-6 md:px-10">
+      <PendingTransactions items={pending} accountById={new Map()} showAccount isMobile={mobile} />
+      {mobile ? (
+        <div className="space-y-2">
+          {rows.map((r) => <TransactionCard key={r.activity.id} row={r} account={undefined} selectionMode={false} {...handlers} />)}
+        </div>
+      ) : (
+        <Table>
+          <TableBody>
+            {rows.map((r) => <TransactionRow key={r.activity.id} row={r} account={undefined} {...handlers} />)}
+          </TableBody>
+        </Table>
+      )}
+    </div>
+  );
+}
+
 /** The window as it opens on a charge just filed under Subscriptions (or a bill category). */
 function TrackPreview() {
   useEffect(() => {
@@ -83,6 +145,8 @@ function TrackPreview() {
 
 function Shell() {
   if (view === "track") return <TrackPreview />;
+  if (view === "pending") return <SpendingPendingChangesPage />;
+  if (view === "rows") return <RowsPreview />;
   if (view === "alerts") {
     // Settings' content column beside its menu.
     return (
@@ -111,11 +175,17 @@ function Shell() {
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/spending/subscriptions"]}>
+      <PrivacyProvider>
+      <TooltipProvider>
+      <EventDialogProvider>
+      <MemoryRouter initialEntries={[view === "pending" && params.get("id") ? `/spending/pending-changes?id=${params.get("id")}` : "/spending/subscriptions"]}>
         <React.Suspense fallback={null}>
           <Shell />
         </React.Suspense>
       </MemoryRouter>
+      </EventDialogProvider>
+      </TooltipProvider>
+      </PrivacyProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 );

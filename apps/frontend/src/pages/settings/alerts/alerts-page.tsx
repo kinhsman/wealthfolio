@@ -4,8 +4,20 @@
 // (/api/money-hub/alerts, server/drive-backup/lib/alerts.js); secrets never come back to the page.
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { Checkbox } from "@wealthfolio/ui/components/ui/checkbox";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Separator } from "@wealthfolio/ui/components/ui/separator";
+import { Switch } from "@wealthfolio/ui/components/ui/switch";
+import {
+  ALERT_STEPS,
+  pendingChangesApi,
+  setPendingChanges,
+  usePendingChanges,
+  type PendingAlertKind,
+  type PendingAlerts,
+  type PendingChangesView,
+} from "@/features/spending/lib/pending-changes";
 import { SettingsHeader } from "../settings-header";
 
 const BASE = "/api/money-hub/alerts";
@@ -127,6 +139,30 @@ export default function AlertsSettingsPage() {
       setBusy(null);
     }
   };
+
+  // Pending vs posted (money-hub lib/pendingChanges.js): its switch, step and test live here.
+  const qc = useQueryClient();
+  const { data: pending } = usePendingChanges();
+  const pendingAlerts = pending?.alerts;
+  const runPending = async (what: string, fn: () => Promise<PendingChangesView>, ok?: (v: PendingChangesView) => string) => {
+    setBusy(what);
+    setNote(null);
+    try {
+      const v = await fn();
+      setPendingChanges(qc, v);
+      if (ok) setNote({ tone: "ok", text: ok(v) });
+    } catch (e) {
+      setNote({ tone: "bad", text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+  const setPending = (patch: Partial<PendingAlerts>) => runPending("pending-set", () => pendingChangesApi.setAlerts(patch));
+  const testPending = (kind: PendingAlertKind) =>
+    runPending(`test-pending-${kind}`, () => pendingChangesApi.test(kind), (v) => {
+      const where = [v.went?.discord && "Discord", v.went?.ntfy && "your phone"].filter(Boolean).join(" and ");
+      return `Sample sent to ${where}, using ${v.sample}.`;
+    });
 
   const ntfyOn = !!status?.ntfy.on;
   const ntfyDirty = !!status && (server !== status.ntfy.server || topic !== status.ntfy.topic || priority !== status.ntfy.priority || token !== "");
@@ -293,6 +329,67 @@ export default function AlertsSettingsPage() {
       <section className="space-y-3">
         <SectionTitle title="What sends alerts" hint="Each one switches its own on and off" />
         <div className="bg-card divide-y rounded-xl border">
+          {pendingAlerts ? (
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <Icons.Receipt className="text-muted-foreground size-4 shrink-0" />
+                <Link to="/spending/pending-changes" className="min-w-0 flex-1 truncate text-sm font-medium underline-offset-4 hover:underline">
+                  Pending vs posted
+                </Link>
+                <button type="button" className={`${btn} h-7`} disabled={!!busy} onClick={() => testPending("up")}>
+                  {busy === "test-pending-up" ? <Icons.Spinner className="size-3.5 animate-spin" /> : null}
+                  Test
+                </button>
+                <Switch
+                  aria-label="Pending vs posted alerts"
+                  checked={pendingAlerts.on}
+                  disabled={!!busy}
+                  onCheckedChange={(on) => setPending({ on })}
+                />
+              </div>
+              <p className="text-muted-foreground mt-0.5 pl-7 text-xs">A card charge posts higher than it was pending: a tip, or a charge to check</p>
+              {pendingAlerts.on ? (
+                <div className="mt-3 space-y-2.5 pl-7 text-xs">
+                  <label className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={pendingAlerts.minDollars}
+                      disabled={!!busy}
+                      onChange={(e) => setPending({ minDollars: Number(e.target.value) })}
+                      className="h-8 rounded-md border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+                    >
+                      {[...new Set([...ALERT_STEPS, pendingAlerts.minDollars])].sort((a, b) => a - b).map((v) => (
+                        <option key={v} value={v}>{v <= 0.01 ? "any amount" : `$${v} or more`}</option>
+                      ))}
+                    </select>
+                    <span className="text-muted-foreground">above pending</span>
+                  </label>
+                  {([
+                    ["lower", "down", "Also when it posts lower", "A gas or hotel hold that came in smaller"],
+                    ["dropped", "dropped", "Also when a pending charge never posts", "A hold let go, or a cancelled charge"],
+                  ] as const).map(([key, kind, title, hint]) => (
+                    <div key={key} className="flex items-start gap-2">
+                      <Checkbox
+                        id={`pending-${key}`}
+                        checked={pendingAlerts[key]}
+                        disabled={!!busy}
+                        onCheckedChange={(v) => setPending({ [key]: v === true })}
+                        className="mt-0.5"
+                      />
+                      <label htmlFor={`pending-${key}`} className="min-w-0 flex-1 cursor-pointer">
+                        <span className="block">{title}</span>
+                        <span className="text-muted-foreground block text-[11px]">{hint}</span>
+                      </label>
+                      {pendingAlerts[key] ? (
+                        <button type="button" className="text-primary shrink-0 underline-offset-4 hover:underline disabled:opacity-50" disabled={!!busy} onClick={() => testPending(kind)}>
+                          {busy === `test-pending-${kind}` ? "Sending" : "Test"}
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <Link to="/spending/subscriptions" className="hover:bg-muted/40 flex items-center gap-3 px-4 py-3 transition-colors">
             <Icons.RotateCcw className="text-muted-foreground size-4 shrink-0" />
             <span className="min-w-0 flex-1">

@@ -4,6 +4,7 @@
 // count in no total and no balance; once the bank posts one it comes in as a normal entry and
 // leaves this list on the next bank sync (server/drive-backup/lib/plaidSync.js pendingTxns).
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 
 import type { Account } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -122,8 +123,12 @@ export function PendingTransactions({
   if (!items.length) return null;
   const heading = (
     <div className="text-muted-foreground flex items-baseline gap-2 px-1 text-xs">
-      <span className="text-foreground font-medium">Pending · {items.length}</span>
-      <span className="truncate">Not posted by the bank yet. Editable once it posts.</span>
+      <span className="text-foreground shrink-0 whitespace-nowrap font-medium">Pending · {items.length}</span>
+      <span className="min-w-0 truncate">Not posted by the bank yet. Editable once it posts.</span>
+      {/* money-hub patch: what each one posts as, beside what it was (lib/pending-changes.ts). */}
+      <Link to="/spending/pending-changes" className="text-foreground ml-auto shrink-0 underline-offset-4 hover:underline">
+        Pending vs posted
+      </Link>
     </div>
   );
   return (
