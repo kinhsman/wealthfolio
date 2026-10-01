@@ -606,15 +606,28 @@ function EditStreamDialog({
             <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
               <div className="min-w-0">
                 <div className="text-sm font-medium">Rules</div>
-                <div className="text-muted-foreground text-xs leading-snug">
+                <div className="text-muted-foreground space-y-0.5 text-xs leading-snug">
+                  {/* What brings its charges here: the owner's rules, and the merchant words (owner, 10-01:
+                      Membership Fee "def have a rule" = merchant Bank fees & credits, word Membership fee). */}
                   {rules.length ? (
-                    <>
-                      {rules.map((r) => r.name).join(", ")}. What {rules.length === 1 ? "it files" : "they file"} joins {s.name}, on any card.{" "}
-                    </>
-                  ) : (
-                    <>No rule yet. A rule files charges like these and keeps them in {s.name}, on any card.{" "}</>
-                  )}
-                  <Link to="/settings/spending/rules" className="text-foreground underline-offset-4 hover:underline">
+                    <div>
+                      Rule{rules.length === 1 ? "" : "s"}: <span className="text-foreground">{rules.map((r) => r.name).join(", ")}</span>.{" "}
+                      What {rules.length === 1 ? "it files" : "they file"} joins {s.name}, on any card.
+                    </div>
+                  ) : null}
+                  {s.merchantWords ? (
+                    <div>
+                      Merchant:{" "}
+                      <Link to="/settings/spending/merchants" className="text-foreground underline-offset-4 hover:underline">
+                        {s.merchantWords.name}
+                      </Link>
+                      , word{s.merchantWords.words.length === 1 ? "" : "s"} {s.merchantWords.words.map((w) => `"${w}"`).join(", ")}.
+                    </div>
+                  ) : null}
+                  {!rules.length && !s.merchantWords ? (
+                    <div>No rule yet. A rule files charges like these and keeps them in {s.name}, on any card.</div>
+                  ) : null}
+                  <Link to="/settings/spending/rules" className="text-foreground inline-block underline-offset-4 hover:underline">
                     All rules
                   </Link>
                 </div>

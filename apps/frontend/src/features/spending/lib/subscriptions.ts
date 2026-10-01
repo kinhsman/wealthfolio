@@ -65,6 +65,8 @@ export interface Stream {
   linkedIds?: string[];
   /** The owner's rules that file its charges as a subscription or bill: what they match joins it, on any card. */
   rules?: { id: string; name: string; categoryId: string }[];
+  /** The owner's merchant words that bring its charges here (Settings, Spending, Merchants). */
+  merchantWords?: { id: string; name: string; words: string[] } | null;
 }
 
 export interface SharedCharge {
