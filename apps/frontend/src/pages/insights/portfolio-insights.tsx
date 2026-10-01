@@ -2,7 +2,6 @@ import { AccountScopeSelector } from "@/components/account-filter-selector";
 import { SwipablePage, SwipablePageView } from "@/components/page";
 
 import { useAccountScopeStore } from "@/lib/account-scope-store";
-import IncomePage from "@/pages/income/income-page";
 import PerformancePage from "@/pages/performance/performance-page";
 import { Icons } from "@wealthfolio/ui";
 import { Card, CardContent, CardHeader } from "@wealthfolio/ui/components/ui/card";
@@ -87,16 +86,9 @@ export default function PortfolioInsightsPage() {
           </Suspense>
         ),
       },
-      {
-        value: "income",
-        label: t("insights:insights.tab_income"),
-        icon: Icons.HandCoins,
-        content: (
-          <Suspense fallback={<DashboardLoader />}>
-            <IncomePage />
-          </Suspense>
-        ),
-      },
+      // money-hub patch: no Income tab (owner, 2026-09-30: "hide"). It lists dividends and interest
+      // paid into investment accounts; WheelTradr sends totals only, so it held just bank interest.
+      // The page is still at /income.
     ],
     [accountFilter, holdingsActions, setAccountScope, t],
   );
