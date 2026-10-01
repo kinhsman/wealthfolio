@@ -146,6 +146,9 @@ import {
   // money-hub patch: travel subcategories (hotels, tours)
   BedDouble,
   Ticket,
+  // money-hub patch: Settings, Alerts (Discord and ntfy)
+  Bell,
+  MessageSquare,
   Code,
   Coffee,
   Dumbbell,
@@ -786,6 +789,8 @@ const IconsInternal = {
   Banknote: Banknote,
   BedDouble: BedDouble,
   Ticket: Ticket,
+  Bell: Bell,
+  MessageSquare: MessageSquare,
   Code: Code,
   Coffee: Coffee,
   Dumbbell: Dumbbell,
@@ -1014,6 +1019,8 @@ export type IconName =
   | "Banknote"
   | "BedDouble"
   | "Ticket"
+  | "Bell"
+  | "MessageSquare"
   | "Code"
   | "Coffee"
   | "Dumbbell"

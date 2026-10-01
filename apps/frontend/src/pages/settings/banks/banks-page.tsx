@@ -330,6 +330,18 @@ export default function BanksSettingsPage() {
                   </div>
                 ))}
               </div>
+              {/* money-hub patch: more accounts from the same login, ticked in Plaid's window (update
+                  mode with account selection: the same link, none of the 10 spent). */}
+              {!item.needsLogin && item.env !== "sandbox" && (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5">
+                  <span className="text-muted-foreground min-w-0 flex-1 text-xs">
+                    Another account at {item.institution.name}? Tick it in Plaid&rsquo;s window: same link, none of your 10 used. It comes in switched off.
+                  </span>
+                  <a className={btn} href={`${BASE}/link?item=${encodeURIComponent(item.id)}&add=accounts`}>
+                    <Icons.Plus className="size-3.5" /> Add accounts
+                  </a>
+                </div>
+              )}
             </div>
           ))}
 

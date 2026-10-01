@@ -191,7 +191,7 @@ export default function SpendingSubscriptionsPage() {
               </div>
             ) : null}
 
-            <Section title="Alerts" blurb="Sent to Discord, and to ntfy when it is set up in the helper's config.">
+            <Section title="Alerts" blurb="Which of these to tell you about.">
               {(Object.keys(ALERT_LABELS) as AlertKind[]).map((k) => (
                 <div key={k} className="flex items-center justify-between gap-4 px-4 py-3">
                   <div className="min-w-0">
@@ -209,6 +209,14 @@ export default function SpendingSubscriptionsPage() {
                 </div>
               ))}
             </Section>
+
+            <p className="text-muted-foreground -mt-3 text-xs">
+              They go to Discord and your phone, as set in{" "}
+              <Link to="/settings/alerts" className="text-foreground underline-offset-4 hover:underline">
+                Settings, Alerts
+              </Link>
+              .
+            </p>
 
             {data.last ? (
               <p className="text-muted-foreground text-xs">

@@ -128,6 +128,13 @@ export default function SettingsLayout() {
             subtitle: "What friends owe you, and friends' Zelle",
             icon: <Icons.HandCoins className="size-5" />,
           },
+          // money-hub patch: where the money app's alerts go (Discord, ntfy).
+          {
+            title: "Alerts",
+            href: "alerts",
+            subtitle: "Discord and phone notifications (ntfy)",
+            icon: <Icons.Bell className="size-5" />,
+          },
         ],
       },
       {

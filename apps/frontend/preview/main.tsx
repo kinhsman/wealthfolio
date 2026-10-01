@@ -12,10 +12,26 @@ import "../src/i18n/i18n";
 import { SubscriptionsCard } from "../src/features/spending/components/subscriptions-card";
 import { SUBSCRIPTIONS_KEY, type SubscriptionsView } from "../src/features/spending/lib/subscriptions";
 import SpendingSubscriptionsPage from "../src/features/spending/pages/spending-subscriptions-page";
+import AlertsSettingsPage from "../src/pages/settings/alerts/alerts-page";
 import fixture from "./subscriptions.fixture.json";
 
 const params = new URLSearchParams(location.search);
 const view = params.get("view") || "page";
+
+// The Alerts page asks the helper directly: answer it here (Discord set up, phone not yet).
+const realFetch = window.fetch.bind(window);
+window.fetch = (input, init) => {
+  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  if (url.startsWith("/api/money-hub/alerts")) {
+    const body = {
+      discord: { on: true, shown: "…Ux9tq" },
+      ntfy: { on: false, server: "https://ntfy.sh", topic: "", hasToken: false, priority: 3 },
+      last: null,
+    };
+    return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+  }
+  return realFetch(input, init);
+};
 
 const qc = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: Infinity, refetchOnWindowFocus: false, refetchOnMount: false } },
@@ -23,6 +39,16 @@ const qc = new QueryClient({
 qc.setQueryData(SUBSCRIPTIONS_KEY, fixture as unknown as SubscriptionsView);
 
 function Shell() {
+  if (view === "alerts") {
+    // Settings' content column beside its menu.
+    return (
+      <div className="bg-background text-foreground min-h-screen px-6 py-8">
+        <div className="mx-auto max-w-3xl">
+          <AlertsSettingsPage />
+        </div>
+      </div>
+    );
+  }
   if (view === "card") {
     // The spending dashboard's left column: two thirds of a three-column grid.
     return (

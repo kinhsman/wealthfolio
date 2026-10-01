@@ -1,0 +1,286 @@
+// money-hub patch: Settings, Connections, Alerts. Where the money app's alerts go (owner, 2026-10-01:
+// "where is ntfy config in the settings page?"): Discord and the phone through ntfy. Every alert goes
+// to every place set up here, the same message. The money-hub service keeps it
+// (/api/money-hub/alerts, server/drive-backup/lib/alerts.js); secrets never come back to the page.
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { Icons } from "@wealthfolio/ui/components/ui/icons";
+import { Separator } from "@wealthfolio/ui/components/ui/separator";
+import { SettingsHeader } from "../settings-header";
+
+const BASE = "/api/money-hub/alerts";
+
+interface AlertsStatus {
+  discord: { on: boolean; shown: string | null };
+  ntfy: { on: boolean; server: string; topic: string; hasToken: boolean; priority: number };
+  last: { at: string; title: string; discord: boolean; ntfy: boolean } | null;
+  went?: { discord: boolean; ntfy: boolean };
+}
+interface NtfyInput {
+  server: string;
+  topic: string;
+  token?: string;
+  priority: number;
+}
+
+async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    credentials: "include",
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error || `The money app helper said ${res.status}`);
+  return data as T;
+}
+const api = {
+  status: () => call<AlertsStatus>("GET", ""),
+  update: (body: { discordWebhook?: string | null; ntfy?: NtfyInput | null }) => call<AlertsStatus>("PUT", "", body),
+  test: () => call<AlertsStatus>("POST", "/test", {}),
+};
+
+const PRIORITIES: { value: number; label: string }[] = [
+  { value: 1, label: "Lowest: no sound" },
+  { value: 2, label: "Low" },
+  { value: 3, label: "Normal" },
+  { value: 4, label: "High: rings, pops up" },
+  { value: 5, label: "Urgent" },
+];
+
+const when = (iso?: string | null) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const today = d.toDateString() === new Date().toDateString();
+  const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return today ? `today ${time}` : `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${time}`;
+};
+
+// Same pieces as the WheelTradr and Banks pages: green = set up, grey = not.
+function StatusPill({ on, text }: { on: boolean; text: string }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${on ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-success" : "bg-muted-foreground"}`} />
+      {text}
+    </span>
+  );
+}
+function SectionTitle({ title, hint }: { title: string; hint: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+      <h3 className="text-muted-foreground whitespace-nowrap text-xs font-semibold uppercase tracking-[0.08em]">{title}</h3>
+      <span className="text-muted-foreground text-xs">{hint}</span>
+    </div>
+  );
+}
+const btn = "inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border bg-background px-3 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50";
+const cta = "!border-primary/50 !text-primary";
+const field = "h-9 w-full min-w-0 rounded-md border bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50";
+const label = "text-muted-foreground text-[11px] font-medium";
+
+type Note = { tone: "ok" | "bad"; text: string };
+
+export default function AlertsSettingsPage() {
+  const [status, setStatus] = useState<AlertsStatus | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<Note | null>(null);
+  const [hook, setHook] = useState("");
+  const [editHook, setEditHook] = useState(false);
+  const [server, setServer] = useState("https://ntfy.sh");
+  const [topic, setTopic] = useState("");
+  const [token, setToken] = useState("");
+  const [priority, setPriority] = useState(3);
+
+  const take = (s: AlertsStatus) => {
+    setStatus(s);
+    setServer(s.ntfy.server);
+    setTopic(s.ntfy.topic);
+    setPriority(s.ntfy.priority);
+    setToken("");
+  };
+  useEffect(() => {
+    api.status().then(take).catch((e) => setLoadError(e instanceof Error ? e.message : String(e)));
+  }, []);
+
+  const run = async (what: string, fn: () => Promise<AlertsStatus>, ok?: (s: AlertsStatus) => string) => {
+    setBusy(what);
+    setNote(null);
+    try {
+      const s = await fn();
+      take(s);
+      if (ok) setNote({ tone: "ok", text: ok(s) });
+      return true;
+    } catch (e) {
+      setNote({ tone: "bad", text: e instanceof Error ? e.message : String(e) });
+      return false;
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const ntfyOn = !!status?.ntfy.on;
+  const anyOn = !!status && (status.discord.on || ntfyOn);
+  const ntfyDirty = !!status && (server !== status.ntfy.server || topic !== status.ntfy.topic || priority !== status.ntfy.priority || token !== "");
+  const saveNtfy = () =>
+    run("ntfy", () => api.update({ ntfy: { server: server.trim(), topic: topic.trim(), priority, ...(token ? { token } : {}) } }), () => "Saved. Send a test to check your phone.");
+
+  return (
+    <div className="space-y-6">
+      <SettingsHeader heading="Alerts" text="Where the money app tells you things: Discord, and your phone through ntfy. Every alert goes to each place set up here." />
+      <Separator />
+
+      {loadError && <p className="text-destructive text-sm">{loadError}</p>}
+
+      <section className="space-y-3">
+        <SectionTitle title="Discord" hint="A channel's webhook" />
+        <div className="bg-card rounded-xl border p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg">
+                <Icons.MessageSquare className="text-primary size-5" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">Discord</div>
+                <div className="text-muted-foreground truncate text-xs">
+                  {status?.discord.on ? `Webhook ${status.discord.shown ?? ""}` : "Not set up"}
+                </div>
+              </div>
+            </div>
+            {status && <StatusPill on={status.discord.on} text={status.discord.on ? "Set up" : "Off"} />}
+          </div>
+          {status && (!status.discord.on || editHook) ? (
+            <div className="mt-4 space-y-2">
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                In Discord: the channel's settings, Integrations, Webhooks, New Webhook, Copy Webhook URL. Paste it here.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input type="password" value={hook} onChange={(e) => setHook(e.target.value)} autoComplete="off" spellCheck={false}
+                  placeholder="https://discord.com/api/webhooks/..." className={`${field} flex-1 font-mono`} />
+                <button type="button" className={`${btn} ${cta}`} disabled={!hook.trim() || !!busy}
+                  onClick={async () => { if (await run("discord", () => api.update({ discordWebhook: hook.trim() }), () => "Discord saved.")) { setHook(""); setEditHook(false); } }}>
+                  {busy === "discord" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Check className="size-3.5" />}
+                  Save
+                </button>
+                {editHook && <button type="button" className={btn} onClick={() => { setEditHook(false); setHook(""); }}>Cancel</button>}
+              </div>
+            </div>
+          ) : status?.discord.on ? (
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
+              <button type="button" className={btn} disabled={!!busy} onClick={() => setEditHook(true)}>
+                <Icons.Pencil className="size-3.5" /> Change
+              </button>
+              <button type="button" className={btn} disabled={!!busy}
+                onClick={() => run("discord-off", () => api.update({ discordWebhook: null }), () => "Discord turned off.")}>
+                <Icons.Unlink className="size-3.5" /> Turn off
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <SectionTitle title="Phone (ntfy)" hint="Free app for iPhone and Android" />
+        <div className="bg-card rounded-xl border p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg">
+                <Icons.Smartphone className="text-primary size-5" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">ntfy</div>
+                <div className="text-muted-foreground truncate text-xs">
+                  {ntfyOn ? `Topic ${status?.ntfy.topic} on ${status?.ntfy.server.replace(/^https:\/\//, "")}` : "Not set up"}
+                </div>
+              </div>
+            </div>
+            {status && <StatusPill on={ntfyOn} text={ntfyOn ? "Set up" : "Off"} />}
+          </div>
+          {status && (
+            <div className="mt-4 space-y-3">
+              {!ntfyOn && (
+                <p className="text-muted-foreground text-xs leading-relaxed">
+                  Install ntfy on your phone, subscribe to a topic name only you know, and type the same name here. The topic you use for WheelTradr works too: the same phone then gets both.
+                </p>
+              )}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1">
+                  <span className={label}>Server</span>
+                  <input value={server} onChange={(e) => setServer(e.target.value)} autoComplete="off" spellCheck={false} className={field} placeholder="https://ntfy.sh" />
+                </label>
+                <label className="space-y-1">
+                  <span className={label}>Topic</span>
+                  <input value={topic} onChange={(e) => setTopic(e.target.value)} autoComplete="off" spellCheck={false} className={`${field} font-mono`} placeholder="money-alerts-..." />
+                </label>
+                <label className="space-y-1">
+                  <span className={label}>Access token (only for a protected topic)</span>
+                  <input type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" spellCheck={false}
+                    className={`${field} font-mono`} placeholder={status.ntfy.hasToken ? "Saved. Type to replace it." : "tk_... (optional)"} />
+                </label>
+                <label className="space-y-1">
+                  <span className={label}>Priority</span>
+                  <select value={priority} onChange={(e) => setPriority(Number(e.target.value))} className={field}>
+                    {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                <button type="button" className={`${btn} ${cta}`} disabled={!topic.trim() || !server.trim() || !!busy || (ntfyOn && !ntfyDirty)} onClick={saveNtfy}>
+                  {busy === "ntfy" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Check className="size-3.5" />}
+                  Save
+                </button>
+                {ntfyOn && (
+                  <button type="button" className={btn} disabled={!!busy}
+                    onClick={() => run("ntfy-off", () => api.update({ ntfy: null }), () => "Phone alerts turned off.")}>
+                    <Icons.Unlink className="size-3.5" /> Turn off
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <SectionTitle title="Check it" hint="One test message to each place set up" />
+        <div className="bg-card flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
+          <span className="text-muted-foreground text-xs">
+            {status?.last
+              ? `Last alert ${when(status.last.at)}: ${status.last.title} (${[status.last.discord && "Discord", status.last.ntfy && "phone"].filter(Boolean).join(" and ") || "not delivered"})`
+              : "No alert sent yet."}
+          </span>
+          <button type="button" className={btn} disabled={!anyOn || !!busy}
+            onClick={() => run("test", api.test, (s) => `Test sent to ${[s.went?.discord && "Discord", s.went?.ntfy && "your phone"].filter(Boolean).join(" and ")}.`)}>
+            {busy === "test" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Bell className="size-3.5" />}
+            Send a test
+          </button>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <SectionTitle title="What sends alerts" hint="Each one switches its own on and off" />
+        <div className="bg-card divide-y rounded-xl border">
+          <Link to="/spending/subscriptions" className="hover:bg-muted/40 flex items-center gap-3 px-4 py-3 transition-colors">
+            <Icons.RotateCcw className="text-muted-foreground size-4 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">Subscriptions &amp; bills</span>
+              <span className="text-muted-foreground block text-xs">New ones, price changes, double charges, stopped ones, your cancel reminders</span>
+            </span>
+            <Icons.ChevronRight className="text-muted-foreground size-4 shrink-0" />
+          </Link>
+          <Link to="/settings/exports" className="hover:bg-muted/40 flex items-center gap-3 px-4 py-3 transition-colors">
+            <Icons.Download className="text-muted-foreground size-4 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">Backups</span>
+              <span className="text-muted-foreground block text-xs">When a Google Drive backup fails</span>
+            </span>
+            <Icons.ChevronRight className="text-muted-foreground size-4 shrink-0" />
+          </Link>
+        </div>
+      </section>
+
+      {note && <p className={`text-sm ${note.tone === "ok" ? "text-success" : "text-destructive"}`}>{note.text}</p>}
+    </div>
+  );
+}
