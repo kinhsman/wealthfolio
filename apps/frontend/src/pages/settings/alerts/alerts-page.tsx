@@ -183,6 +183,39 @@ function GroupAlerts<K extends string>({
   );
 }
 
+/** Free cash's cushion: an amount kept aside on top of the cards and the bills (owner, 10-01). Saved on
+ *  Enter or on leaving the box; empty = none. */
+function CushionField({ value, disabled, onSave }: { value: number; disabled: boolean; onSave: (amount: number) => void }) {
+  const shown = (v: number) => (v > 0 ? String(v) : "");
+  const [text, setText] = useState(shown(value));
+  useEffect(() => setText(shown(value)), [value]);
+  const commit = () => {
+    const n = text.trim() === "" ? 0 : Number(text.replace(/[$,\s]/g, ""));
+    if (!Number.isFinite(n) || n < 0) return setText(shown(value));
+    if (Math.round(n * 100) !== Math.round(value * 100)) onSave(Math.round(n * 100) / 100);
+  };
+  return (
+    <label className="flex flex-wrap items-center gap-2">
+      <span className="text-muted-foreground">Keep a cushion of</span>
+      <span className="relative">
+        <span className="text-muted-foreground pointer-events-none absolute left-2 top-1/2 -translate-y-1/2">$</span>
+        <input
+          inputMode="decimal"
+          aria-label="Cushion"
+          value={text}
+          placeholder="0"
+          disabled={disabled}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+          className="h-8 w-28 rounded-md border bg-background pl-5 pr-2 text-xs tabular-nums text-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+        />
+      </span>
+      <span className="text-muted-foreground">on top of the cards and bills</span>
+    </label>
+  );
+}
+
 const btn = "inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border bg-background px-3 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50";
 const cta = "!border-primary/50 !text-primary";
 const field = "h-9 w-full min-w-0 rounded-md border bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-50";
@@ -546,6 +579,7 @@ export default function AlertsSettingsPage() {
               onSwitch={(patch) => runGroup("cash-set", FREE_CASH_KEY, () => freeCashApi.setAlerts(patch))}
               onTest={(k) => runGroup(`cash-test-${k}`, FREE_CASH_KEY, () => freeCashApi.testAlert(k), (v) => sentTo(v.went, v.sample))}
               extra={
+                <>
                 <label className="flex flex-wrap items-center gap-2">
                   <span className="text-muted-foreground">Count bills due in the next</span>
                   <select
@@ -559,6 +593,12 @@ export default function AlertsSettingsPage() {
                     ))}
                   </select>
                 </label>
+                <CushionField
+                  value={freeCash.totals.cushion ?? 0}
+                  disabled={!!busy}
+                  onSave={(amount) => runGroup("cash-cushion", FREE_CASH_KEY, () => freeCashApi.setCushion(amount))}
+                />
+                </>
               }
             />
           ) : null}

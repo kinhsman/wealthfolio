@@ -47,7 +47,8 @@ export interface FreeCashView {
     /** Due, but already pending on a card (so in the cards). */
     skipped: (FreeCashBill & { why: "pending"; pendingAmount: number })[];
   };
-  totals: { cash: number; cards: number; bills: number; left: number };
+  /** `cushion`: the amount the owner keeps aside on top (Settings, Alerts), 0 until set. */
+  totals: { cash: number; cards: number; bills: number; cushion: number; left: number };
   short: boolean;
   asOf: string | null;
   alerts: { on: boolean } & Record<FreeCashAlertKind, boolean>;
@@ -77,6 +78,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const freeCashApi = {
   get: () => call<FreeCashView>("GET", ""),
   setDays: (days: number) => call<FreeCashView>("PUT", "/days", { days }),
+  setCushion: (amount: number) => call<FreeCashView>("PUT", "/cushion", { amount }),
   setAlerts: (patch: Partial<Record<FreeCashAlertKind | "on", boolean>>) =>
     call<FreeCashView>("PUT", "/alerts", patch),
   testAlert: (kind: FreeCashAlertKind) => call<FreeCashView>("POST", "/alerts/test", { kind }),
@@ -92,7 +94,7 @@ export const refreshFreeCash = (qc: QueryClient) =>
 export const FREE_CASH_ALERT_LABELS: Record<FreeCashAlertKind, { title: string; text: string }> = {
   short: {
     title: "Cash is short",
-    text: "Free cash no longer covers your cards and the bills coming up, then once a week while it stays short.",
+    text: "Free cash no longer covers your cards, the bills coming up and your cushion, then once a week while it stays short.",
   },
   ok: { title: "Covered again", text: "Free cash covers your cards and bills again." },
 };

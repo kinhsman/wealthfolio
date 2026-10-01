@@ -133,8 +133,10 @@ export default function PortfolioPage() {
         actions: netWorthActions,
       },
     ];
+    // money-hub patch: Spending is the first tab and the one the dashboard opens on (owner, 10-01:
+    // "make the Spending tab the default/fisrt tab").
     if (spendingEnabled) {
-      items.push({
+      items.unshift({
         value: "spending",
         label: t("dashboard:tabs.spending"),
         icon: SpendingTabIcon,
@@ -162,11 +164,10 @@ export default function PortfolioPage() {
       <SwipablePage
         className="pt-0"
         views={views}
-        defaultView="investments"
+        defaultView={spendingEnabled ? "spending" : "investments"}
         withPadding={false}
         withMobileNavOffset={false}
         mobileActionsPlacement="header"
-        persistKey="dashboard-tab"
       />
       <AlternativeAssetQuickAddModal
         open={isQuickAddOpen}

@@ -130,6 +130,11 @@ export function FreeCashCard({
                 </span>
               </button>
               {showBills ? <BillsList v={data} currency={currency} /> : null}
+              {data.totals.cushion > 0 ? (
+                <Line label="Your cushion">
+                  - <PrivacyAmount value={data.totals.cushion} currency={currency} />
+                </Line>
+              ) : null}
               <div className="border-border/60 flex items-baseline justify-between gap-2 border-t pt-1.5 font-medium">
                 <span style={data.short ? { color: AMBER } : undefined}>
                   {data.short ? "Short" : "Left over"}

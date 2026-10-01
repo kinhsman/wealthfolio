@@ -1,6 +1,6 @@
 // money-hub patch: Free cash with fixture data, for a picture before shipping (vite.preview.config.ts).
 // ?view=column (the dashboard's right column: Credit cards, then Free cash; &open=1 opens the bills;
-// &case=short poses the cash short), ?view=form (an account's edit window, &id=<account id>),
+// &case=short poses the cash short; &cushion=2000 sets a cushion), ?view=form (an account's edit window, &id=<account id>),
 // ?view=alerts (Settings, Alerts); ?theme=light|dark. The fixture is the helper's view over the
 // owner's real accounts, cards and bills (preview/free-cash.fixture.json, not committed).
 import React, { useEffect } from "react";
@@ -89,7 +89,17 @@ const qc = new QueryClient({
     },
   },
 });
-qc.setQueryData(FREE_CASH_KEY, params.get("case") === "short" ? shortCase(real) : real);
+/** ?cushion=2000: as with that cushion set on Settings, Alerts. */
+function withCushion(v: FreeCashView): FreeCashView {
+  const cushion = Number(params.get("cushion") || 0);
+  if (!cushion) return { ...v, totals: { ...v.totals, cushion: v.totals.cushion ?? 0 } };
+  const left = Math.round((v.totals.left - cushion) * 100) / 100;
+  return { ...v, totals: { ...v.totals, cushion, left }, short: left < 0 };
+}
+qc.setQueryData(
+  FREE_CASH_KEY,
+  withCushion(params.get("case") === "short" ? shortCase(real) : real),
+);
 qc.setQueryData(CREDIT_CARDS_KEY, fixture.cards as unknown as CreditCardsView);
 qc.setQueryData(SUBSCRIPTIONS_KEY, subsFixture as unknown as SubscriptionsView);
 qc.setQueryData(RETURNS_KEY, returnsFixture.view as unknown as ReturnsView);
