@@ -15,6 +15,7 @@ import { QueryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { invalidateSpendingCaches } from "../lib/invalidation";
 import { offerRule } from "../lib/rule-offer";
+import { BankDescription } from "./bank-description";
 import { MerchantShortcut } from "./merchant-dialog";
 import type { Account, Activity, ActivityCreate, ActivityUpdate } from "@/lib/types";
 
@@ -858,6 +859,9 @@ export function CashActivityForm({
                         </FormItem>
                       )}
                     />
+
+                    {/* money-hub patch: the bank's full line, under the payee. */}
+                    {isEditing ? <BankDescription activityId={activity?.id} /> : null}
 
                     {/* Collapsed by default, so the everyday case — a charge in
                         the account's own currency — never sees it. Open, it
