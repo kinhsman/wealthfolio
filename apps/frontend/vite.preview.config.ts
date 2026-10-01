@@ -22,7 +22,10 @@ export default defineConfig({
     outDir: "preview-dist",
     emptyOutDir: true,
     rollupOptions: {
-      input: { subscriptions: path.resolve(__dirname, "preview/subscriptions.html") },
+      input: {
+        subscriptions: path.resolve(__dirname, "preview/subscriptions.html"),
+        "credit-cards": path.resolve(__dirname, "preview/credit-cards.html"),
+      },
     },
   },
 } as unknown as import("vitest/config").UserConfigExport);

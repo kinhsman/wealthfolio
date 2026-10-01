@@ -82,6 +82,7 @@ import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
 import { SubscriptionsCard } from "./subscriptions-card";
 import { ReturnsCard } from "./returns-card";
+import { CreditCardsCard } from "./credit-cards-card";
 import { SpendingPeriodSelector } from "./spending-period-toggle";
 
 const FUTURE_BAR = "#E5E7EB";
@@ -1258,6 +1259,9 @@ export default function SpendingTabContent() {
                   historicalByDay={historyReport?.byDay ?? []}
                 />
               </div>
+
+              {/* money-hub patch: what is owed on the credit cards now (lib/credit-cards.ts); nothing without a card. */}
+              <CreditCardsCard currency={currency} color={theme.deep} darkColor={theme.mid} className="order-2 lg:order-none" />
 
               {insights.length > 0 && (
                 <div className="border-border/40 bg-card/70 order-4 rounded-xl border p-4 backdrop-blur-xl md:p-5 lg:order-none">
