@@ -60,7 +60,9 @@ export interface Stream {
   /** What was last sent to Owly as this bill's total, or why Owly refused. */
   owlyTotal?: { chargeId: string; amount: number | null; from: string | null; at: string; error: string | null } | null;
   /** Every charge in it. */
-  charges?: { id: string; date: string; amount: number; notes?: string; accountId?: string | null }[];
+  /** `extra`: brought in by a rule but not this kind of charge (a fee, a credit): listed and counted, not
+   *  in its rhythm or price. `credit`: money back. */
+  charges?: { id: string; date: string; amount: number; notes?: string; accountId?: string | null; extra?: boolean; credit?: boolean }[];
   /** Charges the owner took out by hand: in no subscription, whatever words or rules say (owner, 10-01). */
   excluded?: ExcludedCharge[];
   /** The charges the owner put in it by hand (owner, 10-01). */

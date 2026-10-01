@@ -704,7 +704,10 @@ function EditStreamDialog({
                 <div className="max-h-[40dvh] divide-y overflow-y-auto">
                   {charges.map((c) => {
                     const isOut = out.has(c.id);
-                    const why = c.wasOut ? "left out by you" : linked.has(c.id) ? "linked by you" : ruled.has(c.id) ? "by a rule" : null;
+                    const why = [
+                      "credit" in c && c.credit ? "credit" : null,
+                      c.wasOut ? "left out by you" : linked.has(c.id) ? "linked by you" : ruled.has(c.id) ? "by a rule" : null,
+                    ].filter(Boolean).join(", ") || null;
                     return (
                       <label key={c.id} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2", isOut && "opacity-60")}>
                         <span className="min-w-0 flex-1">
