@@ -200,12 +200,36 @@ export default function SpendingSubscriptionsPage() {
                     </Label>
                     <p className="text-muted-foreground text-xs">{ALERT_LABELS[k].text}</p>
                   </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={busy !== null}
+                    onClick={async () => {
+                      setBusy(`test-${k}`);
+                      try {
+                        const r = await subscriptionsApi.testAlert(k);
+                        set(r);
+                        const where = [r.went.discord && "Discord", r.went.ntfy && "your phone"].filter(Boolean).join(" and ");
+                        toast.success(`Sample sent to ${where}, using ${r.sample}.`);
+                      } catch (e) {
+                        toast.error(errorText(e));
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}
+                  >
+                    {busy === `test-${k}` ? <Icons.Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                    Test
+                  </Button>
                   <Switch
                     id={`alert-${k}`}
                     checked={data.alerts[k] !== false}
                     disabled={busy !== null}
                     onCheckedChange={(on) => act(`alert-${k}`, () => subscriptionsApi.setAlerts({ [k]: on }))}
                   />
+                  </div>
                 </div>
               ))}
             </Section>

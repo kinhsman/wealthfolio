@@ -25,7 +25,9 @@ window.fetch = (input, init) => {
   if (url.startsWith("/api/money-hub/alerts")) {
     const body = {
       discord: { on: true, shown: "…Ux9tq" },
-      ntfy: { on: false, server: "https://ntfy.sh", topic: "", hasToken: false, priority: 3 },
+      ntfy: params.get("ntfy") === "on"
+        ? { on: true, server: "https://ntfy.sh", topic: "money-4a0d2r4x2o2b5u0c28", hasToken: false, priority: 4 }
+        : { on: false, server: "https://ntfy.sh", topic: "", hasToken: false, priority: 3 },
       last: null,
     };
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));

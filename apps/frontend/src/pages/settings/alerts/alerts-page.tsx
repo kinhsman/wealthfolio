@@ -37,7 +37,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 const api = {
   status: () => call<AlertsStatus>("GET", ""),
   update: (body: { discordWebhook?: string | null; ntfy?: NtfyInput | null }) => call<AlertsStatus>("PUT", "", body),
-  test: () => call<AlertsStatus>("POST", "/test", {}),
+  test: (only?: "discord" | "ntfy") => call<AlertsStatus>("POST", "/test", only ? { only } : {}),
 };
 
 const PRIORITIES: { value: number; label: string }[] = [
@@ -129,10 +129,9 @@ export default function AlertsSettingsPage() {
   };
 
   const ntfyOn = !!status?.ntfy.on;
-  const anyOn = !!status && (status.discord.on || ntfyOn);
   const ntfyDirty = !!status && (server !== status.ntfy.server || topic !== status.ntfy.topic || priority !== status.ntfy.priority || token !== "");
   const saveNtfy = () =>
-    run("ntfy", () => api.update({ ntfy: { server: server.trim(), topic: topic.trim(), priority, ...(token ? { token } : {}) } }), () => "Saved. Send a test to check your phone.");
+    run("ntfy", () => api.update({ ntfy: { server: server.trim(), topic: topic.trim(), priority, ...(token ? { token } : {}) } }), () => "Saved. Press Send a test to check your phone.");
 
   return (
     <div className="space-y-6">
@@ -176,6 +175,11 @@ export default function AlertsSettingsPage() {
             </div>
           ) : status?.discord.on ? (
             <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-3">
+              <button type="button" className={`${btn} ${cta}`} disabled={!!busy}
+                onClick={() => run("test-discord", () => api.test("discord"), () => "Test sent to Discord. Check the channel.")}>
+                {busy === "test-discord" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Bell className="size-3.5" />}
+                Send a test
+              </button>
               <button type="button" className={btn} disabled={!!busy} onClick={() => setEditHook(true)}>
                 <Icons.Pencil className="size-3.5" /> Change
               </button>
@@ -266,29 +270,23 @@ export default function AlertsSettingsPage() {
                     </button>
                   )}
                 </div>
-                <button type="button" className={`${btn} ${cta}`} disabled={!topic.trim() || !server.trim() || !!busy || (ntfyOn && !ntfyDirty)} onClick={saveNtfy}>
-                  {busy === "ntfy" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Check className="size-3.5" />}
-                  {ntfyOn ? "Save changes" : "Save and turn on"}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  {ntfyOn && (
+                    <button type="button" className={`${btn} ${ntfyDirty ? "" : cta}`} disabled={!!busy || ntfyDirty}
+                      title={ntfyDirty ? "Save first, then test" : undefined}
+                      onClick={() => run("test-ntfy", () => api.test("ntfy"), () => "Test sent. It should be on your phone now.")}>
+                      {busy === "test-ntfy" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Bell className="size-3.5" />}
+                      Send a test
+                    </button>
+                  )}
+                  <button type="button" className={`${btn} ${ntfyOn && !ntfyDirty ? "" : cta}`} disabled={!topic.trim() || !server.trim() || !!busy || (ntfyOn && !ntfyDirty)} onClick={saveNtfy}>
+                    {busy === "ntfy" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Check className="size-3.5" />}
+                    {ntfyOn ? "Save changes" : "Save and turn on"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <SectionTitle title="Check it" hint="One test message to each place set up" />
-        <div className="bg-card flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4">
-          <span className="text-muted-foreground text-xs">
-            {status?.last
-              ? `Last alert ${when(status.last.at)}: ${status.last.title} (${[status.last.discord && "Discord", status.last.ntfy && "phone"].filter(Boolean).join(" and ") || "not delivered"})`
-              : "No alert sent yet."}
-          </span>
-          <button type="button" className={btn} disabled={!anyOn || !!busy}
-            onClick={() => run("test", api.test, (s) => `Test sent to ${[s.went?.discord && "Discord", s.went?.ntfy && "your phone"].filter(Boolean).join(" and ")}.`)}>
-            {busy === "test" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Bell className="size-3.5" />}
-            Send a test
-          </button>
         </div>
       </section>
 
@@ -313,6 +311,12 @@ export default function AlertsSettingsPage() {
           </Link>
         </div>
       </section>
+
+      {status?.last && (
+        <p className="text-muted-foreground text-xs">
+          Last alert {when(status.last.at)}: {status.last.title} ({[status.last.discord && "Discord", status.last.ntfy && "phone"].filter(Boolean).join(" and ") || "not delivered"})
+        </p>
+      )}
 
       {note && <p className={`text-sm ${note.tone === "ok" ? "text-success" : "text-destructive"}`}>{note.text}</p>}
     </div>

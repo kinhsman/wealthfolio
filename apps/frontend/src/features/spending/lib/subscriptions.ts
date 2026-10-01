@@ -98,6 +98,9 @@ export const subscriptionsApi = {
   updateManual: (id: string, input: ManualInput) => call<SubscriptionsView>("PUT", `/manual/${encodeURIComponent(id)}`, input),
   removeManual: (id: string) => call<SubscriptionsView>("DELETE", `/manual/${encodeURIComponent(id)}`),
   setAlerts: (alerts: Partial<Record<AlertKind, boolean>>) => call<SubscriptionsView>("PUT", "/alerts", alerts),
+  /** A sample of one kind of alert from the owner's own list, sent the way the real one goes. */
+  testAlert: (kind: AlertKind) =>
+    call<SubscriptionsView & { went: { discord: boolean; ntfy: boolean }; sample: string }>("POST", "/alerts/test", { kind }),
 };
 
 export function useSubscriptions() {
