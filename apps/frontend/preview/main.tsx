@@ -1,6 +1,8 @@
 // money-hub patch: the Subscriptions & bills screens with fixture data, for a picture before shipping
 // (vite.preview.config.ts). ?view=page|card|alerts|track|pending|rows, ?theme=light|dark; track: ?case=likely|member|new. The fixture is the helper's view
 // over the owner's real transactions (preview/subscriptions.fixture.json, not committed).
+// Returns: ?view=returns|returns-empty|returns-card|return-new|return-edit|return-pick over sample returns at the
+// owner's real stores (preview/returns.fixture.json, not committed; ?id=r2 picks the one the window opens on).
 import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
@@ -16,6 +18,11 @@ import { TrackChargeHost } from "../src/features/spending/components/track-charg
 import { MERCHANTS_KEY, type Merchant } from "../src/features/spending/lib/merchants";
 import { trackChargeStore } from "../src/features/spending/lib/track-charge";
 import AlertsSettingsPage from "../src/pages/settings/alerts/alerts-page";
+import { ReturnsCard } from "../src/features/spending/components/returns-card";
+import { TrackReturnHost } from "../src/features/spending/components/track-return-dialog";
+import { RETURNS_KEY, trackReturnStore, type ReturnsView } from "../src/features/spending/lib/returns";
+import SpendingReturnsPage from "../src/features/spending/pages/spending-returns-page";
+import { QueryKeys } from "../src/lib/query-keys";
 import fixture from "./subscriptions.fixture.json";
 import pendingFixture from "./pending.fixture.json";
 import SpendingPendingChangesPage from "../src/features/spending/pages/spending-pending-changes-page";
@@ -27,6 +34,7 @@ import type { TransactionRowVM } from "../src/features/spending/lib/transactions
 import { Table, TableBody, TooltipProvider } from "@wealthfolio/ui";
 import { PrivacyProvider } from "../src/context/privacy-context";
 import { EventDialogProvider } from "../src/features/spending/components/event-dialog-provider";
+import returnsFixture from "./returns.fixture.json";
 
 const params = new URLSearchParams(location.search);
 const view = params.get("view") || "page";
@@ -51,6 +59,10 @@ window.fetch = (input, init) => {
   if (url.startsWith("/api/money-hub/plaid/pending-changes")) {
     return Promise.resolve(new Response(JSON.stringify(pendingFixture.view), { status: 200, headers: { "Content-Type": "application/json" } }));
   }
+  const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+  // The Returns window asks the helper for purchases to start from and for the money in to pick from.
+  if (url.startsWith("/api/money-hub/returns/purchases")) return json(returnsFixture.purchases);
+  if (url.includes("/candidates")) return json(returnsFixture.moneyIn);
   if (url.startsWith("/api/money-hub/alerts")) {
     const body = {
       discord: { on: true, shown: "…Ux9tq" },
@@ -68,6 +80,16 @@ const qc = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: Infinity, refetchOnWindowFocus: false, refetchOnMount: false } },
 });
 qc.setQueryData(SUBSCRIPTIONS_KEY, fixture as unknown as SubscriptionsView);
+const returnsView = returnsFixture.view as unknown as ReturnsView;
+qc.setQueryData(RETURNS_KEY, view === "returns-empty" ? { ...returnsView, items: [], totals: { waiting: 0, count: 0, late: 0, toConfirm: 0, back: 0, backCount: 0 } } : returnsView);
+// ?view=rows&returns=1: the Returns mark on the sample rows (waiting, late, refunded).
+if (view === "rows" && params.get("returns") === "1") {
+  const pick = ["r1", "r3", "r5"];
+  const ids = ["p-pho", "p-shell", "p-costco"].map((id) => (pendingFixture.view as unknown as PendingChangesView).items.find((x) => x.id === id)?.activityId ?? `act-${id}`);
+  qc.setQueryData(RETURNS_KEY, { ...returnsView, items: returnsView.items.map((x) => (pick.includes(x.id) ? { ...x, purchaseId: ids[pick.indexOf(x.id)] } : x)) });
+}
+// The owner's accounts, for their names on the rows.
+for (const archived of [true, false]) qc.setQueryData([QueryKeys.ACCOUNTS, archived], returnsFixture.accounts);
 // The owner's merchants, from the streams that have one (their logos sit in preview/public).
 qc.setQueryData(
   MERCHANTS_KEY,
@@ -143,10 +165,39 @@ function TrackPreview() {
   );
 }
 
+/** The Returns window as it opens: on a purchase (new), on one being tracked (edit), or to pick the purchase. */
+function ReturnPreview() {
+  useEffect(() => {
+    const p = returnsFixture.purchases.find((x) => x.notes === "Costco") ?? returnsFixture.purchases[0];
+    trackReturnStore.open(view === "return-new" ? { purchase: p } : view === "return-edit" ? { returnId: params.get("id") || "r2" } : {});
+  }, []);
+  return (
+    <>
+      <SpendingReturnsPage />
+      <TrackReturnHost />
+    </>
+  );
+}
+
 function Shell() {
   if (view === "track") return <TrackPreview />;
   if (view === "pending") return <SpendingPendingChangesPage />;
   if (view === "rows") return <RowsPreview />;
+  if (view === "returns" || view === "returns-empty") return <><SpendingReturnsPage /><TrackReturnHost /></>;
+  if (view.startsWith("return-")) return <ReturnPreview />;
+  if (view === "returns-card") {
+    // The spending dashboard's left column, under the Subscriptions card.
+    return (
+      <div className="bg-background text-foreground min-h-screen px-10 py-10">
+        <div className="lg:grid lg:grid-cols-3 lg:gap-20">
+          <div className="space-y-6 lg:col-span-2">
+            <SubscriptionsCard currency="USD" />
+            <ReturnsCard currency="USD" />
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (view === "alerts") {
     // Settings' content column beside its menu.
     return (

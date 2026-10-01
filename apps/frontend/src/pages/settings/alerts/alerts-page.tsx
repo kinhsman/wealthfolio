@@ -398,6 +398,14 @@ export default function AlertsSettingsPage() {
             </span>
             <Icons.ChevronRight className="text-muted-foreground size-4 shrink-0" />
           </Link>
+          <Link to="/spending/returns" className="hover:bg-muted/40 flex items-center gap-3 px-4 py-3 transition-colors">
+            <Icons.Undo className="text-muted-foreground size-4 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium">Returns</span>
+              <span className="text-muted-foreground block text-xs">A refund landed, money in that could be one, a refund running late</span>
+            </span>
+            <Icons.ChevronRight className="text-muted-foreground size-4 shrink-0" />
+          </Link>
           <Link to="/settings/exports" className="hover:bg-muted/40 flex items-center gap-3 px-4 py-3 transition-colors">
             <Icons.Download className="text-muted-foreground size-4 shrink-0" />
             <span className="min-w-0 flex-1">

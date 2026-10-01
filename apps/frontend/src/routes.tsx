@@ -53,6 +53,7 @@ import SpendingInsightsPage from "./features/spending/pages/spending-insights-pa
 import SpendingBudgetPage from "./features/spending/pages/spending-budget-page";
 import SpendingSubscriptionsPage from "./features/spending/pages/spending-subscriptions-page";
 import SpendingPendingChangesPage from "./features/spending/pages/spending-pending-changes-page";
+import SpendingReturnsPage from "./features/spending/pages/spending-returns-page";
 import SpendingSettingsPage from "./pages/settings/spending/spending-settings-page";
 import SpendingSettingsCategoriesPage from "./pages/settings/spending/categories/spending-categories-page";
 import SpendingSettingsEventsPage from "./pages/settings/spending/events/spending-events-page";
@@ -133,6 +134,7 @@ export function AppRoutes() {
           <Route path="spending/budget" element={<SpendingBudgetPage />} />
           <Route path="spending/subscriptions" element={<SpendingSubscriptionsPage />} />
           <Route path="spending/pending-changes" element={<SpendingPendingChangesPage />} />
+          <Route path="spending/returns" element={<SpendingReturnsPage />} />
           {/* Dynamic addon routes */}
           {dynamicRoutes.map(({ path, addonId, routeId }) => (
             <Route

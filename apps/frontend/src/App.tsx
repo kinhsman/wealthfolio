@@ -12,6 +12,8 @@ import { RuleOfferHost } from "@/features/spending/components/rule-offer-dialog"
 import { CountsAsHost } from "@/features/spending/components/counts-as-dialog";
 // money-hub patch: "which subscription or bill is this?", opened when a charge is filed as one.
 import { TrackChargeHost } from "@/features/spending/components/track-charge-dialog";
+// money-hub patch: a return and the refund it is waiting for, opened from a purchase's menu.
+import { TrackReturnHost } from "@/features/spending/components/track-return-dialog";
 import { WealthfolioConnectProvider } from "@/features/wealthfolio-connect";
 import { SettingsProvider } from "@/lib/settings-provider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -51,6 +53,7 @@ function App() {
               <RuleOfferHost />
               <CountsAsHost />
               <TrackChargeHost />
+              <TrackReturnHost />
               <AppRoutes />
             </EventDialogProvider>
           </TooltipProvider>

@@ -20,6 +20,8 @@ import { QuickEventPopover } from "./quick-event-popover";
 import { bankLineFor, bankWordsFor, useBankLines } from "../lib/bank-lines";
 import { useNotes } from "../lib/notes";
 import { PendingChangeTag } from "./pending-change-tag";
+import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
+import { ReturnBadge } from "./return-badge";
 import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
@@ -87,6 +89,7 @@ function TransactionCardImpl({
   const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id, notesById));
   const bankLine = bankLineFor(bankLines, a);
   const note = notesById?.[a.id];
+  const returnMark = useReturnMarks().get(a.id);
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,
@@ -148,6 +151,8 @@ function TransactionCardImpl({
             <span className="text-foreground min-w-0 flex-1 truncate text-sm font-medium">
               {a.notes ?? <span className="text-muted-foreground italic">—</span>}
             </span>
+            {/* money-hub patch: sent back, or the refund for something sent back (lib/returns.ts). */}
+            <ReturnBadge mark={returnMark} />
             <span
               className={cn(
                 "shrink-0 text-sm font-medium tabular-nums",
@@ -317,6 +322,15 @@ function TransactionCardImpl({
                         icon: Icons.ArrowLeftRight,
                         label: "Counts as…",
                         onClick: () => countsAsStore.open({ activity: a }),
+                      },
+                    ]
+                  : []),
+                ...(activityType === "WITHDRAWAL" || returnMark
+                  ? [
+                      {
+                        icon: Icons.Undo,
+                        label: returnMark ? "See the return" : "Track a return…",
+                        onClick: () => trackReturnStore.open(returnMark ? { returnId: returnMark.item.id } : { purchase: purchaseOf(a) }),
                       },
                     ]
                   : []),

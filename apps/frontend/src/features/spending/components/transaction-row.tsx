@@ -35,6 +35,8 @@ import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
 import { useNotes } from "../lib/notes";
 import { PendingChangeTag } from "./pending-change-tag";
+import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
+import { ReturnBadge } from "./return-badge";
 
 interface TransactionRowProps {
   row: TransactionRowVM;
@@ -97,6 +99,7 @@ function TransactionRowImpl({
   const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id, notesById));
   const bankLine = bankLineFor(bankLines, a);
   const note = notesById?.[a.id];
+  const returnMark = useReturnMarks().get(a.id);
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,
@@ -169,6 +172,8 @@ function TransactionRowImpl({
           ) : null}
           {/* money-hub patch: posted at another amount than it was pending, e.g. a tip (lib/pending-changes.ts). */}
           <PendingChangeTag activityId={a.id} />
+          {/* money-hub patch: sent back, or the refund for something sent back (lib/returns.ts). */}
+          <ReturnBadge mark={returnMark} />
           {/* money-hub patch: the bank's own line after the payee (lib/bank-lines.ts). */}
           {bankLine ? <TruncatedText text={bankLine} className="text-muted-foreground flex-1 text-xs" /> : null}
           {showAccount && (
@@ -314,6 +319,12 @@ function TransactionRowImpl({
               <DropdownMenuItem onClick={() => countsAsStore.open({ activity: a })}>
                 <Icons.ArrowLeftRight className="mr-2 h-4 w-4" aria-hidden="true" />
                 Counts as…
+              </DropdownMenuItem>
+            )}
+            {(activityType === "WITHDRAWAL" || returnMark) && (
+              <DropdownMenuItem onClick={() => trackReturnStore.open(returnMark ? { returnId: returnMark.item.id } : { purchase: purchaseOf(a) })}>
+                <Icons.Undo className="mr-2 h-4 w-4" aria-hidden="true" />
+                {returnMark ? "See the return" : "Track a return…"}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={() => onDuplicate(row)}>

@@ -81,6 +81,7 @@ import { CashFlowStrip } from "./cash-flow-strip";
 import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
 import { SubscriptionsCard } from "./subscriptions-card";
+import { ReturnsCard } from "./returns-card";
 import { SpendingPeriodSelector } from "./spending-period-toggle";
 
 const FUTURE_BAR = "#E5E7EB";
@@ -1203,6 +1204,9 @@ export default function SpendingTabContent() {
               <div className="order-3 lg:order-none">
                 <SubscriptionsCard currency={currency} />
               </div>
+
+              {/* money-hub patch: returns still waiting for their refund (lib/returns.ts); nothing while none is. */}
+              <ReturnsCard currency={currency} className="order-3 lg:order-none" />
 
               <div className="order-6 lg:order-none">
                 <h2 className="pb-2 text-sm font-semibold tracking-tight">
