@@ -53,6 +53,10 @@ export interface Stream {
   sharedOn?: boolean;
   /** With sharedOn: the usual whole bill. */
   billUsual?: number;
+  /** "Send the bank's amount to Owly" is on (owner, 10-01). */
+  sendTotal?: boolean;
+  /** What was last sent to Owly as this bill's total, or why Owly refused. */
+  owlyTotal?: { chargeId: string; amount: number | null; from: string | null; at: string; error: string | null } | null;
 }
 
 export interface SharedCharge {
@@ -133,6 +137,8 @@ export const subscriptionsApi = {
   /** "Count only my part" for a shared bill: splits its charges (on) or puts them back whole (off). */
   setShared: (key: string, on: boolean) =>
     call<SubscriptionsView & { changed: number }>("PUT", `/entries/${encodeURIComponent(key)}`, { shared: on }),
+  /** "Send the bank's amount to Owly": each new charge becomes Owly's total for its next bill. */
+  setSendTotal: (key: string, on: boolean) => call<SubscriptionsView>("PUT", `/entries/${encodeURIComponent(key)}`, { sendTotal: on }),
   addManual: (input: ManualInput) => call<SubscriptionsView>("POST", "/manual", input),
   updateManual: (id: string, input: ManualInput) => call<SubscriptionsView>("PUT", `/manual/${encodeURIComponent(id)}`, input),
   removeManual: (id: string) => call<SubscriptionsView>("DELETE", `/manual/${encodeURIComponent(id)}`),

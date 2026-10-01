@@ -57,12 +57,8 @@ const TONE = {
 
 /** How many days before each charge a reminder can come. */
 const REMIND_DAYS = [1, 2, 3, 5, 7, 14];
-/** One height for every button, box and list in a row's menu (the boxes' own height setting wins
- *  over a plain one, hence the !). */
-const ctl = "h-8 text-xs";
-const box = "h-8! py-1 text-xs";
 
-/** A labelled setting in a row's menu: label above, a short note below. */
+/** A labelled setting: label above, a short note below. */
 function Field({ label, htmlFor, foot, children }: { label: string; htmlFor?: string; foot?: ReactNode; children: ReactNode }) {
   return (
     <div className="min-w-0 space-y-1">
@@ -323,23 +319,20 @@ function StreamRow({
   act: (label: string, fn: () => Promise<SubscriptionsView>, done?: string) => Promise<void>;
   onEditManual: (m: ManualEntry) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [nextDate, setNextDate] = useState(s.next);
-  const [sharing, setSharing] = useState(false);
+  const [editing, setEditing] = useState(false);
   const st = statusLabel(s);
-  const other: StreamGroup = s.group === "bills" ? "subscriptions" : "bills";
-  const change = (patch: Parameters<typeof subscriptionsApi.update>[1], done?: string) => act(s.key, () => subscriptionsApi.update(s.key, patch), done);
-  const disabled = busy !== null;
   const { data } = useSubscriptions();
   const manual = s.manualId ? data?.manual.find((m) => m.id === s.manualId) : undefined;
+  const openEdit = () => (manual ? onEditManual(manual) : setEditing(true));
 
   return (
-    <div className={cn("px-4 py-3", s.status === "stopped" && "opacity-70")}>
+    // A click anywhere on the row opens it; the pencil is the keyboard's way in (no button inside a button).
+    <div onClick={openEdit} className={cn("hover:bg-muted/40 cursor-pointer px-4 py-3 transition-colors", s.status === "stopped" && "opacity-70")}>
       <div className="flex items-center gap-3">
         <StreamLogo s={s} className="h-9 w-9 text-sm" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <Link to={transactionsHref(s)} className="text-sm font-medium underline-offset-4 hover:underline">
+            <Link to={transactionsHref(s)} onClick={(e) => e.stopPropagation()} className="text-sm font-medium underline-offset-4 hover:underline">
               {s.name}
             </Link>
             {s.confirmed ? <Icons.Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="Looks right" /> : null}
@@ -365,11 +358,11 @@ function StreamRow({
         <div className="shrink-0 text-right">
           <div className="text-sm tabular-nums">
             {s.variable && !s.sharedOn ? <span className="text-muted-foreground">about </span> : null}
-            <PrivacyAmount value={s.usual} currency={currency} />
+            <PrivacyAmount value={s.sharedOn && s.shared?.latest ? s.shared.latest.mine : s.usual} currency={currency} />
           </div>
-          {s.sharedOn && s.billUsual != null ? (
+          {s.sharedOn && s.shared?.latest ? (
             <div className="text-muted-foreground text-[11px] tabular-nums">
-              of <PrivacyAmount value={s.billUsual} currency={currency} /> bill
+              of <PrivacyAmount value={s.shared.latest.amount} currency={currency} /> bill
             </div>
           ) : s.variable ? (
             <div className="text-muted-foreground text-[11px]">varies</div>
@@ -383,68 +376,120 @@ function StreamRow({
             </div>
           ) : null}
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="More" onClick={() => setOpen((v) => !v)}>
-          <Icons.MoreHorizontal className="h-4 w-4" />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0"
+          aria-label={`Edit ${s.name}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            openEdit();
+          }}
+        >
+          <Icons.Pencil className="h-4 w-4" />
         </Button>
       </div>
-      {open ? (
-        <div className="mt-3 space-y-3 sm:pl-12">
-          {/* What to do with it: one row of buttons. */}
-          <div className="flex flex-wrap gap-2">
-            {manual ? (
-              <Button variant="outline" size="sm" className={ctl} disabled={disabled} onClick={() => onEditManual(manual)}>
-                Edit
-              </Button>
-            ) : (
-              <>
-                <Button variant="outline" size="sm" className={ctl} disabled={disabled} onClick={() => change({ confirmed: !s.confirmed })}>
-                  {s.confirmed ? "Untick" : "Looks right"}
-                </Button>
-                <Button variant="outline" size="sm" className={ctl} disabled={disabled} onClick={() => change({ hidden: true }, `${s.name} marked not a subscription.`)}>
-                  Not a subscription
-                </Button>
-              </>
-            )}
-            {s.shared ? (
-              <Button variant="outline" size="sm" className={ctl} disabled={disabled} onClick={() => setSharing(true)}>
-                {s.sharedOn ? "Count the whole bill" : "Count only my part"}
-              </Button>
-            ) : null}
-            <Button variant="outline" size="sm" className={ctl} disabled={disabled} onClick={() => change({ group: other })}>
-              Move to {other === "bills" ? "Bills" : "Subscriptions"}
-            </Button>
-          </div>
+      {editing ? (
+        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <EditStreamDialog s={s} currency={currency} busy={busy !== null} act={act} onClose={() => setEditing(false)} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
-          {/* Its settings: three fields of one size, side by side, stacked on a phone. */}
-          <div className="grid gap-3 sm:grid-cols-3">
-            {s.status !== "stopped" ? (
-              <Field label="Next charge" htmlFor={`next-${s.key}`}
-                foot={s.nextSetByOwner ? (
-                  <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={disabled}
-                    onClick={() => change({ nextDate: null }, "Back to the date from its charges.")}>
-                    Use the date from its charges
-                  </button>
-                ) : "For your records: no transaction is made."}>
-                <div className="flex gap-2">
-                  <Input id={`next-${s.key}`} type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} className={`${box} min-w-0 flex-1`} />
-                  <Button variant="outline" size="sm" className={ctl} disabled={disabled || !nextDate || nextDate === s.next}
-                    onClick={() => change({ nextDate }, "Date saved, for your records. No transaction was made.")}>
-                    Save
-                  </Button>
-                </div>
+/** One repeating charge's settings, in a window like Add one (owner, 10-01: "i dont like the inline
+ *  edit style ... make it a proper modal like the Add one subscription button modal"). Everything
+ *  is saved together; splitting a shared bill keeps its own preview window. */
+function EditStreamDialog({
+  s,
+  currency,
+  busy,
+  act,
+  onClose,
+}: {
+  s: Stream;
+  currency: string;
+  busy: boolean;
+  act: (label: string, fn: () => Promise<SubscriptionsView>, done?: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(s.name);
+  const [group, setGroup] = useState<StreamGroup>(s.group);
+  const [every, setEvery] = useState<Every>(s.every);
+  const [nextDate, setNextDate] = useState(s.next);
+  const [remind, setRemind] = useState(s.remindBefore ? String(s.remindBefore) : "off");
+  const [confirmed, setConfirmed] = useState(!!s.confirmed);
+  const [sendTotal, setSendTotal] = useState(!!s.sendTotal);
+  const [sharing, setSharing] = useState(false);
+  const [confirmHide, setConfirmHide] = useState(false);
+
+  const patch: Parameters<typeof subscriptionsApi.update>[1] = {};
+  if (name.trim() && name.trim() !== s.name) patch.name = name.trim();
+  if (group !== s.group) patch.group = group;
+  if (every !== s.every) patch.every = every;
+  if (nextDate && nextDate !== s.next) patch.nextDate = nextDate;
+  if ((remind === "off" ? null : Number(remind)) !== (s.remindBefore ?? null)) patch.remindBefore = remind === "off" ? null : Number(remind);
+  if (confirmed !== !!s.confirmed) patch.confirmed = confirmed;
+  const sendChanged = sendTotal !== !!s.sendTotal;
+  const dirty = Object.keys(patch).length > 0 || sendChanged;
+
+  const save = () =>
+    act(
+      s.key,
+      async () => {
+        let view = Object.keys(patch).length ? await subscriptionsApi.update(s.key, patch) : undefined;
+        if (sendChanged) view = await subscriptionsApi.setSendTotal(s.key, sendTotal);
+        return view!;
+      },
+      `${name.trim() || s.name} saved.`,
+    ).then(onClose);
+
+  const latest = s.shared?.latest;
+  const owly = s.owlyTotal;
+
+  return (
+    <>
+      <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[520px]" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <DialogHeader className="text-left">
+            <div className="flex items-center gap-3 pr-8">
+              <StreamLogo s={s} className="h-10 w-10 text-sm" />
+              <div className="min-w-0">
+                <DialogTitle className="truncate">{s.name}</DialogTitle>
+                <DialogDescription>
+                  {EVERY_LABELS[s.every]} · {dueLabel(s)}
+                  {s.count ? ` · ${s.count} charge${s.count === 1 ? "" : "s"}` : ""}
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Name" htmlFor="edit-name">
+                <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
               </Field>
-            ) : null}
-            {!s.manualId ? (
+              <Field label="Group">
+                <Select value={group} onValueChange={(v) => setGroup(v as StreamGroup)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="subscriptions">Subscriptions</SelectItem>
+                    <SelectItem value="bills">Bills</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
               <Field label="How often"
                 foot={s.everySetByOwner ? (
-                  <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={disabled}
-                    onClick={() => change({ every: null }, "Back to what its charges show.")}>
+                  <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={busy}
+                    onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { every: null }), "Back to what its charges show.").then(onClose)}>
                     Use what its charges show
                   </button>
                 ) : "As its charges show."}>
-                <Select value={s.every} disabled={disabled}
-                  onValueChange={(v) => change({ every: v as Every }, `${s.name}: ${EVERY_LABELS[v as Every].toLowerCase()}.`)}>
-                  <SelectTrigger className={`${box} w-full`}>
+                <Select value={every} onValueChange={(v) => setEvery(v as Every)}>
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -454,24 +499,18 @@ function StreamRow({
                   </SelectContent>
                 </Select>
               </Field>
-            ) : null}
-            {s.status !== "stopped" ? (
-              <Field label="Remind me"
-                foot={s.reminder ? (
-                  <span>
-                    Also once on {day(s.reminder)}.{" "}
-                    <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={disabled}
-                      onClick={() => void change({ reminder: null })}>
-                      Clear
-                    </button>
-                  </span>
-                ) : "On Discord and your phone, in the daytime."}>
-                <Select value={s.remindBefore ? String(s.remindBefore) : "off"} disabled={disabled}
-                  onValueChange={(v) => change(
-                    { remindBefore: v === "off" ? null : Number(v) },
-                    v === "off" ? "Reminder off." : `You'll hear ${v} day${v === "1" ? "" : "s"} before each ${s.name} charge.`,
-                  )}>
-                  <SelectTrigger className={`${box} w-full`}>
+              <Field label="Next charge" htmlFor="edit-next"
+                foot={s.nextSetByOwner ? (
+                  <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={busy}
+                    onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { nextDate: null }), "Back to the date from its charges.").then(onClose)}>
+                    Use the date from its charges
+                  </button>
+                ) : "For your records: no transaction is made."}>
+                <Input id="edit-next" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} disabled={s.status === "stopped"} />
+              </Field>
+              <Field label="Remind me" foot="On Discord and your phone, in the daytime.">
+                <Select value={remind} onValueChange={setRemind} disabled={s.status === "stopped"}>
+                  <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -482,15 +521,77 @@ function StreamRow({
                   </SelectContent>
                 </Select>
               </Field>
+              <Field label="Looks right" foot="It really is a subscription or bill.">
+                <div className="flex h-9 items-center">
+                  <Switch checked={confirmed} onCheckedChange={setConfirmed} aria-label="Looks right" />
+                </div>
+              </Field>
+            </div>
+
+            {s.shared ? (
+              <div className="divide-y rounded-lg border">
+                <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">Count only my part</div>
+                    <div className="text-muted-foreground text-xs leading-snug">
+                      {s.sharedOn && latest ? (
+                        <>Your part <PrivacyAmount value={latest.mine} currency={currency} /> of the latest <PrivacyAmount value={latest.amount} currency={currency} /> bill; friends&rsquo; part in Counted elsewhere.</>
+                      ) : latest ? (
+                        <>Owly&rsquo;s {s.shared.service}: friends owe <PrivacyAmount value={latest.friends} currency={currency} /> of the latest <PrivacyAmount value={latest.amount} currency={currency} /> bill.</>
+                      ) : (
+                        <>Shared in Owly as {s.shared.service}; no friends&rsquo; shares for its charges yet.</>
+                      )}
+                    </div>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" className="shrink-0 self-start" disabled={busy || (!s.sharedOn && !s.shared.count)} onClick={() => setSharing(true)}>
+                    {s.sharedOn ? "Count the whole bill" : "Review and split"}
+                  </Button>
+                </div>
+                <div className="flex items-start justify-between gap-3 p-3">
+                  <div className="min-w-0">
+                    <Label htmlFor="edit-send" className="text-sm font-medium">Send the bank&rsquo;s amount to Owly</Label>
+                    <div className={cn("text-xs leading-snug", owly?.error ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
+                      {owly?.error
+                        ? owly.error
+                        : owly?.amount != null && owly.from
+                          ? <>Owly&rsquo;s total: <PrivacyAmount value={owly.amount} currency={currency} /> from {day(owly.from)}. Each new charge updates it.</>
+                          : "Each new charge becomes Owly's total, so its next bill uses it. Friends' amounts stay as typed."}
+                    </div>
+                  </div>
+                  <Switch id="edit-send" checked={sendTotal} onCheckedChange={setSendTotal} />
+                </div>
+              </div>
             ) : null}
           </div>
-        </div>
-      ) : null}
+
+          <DialogFooter className="gap-2 sm:justify-between">
+            {confirmHide ? (
+              <Button type="button" variant="destructive" disabled={busy}
+                onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { hidden: true }), `${s.name} marked not a subscription.`).then(onClose)}>
+                Yes, not a subscription
+              </Button>
+            ) : (
+              <Button type="button" variant="ghost" className="text-destructive" disabled={busy} onClick={() => setConfirmHide(true)}>
+                Not a subscription
+              </Button>
+            )}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={save} disabled={busy || !dirty}>
+                {busy ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {sharing && s.shared ? (
         <SharedDialog
           s={s}
           currency={currency}
-          busy={disabled}
+          busy={busy}
           onClose={() => setSharing(false)}
           onConfirm={() =>
             act(
@@ -501,7 +602,7 @@ function StreamRow({
           }
         />
       ) : null}
-    </div>
+    </>
   );
 }
 
