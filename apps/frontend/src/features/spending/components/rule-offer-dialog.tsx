@@ -45,6 +45,8 @@ interface PreviewItem {
   byHand?: boolean;
   /** Already in that category: listed so the matches add up, nothing to re-file. */
   already?: boolean;
+  /** Split (a shared bill): only the owner's share moves, the friends' share stays where it is. */
+  split?: boolean;
 }
 
 async function hub<T>(path: string, body: unknown): Promise<T> {
@@ -187,7 +189,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm">{it.notes}</span>
               <span className="text-muted-foreground block truncate text-xs">
-                {[day(it.date), accountName.get(it.accountId), it.already ? `already ${from?.name ?? categoryName}` : from ? `now ${from.name}${it.byHand ? ", filed by hand" : ""}` : "no category now"].filter(Boolean).join(" · ")}
+                {[day(it.date), accountName.get(it.accountId), it.already ? `already ${from?.name ?? categoryName}` : from ? `now ${from.name}${it.byHand ? ", filed by hand" : ""}` : "no category now", it.split && !it.already ? "split: only your share moves" : null].filter(Boolean).join(" · ")}
               </span>
             </span>
             <span className="shrink-0 text-sm tabular-nums">

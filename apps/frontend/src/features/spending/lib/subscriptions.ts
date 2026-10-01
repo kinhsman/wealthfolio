@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 export type Every = "month" | "quarter" | "half-year" | "year";
 export type StreamGroup = "subscriptions" | "bills";
 export type StreamStatus = "active" | "price-up" | "price-down" | "stopped";
-export type AlertKind = "newFound" | "priceChange" | "doubleCharge" | "stopped" | "reminders";
+export type AlertKind = "newFound" | "priceChange" | "doubleCharge" | "stopped" | "cameBack" | "reminders";
 
 export interface Stream {
   key: string;
@@ -244,6 +244,7 @@ export const ALERT_LABELS: Record<AlertKind, { title: string; text: string }> = 
   priceChange: { title: "Price changed", text: "The latest charge is higher or lower than usual." },
   doubleCharge: { title: "Charged twice", text: "Two charges close together for the same amount." },
   stopped: { title: "Stopped", text: "No charge for two periods. Cancelled, or a card changed." },
+  cameBack: { title: "Came back", text: "A stopped one is charged again." },
   reminders: { title: "Charge coming up", text: "A few days before each charge, on the rows where you set a reminder." },
 };
 
