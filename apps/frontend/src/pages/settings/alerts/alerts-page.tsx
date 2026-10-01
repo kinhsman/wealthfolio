@@ -44,9 +44,16 @@ const PRIORITIES: { value: number; label: string }[] = [
   { value: 1, label: "Lowest: no sound" },
   { value: 2, label: "Low" },
   { value: 3, label: "Normal" },
-  { value: 4, label: "High: rings, pops up" },
+  { value: 4, label: "High: rings and pops up" },
   { value: 5, label: "Urgent" },
 ];
+
+// A topic on the public server is readable by anyone who knows its name, so the suggested one is
+// long and random (the same Make one as WheelTradr's ntfy settings).
+const randomTopic = () => {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return "money-" + Array.from(bytes, (b) => b.toString(36).padStart(2, "0")).join("").slice(0, 18);
+};
 
 const when = (iso?: string | null) => {
   if (!iso) return "";
@@ -92,6 +99,7 @@ export default function AlertsSettingsPage() {
   const [topic, setTopic] = useState("");
   const [token, setToken] = useState("");
   const [priority, setPriority] = useState(3);
+  const [showMore, setShowMore] = useState(false);
 
   const take = (s: AlertsStatus) => {
     setStatus(s);
@@ -200,42 +208,68 @@ export default function AlertsSettingsPage() {
           {status && (
             <div className="mt-4 space-y-3">
               {!ntfyOn && (
-                <p className="text-muted-foreground text-xs leading-relaxed">
-                  Install ntfy on your phone, subscribe to a topic name only you know, and type the same name here. The topic you use for WheelTradr works too: the same phone then gets both.
-                </p>
+                <ol className="text-muted-foreground list-inside list-decimal space-y-1 text-xs leading-relaxed">
+                  <li>Install ntfy from the App Store or Google Play.</li>
+                  <li>Press Make one below, then Save and turn on.</li>
+                  <li>In the ntfy app press +, type the same topic name, and subscribe.</li>
+                </ol>
               )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1">
-                  <span className={label}>Server</span>
-                  <input value={server} onChange={(e) => setServer(e.target.value)} autoComplete="off" spellCheck={false} className={field} placeholder="https://ntfy.sh" />
-                </label>
-                <label className="space-y-1">
                   <span className={label}>Topic</span>
-                  <input value={topic} onChange={(e) => setTopic(e.target.value)} autoComplete="off" spellCheck={false} className={`${field} font-mono`} placeholder="money-alerts-..." />
+                  <span className="flex gap-2">
+                    <input value={topic} maxLength={64} autoComplete="off" spellCheck={false} className={`${field} font-mono`} placeholder="money-your-secret-topic"
+                      onChange={(e) => setTopic(e.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} />
+                    <button type="button" className={btn} disabled={!!busy} onClick={() => setTopic(randomTopic())}>
+                      <Icons.Wand2 className="size-3.5" /> Make one
+                    </button>
+                  </span>
                 </label>
                 <label className="space-y-1">
-                  <span className={label}>Access token (only for a protected topic)</span>
-                  <input type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" spellCheck={false}
-                    className={`${field} font-mono`} placeholder={status.ntfy.hasToken ? "Saved. Type to replace it." : "tk_... (optional)"} />
-                </label>
-                <label className="space-y-1">
-                  <span className={label}>Priority</span>
+                  <span className={label}>How loud</span>
                   <select value={priority} onChange={(e) => setPriority(Number(e.target.value))} className={field}>
                     {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </select>
                 </label>
               </div>
-              <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+              <p className="text-muted-foreground text-[11px]">
+                Anyone who knows the topic can read it. Keep it long and random, like a password. Your WheelTradr topic works too: one phone then gets both.
+              </p>
+              {showMore && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className={label}>Server</span>
+                    <input value={server} onChange={(e) => setServer(e.target.value)} autoComplete="off" spellCheck={false} className={field} placeholder="https://ntfy.sh" />
+                  </label>
+                  <label className="space-y-1">
+                    <span className={label}>Access token (optional)</span>
+                    <input type="password" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" spellCheck={false}
+                      className={`${field} font-mono`} placeholder={status.ntfy.hasToken ? "Saved. Type a new one to replace it." : "tk_..."} />
+                  </label>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                  <button type="button" className="text-primary underline-offset-4 hover:underline" onClick={() => setShowMore((v) => !v)}>
+                    {showMore ? "Hide server and token" : "Own server or token"}
+                  </button>
+                  {ntfyOn && (
+                    <a href={`${status.ntfy.server.replace(/\/+$/, "")}/${status.ntfy.topic}`} target="_blank" rel="noopener noreferrer"
+                      className="text-primary inline-flex items-center gap-1 underline-offset-4 hover:underline">
+                      Open topic <Icons.ExternalLink className="size-3" />
+                    </a>
+                  )}
+                  {ntfyOn && (
+                    <button type="button" className="text-destructive underline-offset-4 hover:underline" disabled={!!busy}
+                      onClick={() => run("ntfy-off", () => api.update({ ntfy: null }), () => "Phone alerts turned off.")}>
+                      Turn off
+                    </button>
+                  )}
+                </div>
                 <button type="button" className={`${btn} ${cta}`} disabled={!topic.trim() || !server.trim() || !!busy || (ntfyOn && !ntfyDirty)} onClick={saveNtfy}>
                   {busy === "ntfy" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Check className="size-3.5" />}
-                  Save
+                  {ntfyOn ? "Save changes" : "Save and turn on"}
                 </button>
-                {ntfyOn && (
-                  <button type="button" className={btn} disabled={!!busy}
-                    onClick={() => run("ntfy-off", () => api.update({ ntfy: null }), () => "Phone alerts turned off.")}>
-                    <Icons.Unlink className="size-3.5" /> Turn off
-                  </button>
-                )}
               </div>
             </div>
           )}
