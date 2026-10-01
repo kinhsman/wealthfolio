@@ -499,7 +499,7 @@ export default function AlertsSettingsPage() {
           {subs ? (
             <GroupAlerts<AlertKind>
               icon={<Icons.RotateCcw className="text-muted-foreground size-4 shrink-0" />}
-              title="Subscriptions & bills"
+              title="Subscriptions & Bills"
               to="/spending/subscriptions"
               text="Charges that repeat: what changed, and a heads-up before a charge"
               on={subs.alerts.on !== false}

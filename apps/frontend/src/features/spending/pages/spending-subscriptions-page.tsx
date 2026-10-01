@@ -15,6 +15,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Icons,
   Input,
   Label,
@@ -119,9 +123,9 @@ export default function SpendingSubscriptionsPage() {
 
   return (
     <Page>
+      {/* Its own title, not `heading`: a phone cut it to "Subscriptions & Bi…". A size smaller there, and on a
+          very narrow screen it wraps instead (owner, 10-01: "the Bills title must be capital"). */}
       <PageHeader
-        heading="Subscriptions & bills"
-        text="Charges that repeat: what they cost, and when the next one is due."
         onBack={() => {
           if (window.history.length > 1) navigate(-1);
           else navigate("/dashboard?tab=spending");
@@ -146,7 +150,9 @@ export default function SpendingSubscriptionsPage() {
             </Button>
           </div>
         }
-      />
+      >
+        <h1 className="min-w-0 text-base font-semibold leading-tight sm:text-lg md:text-xl">Subscriptions &amp; Bills</h1>
+      </PageHeader>
       <PageContent className="space-y-6">
         {isLoading ? (
           <p className="text-muted-foreground text-sm">Looking for repeating charges.</p>
@@ -330,9 +336,13 @@ function StreamRow({
   // One window for every row (owner, 10-01: "why the edit modal look different between each
   // subscriptions"): a hand-added one shows its amount and words in it too.
   const openEdit = () => setEditing(true);
+  // Still going, the owner says (paid from a card the app cannot see): back on the list until a new
+  // charge comes in; undone the same way (owner, 10-01: "enable reactivate stopped bills").
+  const setActive = (active: boolean) =>
+    act(s.key, () => subscriptionsApi.update(s.key, { active }), active ? `${s.name} is active again.` : `${s.name} is stopped again.`);
 
   return (
-    // A click anywhere on the row opens it; the pencil is the keyboard's way in (no button inside a button).
+    // A click anywhere on the row opens it; the menu is the keyboard's way in (no button inside a button).
     <div onClick={openEdit} className={cn("hover:bg-muted/40 cursor-pointer px-4 py-3 transition-colors", s.status === "stopped" && "opacity-70")}>
       <div className="flex items-center gap-3">
         <StreamLogo s={s} className="h-9 w-9 text-sm" />
@@ -390,6 +400,7 @@ function StreamRow({
             {EVERY_LABELS[s.every]}
             {s.everySetByOwner ? " (your choice)" : ""} · {dueLabel(s)}
             {s.nextSetByOwner ? " (your date)" : ""}
+            {s.reactivated ? " · Reactivated by you" : ""}
             {s.remindBefore
               ? ` · Reminder ${s.remindBefore} day${s.remindBefore === 1 ? "" : "s"} before`
               : s.reminder
@@ -423,18 +434,34 @@ function StreamRow({
             </div>
           ) : null}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 shrink-0"
-          aria-label={`Edit ${s.name}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            openEdit();
-          }}
-        >
-          <Icons.Pencil className="h-4 w-4" />
-        </Button>
+        {/* Three dots, not a pencil (owner, 10-01): Edit, and Reactivate on a stopped one. Its clicks stay
+            here: the menu is portalled, but React still bubbles them to the row, which opens Edit. */}
+        <div className="shrink-0" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`More for ${s.name}`} disabled={busy === s.key}>
+                {busy === s.key ? <Icons.Spinner className="h-4 w-4 animate-spin" /> : <Icons.MoreVertical className="h-4 w-4" />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={openEdit}>
+                <Icons.Pencil className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              {s.status === "stopped" ? (
+                <DropdownMenuItem disabled={busy !== null} onSelect={() => setActive(true)}>
+                  <Icons.PlayCircle className="mr-2 h-4 w-4" />
+                  Reactivate
+                </DropdownMenuItem>
+              ) : s.reactivated ? (
+                <DropdownMenuItem disabled={busy !== null} onSelect={() => setActive(false)}>
+                  <Icons.PauseCircle className="mr-2 h-4 w-4" />
+                  Mark as stopped
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
       {editing ? (
         <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>

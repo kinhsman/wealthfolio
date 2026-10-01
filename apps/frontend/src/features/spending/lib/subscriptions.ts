@@ -49,6 +49,8 @@ export interface Stream {
   remindBefore?: number | null;
   /** The next date was set by the owner, for the record (it never makes a transaction). */
   nextSetByOwner?: boolean;
+  /** Stopped by its charges, but the owner reactivated it: active until a new charge comes in. */
+  reactivated?: boolean;
   /** A service shared in Owly: each charge's friends' part and the owner's part. */
   shared?: SharedInfo;
   /** "Count only my part" is on: `usual`, `monthly` and `yearly` are the owner's part. */
@@ -192,6 +194,8 @@ export const subscriptionsApi = {
       Pick<Stream, "hidden" | "confirmed" | "group" | "name" | "reminder" | "remindBefore"> & {
         nextDate: string | null;
         every: Every | null;
+        /** Reactivate a stopped one (true), or let its charges say again (false). */
+        active: boolean;
         /** The company whose logo it shows (escrow's bills: no charge to find one from). */
         merchantId: string | null;
       }

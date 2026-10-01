@@ -15,7 +15,7 @@ export function SubscriptionsCard({ currency = "USD" }: { currency?: string }) {
 
   return (
     <DashboardCard
-      title="Subscriptions & bills"
+      title="Subscriptions & Bills"
       subtitle={data && data.totals.count > 0 ? `${data.totals.count} repeating` : undefined}
       padded={false}
       action={

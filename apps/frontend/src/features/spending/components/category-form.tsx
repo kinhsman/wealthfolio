@@ -209,7 +209,7 @@ export function CategoryForm({
         {trackId && track ? (
           <div className="space-y-2 rounded-md border px-3 py-2.5">
             <div>
-              <div className="text-sm font-medium">Subscriptions &amp; bills</div>
+              <div className="text-sm font-medium">Subscriptions &amp; Bills</div>
               <p className="text-muted-foreground mt-0.5 text-xs">
                 {track === "off"
                   ? "Charges filed here are not asked about."
