@@ -340,9 +340,8 @@ export default function AlertsSettingsPage() {
         <div className="bg-card rounded-xl border p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg">
-                <Icons.Smartphone className="text-primary size-5" />
-              </span>
+              {/* The ntfy app's own icon (same file as WheelTradr's ntfy card), served from public/ */}
+              <img src="/icons/ntfy.png" width={40} height={40} alt="" aria-hidden="true" className="size-10 shrink-0 rounded-lg" />
               <div className="min-w-0">
                 <div className="text-sm font-semibold">ntfy</div>
                 <div className="text-muted-foreground truncate text-xs">
