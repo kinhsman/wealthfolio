@@ -64,6 +64,21 @@ const TONE = {
   over: "bg-muted text-muted-foreground",
 } as const;
 
+/** Owly's amber (its logo), fixed: the dark theme turns amber utilities white. */
+const OWLY_AMBER = "#d9861a";
+
+/** Owly's mark, the owl its app header draws (owly web/public/logo.svg). */
+function OwlyMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="10" stroke="#f2a83c" strokeWidth="1.8" />
+      <circle cx="8.6" cy="10.4" r="2.6" stroke="#f2a83c" strokeWidth="1.8" />
+      <circle cx="15.4" cy="10.4" r="2.6" stroke="#f2a83c" strokeWidth="1.8" />
+      <path d="M12 13.4l-1.4 2.2h2.8L12 13.4z" fill="#f2a83c" />
+    </svg>
+  );
+}
+
 /** How many days before each charge a reminder can come. */
 const REMIND_DAYS = [1, 2, 3, 5, 7, 14];
 
@@ -365,9 +380,16 @@ function StreamRow({
                 <Icons.Bell className="h-3.5 w-3.5 shrink-0" style={{ color: "#d97706" }} aria-label="Reminder on" />
               </span>
             ) : null}
+            {/* Tracked by Owly (owner, 10-01: "add a badge showing an item is being tracked by owly"): Owly's own
+                mark and name; the amount on the right already says when only the owner's part counts. */}
             {s.shared ? (
-              <span className="bg-primary/10 text-primary shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium">
-                {s.sharedOn ? "Your part" : "Shared in Owly"}
+              <span
+                title={s.sharedOn ? `Shared in Owly as ${s.shared.service}: only your part counts here` : `Shared in Owly as ${s.shared.service}`}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                style={{ backgroundColor: "rgba(242, 168, 60, 0.14)", color: OWLY_AMBER }}
+              >
+                <OwlyMark className="h-3 w-3" />
+                Owly
               </span>
             ) : null}
             {s.escrow ? (
