@@ -41,6 +41,8 @@ export interface Stream {
   confirmed?: boolean;
   hidden?: boolean;
   reminder?: string | null;
+  /** The next date was set by the owner, for the record (it never makes a transaction). */
+  nextSetByOwner?: boolean;
 }
 
 export interface ManualEntry {
@@ -92,7 +94,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const subscriptionsApi = {
   get: () => call<SubscriptionsView>("GET", ""),
   rescan: () => call<SubscriptionsView>("POST", "/rescan"),
-  update: (key: string, patch: Partial<Pick<Stream, "hidden" | "confirmed" | "group" | "name" | "reminder">>) =>
+  update: (key: string, patch: Partial<Pick<Stream, "hidden" | "confirmed" | "group" | "name" | "reminder"> & { nextDate: string | null }>) =>
     call<SubscriptionsView>("PUT", `/entries/${encodeURIComponent(key)}`, patch),
   addManual: (input: ManualInput) => call<SubscriptionsView>("POST", "/manual", input),
   updateManual: (id: string, input: ManualInput) => call<SubscriptionsView>("PUT", `/manual/${encodeURIComponent(id)}`, input),
@@ -143,14 +145,23 @@ export function statusLabel(s: Pick<Stream, "status" | "sure" | "doubleCharge" |
 const day = (iso: string) =>
   new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
-/** When the next charge is expected, in words; a stopped one tells when it was last paid. */
+/** A date as "Oct 26", with the year when it is not this year ("May 19, 2027"). */
+export function shortDate(iso: string): string {
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  const thisYear = d.getUTCFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", ...(thisYear ? {} : { year: "numeric" }), timeZone: "UTC" });
+}
+
+/** When the next charge is expected, with its date (owner, 10-01: "display the date for
+ *  subscriptions and bills"); a stopped one tells when it was last paid. */
 export function dueLabel(s: Pick<Stream, "status" | "dueInDays" | "next" | "last">): string {
   if (s.status === "stopped") return s.last ? `Last paid ${day(s.last.date)}` : "Never charged";
-  if (s.dueInDays === 0) return "Due today";
-  if (s.dueInDays === 1) return "Due tomorrow";
-  if (s.dueInDays > 1) return `Due in ${s.dueInDays} days`;
-  if (s.dueInDays === -1) return "Was due yesterday";
-  return `Was due ${-s.dueInDays} days ago`;
+  const date = shortDate(s.next);
+  if (s.dueInDays === 0) return `Due today, ${date}`;
+  if (s.dueInDays === 1) return `Due tomorrow, ${date}`;
+  if (s.dueInDays > 1) return `Next ${date}, in ${s.dueInDays} days`;
+  if (s.dueInDays === -1) return `Was due yesterday, ${date}`;
+  return `Was due ${date}, ${-s.dueInDays} days ago`;
 }
 
 /** The transactions list filtered to this stream's payee. */

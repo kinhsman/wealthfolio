@@ -305,6 +305,7 @@ function StreamRow({
 }) {
   const [open, setOpen] = useState(false);
   const [reminder, setReminder] = useState(s.reminder ?? "");
+  const [nextDate, setNextDate] = useState(s.next);
   const st = statusLabel(s);
   const other: StreamGroup = s.group === "bills" ? "subscriptions" : "bills";
   const change = (patch: Parameters<typeof subscriptionsApi.update>[1], done?: string) => act(s.key, () => subscriptionsApi.update(s.key, patch), done);
@@ -324,8 +325,9 @@ function StreamRow({
             {s.confirmed ? <Icons.Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="Looks right" /> : null}
             <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", TONE[st.tone])}>{st.label}</span>
           </div>
-          <div className="text-muted-foreground truncate text-xs">
+          <div className="text-muted-foreground text-xs leading-snug">
             {EVERY_LABELS[s.every]} · {dueLabel(s)}
+            {s.nextSetByOwner ? " (your date)" : ""}
             {s.reminder ? ` · Reminder ${day(s.reminder)}` : ""}
             {s.count ? ` · ${s.count} charge${s.count === 1 ? "" : "s"}` : " · not charged yet"}
           </div>
@@ -370,6 +372,24 @@ function StreamRow({
           <Button variant="outline" size="sm" className="h-7 text-xs" disabled={disabled} onClick={() => change({ group: other })}>
             Move to {other === "bills" ? "Bills" : "Subscriptions"}
           </Button>
+          {s.status !== "stopped" ? (
+            <span className="flex items-center gap-1.5">
+              <Label htmlFor={`next-${s.key}`} className="text-muted-foreground text-xs">
+                Next charge
+              </Label>
+              <Input id={`next-${s.key}`} type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} className="h-7 w-36 text-xs" />
+              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={disabled || !nextDate || nextDate === s.next}
+                onClick={() => change({ nextDate }, "Date saved, for your records. No transaction was made.")}>
+                Save
+              </Button>
+              {s.nextSetByOwner ? (
+                <Button variant="ghost" size="sm" className="h-7 text-xs" disabled={disabled}
+                  onClick={() => change({ nextDate: null }, "Back to the date from its charges.")}>
+                  Use the usual date
+                </Button>
+              ) : null}
+            </span>
+          ) : null}
           <span className="flex items-center gap-1.5">
             <Label htmlFor={`rem-${s.key}`} className="text-muted-foreground text-xs">
               Remind me

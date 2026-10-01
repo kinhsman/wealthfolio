@@ -19,12 +19,15 @@ describe("subscriptions wording", () => {
     expect(statusLabel(mk({ sure: false, confirmed: true }))).toEqual({ label: "Active", tone: "fine" });
     expect(statusLabel(mk({ status: "stopped", doubleCharge: true }))).toEqual({ label: "Stopped", tone: "over" });
   });
-  it("due: today, tomorrow, in N days, overdue; stopped tells the last payment", () => {
-    expect(dueLabel(mk({ dueInDays: 0 }))).toBe("Due today");
-    expect(dueLabel(mk({ dueInDays: 1 }))).toBe("Due tomorrow");
-    expect(dueLabel(base)).toBe("Due in 25 days");
-    expect(dueLabel(mk({ dueInDays: -1 }))).toBe("Was due yesterday");
-    expect(dueLabel(mk({ dueInDays: -4 }))).toBe("Was due 4 days ago");
+  it("due: the date with today, tomorrow, in N days, overdue; stopped tells the last payment", () => {
+    const year = new Date().getFullYear();
+    const oct26 = `${year}-10-26`;
+    expect(dueLabel(mk({ dueInDays: 0, next: oct26 }))).toBe("Due today, Oct 26");
+    expect(dueLabel(mk({ dueInDays: 1, next: oct26 }))).toBe("Due tomorrow, Oct 26");
+    expect(dueLabel(mk({ dueInDays: 25, next: oct26 }))).toBe("Next Oct 26, in 25 days");
+    expect(dueLabel(mk({ dueInDays: -1, next: oct26 }))).toBe("Was due yesterday, Oct 26");
+    expect(dueLabel(mk({ dueInDays: -4, next: oct26 }))).toBe("Was due Oct 26, 4 days ago");
+    expect(dueLabel(mk({ dueInDays: 230, next: `${year + 1}-05-19` }))).toBe(`Next May 19, ${year + 1}, in 230 days`);
     expect(dueLabel(mk({ status: "stopped" }))).toMatch(/^Last paid Sep 26, 2026$/);
     expect(dueLabel(mk({ status: "stopped", last: null }))).toBe("Never charged");
   });
