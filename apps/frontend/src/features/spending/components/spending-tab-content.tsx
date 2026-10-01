@@ -558,6 +558,7 @@ export default function SpendingTabContent() {
       histEnd: iso(histEnd),
       historyOutflow: historyReport.current.outflow ?? 0,
       historyDays: Math.max(1, calendarDaysBetweenInclusive(histStart, histEnd)),
+      historyByDay: historyReport.byDay ?? [],
     });
   }, [subscriptionsView, historyReport, budgetMonthKey, todayParts]);
 

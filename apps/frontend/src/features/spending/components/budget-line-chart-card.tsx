@@ -904,7 +904,15 @@ function ForecastSums({
         <PrivacyAmount value={parts.billsLeftTotal} currency={currency} /> in {parts.billsLeft.length}{" "}
         {parts.billsLeft.length === 1 ? "bill" : "bills"} still due, and{" "}
         <PrivacyAmount value={parts.everydayDaily} currency={currency} /> a day of everyday spending for the{" "}
-        {daysRemaining} {daysRemaining === 1 ? "day" : "days"} left.{" "}
+        {daysRemaining} {daysRemaining === 1 ? "day" : "days"} left
+        {parts.cappedDays > 0 ? (
+          <>
+            {" "}(your usual days of the last 3 months; {parts.cappedDays} one-off big{" "}
+            {parts.cappedDays === 1 ? "day counts" : "days count"} as{" "}
+            <PrivacyAmount value={parts.everydayCap} currency={currency} />)
+          </>
+        ) : null}
+        .{" "}
         {over > 0 ? (
           <>
             That is <PrivacyAmount value={over} currency={currency} /> {sums.fixed > 0 ? "more than is left" : "over the budget"}.

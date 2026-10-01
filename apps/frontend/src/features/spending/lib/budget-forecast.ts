@@ -37,8 +37,13 @@ export interface ForecastParts {
   /** The bills and subscriptions still to come this month, by date (not the fixed ones). */
   billsLeft: BillDue[];
   billsLeftTotal: number;
-  /** An everyday day: the last 3 months' spending less their bills, per day. */
+  /** An everyday day: the last 3 months' spending less their bills, per day, a one-off big day counted
+   *  only up to `everydayCap` (owner, 10-01: two cash advances, an ATM pull and a $1,203 Apple buy had
+   *  made the rate $105 a day). */
   everydayDaily: number;
+  /** The most one day counts (Infinity: no day was far out); and how many days were over it. */
+  everydayCap: number;
+  cappedDays: number;
   /** The bills charged in those 3 months (taken out of the average). */
   billsInHistory: number;
   /** The bills switched to "Exclude from forecast": this month's charges paid and still due. They come
@@ -65,6 +70,8 @@ export function forecastParts(
     histEnd: string;
     historyOutflow: number;
     historyDays: number;
+    /** Spending by day over the 3 months: with it, the everyday rate leaves one-off big days out. */
+    historyByDay?: { date: string; outflow: number }[];
   },
 ): ForecastParts {
   const billsLeft: BillDue[] = [];
@@ -101,11 +108,11 @@ export function forecastParts(
     }
   }
   billsLeft.sort((a, b) => a.date.localeCompare(b.date) || b.amount - a.amount);
-  const everyday = Math.max(0, opts.historyOutflow - billsInHistory);
+  const rate = everydayRate(streams, opts, billsInHistory);
   return {
     billsLeft,
     billsLeftTotal: round(sumOf(billsLeft)),
-    everydayDaily: opts.historyDays > 0 ? everyday / opts.historyDays : 0,
+    ...rate,
     billsInHistory: round(billsInHistory),
     fixedPaid,
     fixedDue,
@@ -175,3 +182,81 @@ export function withoutCharges<T extends { date: string; outflow: number }>(
     return x ? { ...d, outflow: Math.max(0, d.outflow - x) } : d;
   });
 }
+
+/** A quantile of sorted numbers, Python's statistics.quantiles "exclusive" way. */
+function quantile(sorted: number[], q: number): number {
+  const n = sorted.length;
+  const h = (n + 1) * q;
+  if (h <= 1) return sorted[0];
+  if (h >= n) return sorted[n - 1];
+  const lo = Math.floor(h);
+  return sorted[lo - 1] + (h - lo) * (sorted[lo] - sorted[lo - 1]);
+}
+
+/**
+ * The most one ordinary day of everyday spending comes to: far above the usual days (the upper quartile
+ * plus 3 times the spread between the quartiles, Tukey's "far out" fence). From the days themselves, so
+ * nothing is set by hand. Infinity with too few days to tell, or when most days are empty.
+ */
+export function oneOffLine(days: number[]): number {
+  if (days.length < 28) return Infinity;
+  const sorted = [...days].sort((a, b) => a - b);
+  const q1 = quantile(sorted, 0.25);
+  const q3 = quantile(sorted, 0.75);
+  const line = q3 + 3 * (q3 - q1);
+  return line > 0 ? line : Infinity;
+}
+
+/** The everyday rate: each day's spending less that day's bills, a one-off big day counted up to the line. */
+function everydayRate(
+  streams: Stream[],
+  opts: {
+    histStart: string;
+    histEnd: string;
+    historyOutflow: number;
+    historyDays: number;
+    historyByDay?: { date: string; outflow: number }[];
+  },
+  billsInHistory: number,
+): { everydayDaily: number; everydayCap: number; cappedDays: number } {
+  if (!opts.historyByDay) {
+    const everyday = Math.max(0, opts.historyOutflow - billsInHistory);
+    return {
+      everydayDaily: opts.historyDays > 0 ? everyday / opts.historyDays : 0,
+      everydayCap: Infinity,
+      cappedDays: 0,
+    };
+  }
+  const bills = new Map<string, number>();
+  for (const s of streams) {
+    if (s.hidden || s.escrow) continue;
+    for (const c of s.charges ?? []) {
+      if (c.date >= opts.histStart && c.date <= opts.histEnd)
+        bills.set(c.date, (bills.get(c.date) ?? 0) + myPart(s, c.amount));
+    }
+  }
+  const spent = new Map<string, number>();
+  for (const d of opts.historyByDay)
+    spent.set(d.date.slice(0, 10), (spent.get(d.date.slice(0, 10)) ?? 0) + d.outflow);
+  const days: number[] = [];
+  for (
+    let date = opts.histStart, i = 0;
+    date <= opts.histEnd && i < 400;
+    date = addDaysISO(date, 1), i += 1
+  ) {
+    days.push(Math.max(0, (spent.get(date) ?? 0) - (bills.get(date) ?? 0)));
+  }
+  if (!days.length) return { everydayDaily: 0, everydayCap: Infinity, cappedDays: 0 };
+  const cap = oneOffLine(days);
+  const total = days.reduce((sum, v) => sum + Math.min(v, cap), 0);
+  return {
+    everydayDaily: total / days.length,
+    everydayCap: cap,
+    cappedDays: days.filter((v) => v > cap).length,
+  };
+}
+
+const addDaysISO = (iso: string, n: number) => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+};

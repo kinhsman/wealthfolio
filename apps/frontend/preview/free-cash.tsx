@@ -38,6 +38,7 @@ import fixture from "./free-cash.fixture.json";
 import pendingFixture from "./pending.fixture.json";
 import returnsFixture from "./returns.fixture.json";
 import subsFixture from "./subscriptions.fixture.json";
+import budgetHistory from "./budget-history.fixture.json";
 
 const params = new URLSearchParams(location.search);
 const view = params.get("view") || "column";
@@ -129,24 +130,15 @@ function BudgetPreview() {
   const items = (subsFixture as unknown as SubscriptionsView).items;
   // Jul to Sep: $105.28 a day of everyday spending plus each bill's charges on its day (?pending=1:
   // as on a reload, before the bills have come).
-  const historicalByDay: { date: string; income: number; outflow: number }[] = [];
-  for (let t = Date.UTC(2026, 6, 1); t <= Date.UTC(2026, 8, 30); t += 86_400_000) {
-    const date = new Date(t).toISOString().slice(0, 10);
-    const bills = items
-      .filter((x) => !x.hidden && !x.escrow)
-      .flatMap((x) => (x.charges ?? []).filter((c) => c.date === date));
-    historicalByDay.push({
-      date,
-      income: 0,
-      outflow: 105.28 + bills.reduce((sum, c) => sum + c.amount, 0),
-    });
-  }
+  // The owner's real Jul to Sep spending by day (?pending=1: as on a reload, before the bills come).
+  const historicalByDay = budgetHistory.byDay;
   const parts = forecastParts(items, {
     monthStart: "2026-10-01",
     monthEnd: "2026-10-31",
     histStart: "2026-07-01",
     histEnd: "2026-09-30",
-    historyOutflow: 19953.76,
+    historyOutflow: budgetHistory.outflow,
+    historyByDay: budgetHistory.byDay,
     historyDays: 92,
   });
   return (

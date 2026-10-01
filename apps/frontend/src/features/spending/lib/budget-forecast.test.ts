@@ -4,6 +4,7 @@ import {
   addMonthsISO,
   againstBudget,
   forecastParts,
+  oneOffLine,
   paceWithFixed,
   withoutCharges,
 } from "./budget-forecast";
@@ -220,5 +221,48 @@ describe("pace with fixed bills", () => {
       0,
     ]);
     expect(withoutCharges(days, [])).toBe(days);
+  });
+});
+
+describe("everyday rate leaves one-off big days out", () => {
+  it("the line is far above the usual days, from the days themselves", () => {
+    // 92 days: 60 empty, 28 at $40, 2 at $100, a $1,004 cash advance and a $1,203 Apple buy.
+    const days = [...Array(60).fill(0), ...Array(28).fill(40), 100, 100, 1004, 1203.09];
+    // Quartiles (Python's exclusive way): q1 0, q3 40, so the line is 40 + 3 x 40 = 160.
+    expect(oneOffLine(days)).toBe(160);
+    expect(oneOffLine(Array(20).fill(50))).toBe(Infinity); // too few days to tell
+    expect(oneOffLine(Array(60).fill(0))).toBe(Infinity); // nothing spent: no line
+  });
+
+  it("counts a big day up to the line, after taking that day's bills off", () => {
+    const histDays: { date: string; outflow: number }[] = [];
+    for (let i = 0; i < 92; i += 1) {
+      const date = new Date(Date.UTC(2026, 6, 1 + i)).toISOString().slice(0, 10);
+      histDays.push({ date, outflow: i % 3 === 0 ? 40 : 0 });
+    }
+    histDays[15].outflow = 1004; // a cash advance
+    histDays[0].outflow += 2505.76; // the mortgage on Jul 1, a bill
+    const parts = forecastParts(
+      [
+        stream("US Bank", {
+          usual: 2505.76,
+          next: "2026-11-01",
+          excludeFromForecast: true,
+          charges: mortgageCharges,
+        }),
+      ],
+      { ...OCT, historyOutflow: 0, historyByDay: histDays },
+    );
+    expect(parts.cappedDays).toBe(1);
+    // Days: 30 at $40 (Jul 1 is $40 once the mortgage is off), 61 empty, the $1,004 day: q1 0, q3 40.
+    expect(parts.everydayCap).toBe(160);
+    expect(parts.everydayDaily).toBeCloseTo((30 * 40 + 160) / 92, 6);
+    // Without the days, the old average (everything less the bills, per day).
+    const plain = forecastParts([], { ...OCT, historyOutflow: 1000, historyDays: 92 });
+    expect([plain.everydayDaily, plain.everydayCap, plain.cappedDays]).toEqual([
+      1000 / 92,
+      Infinity,
+      0,
+    ]);
   });
 });
