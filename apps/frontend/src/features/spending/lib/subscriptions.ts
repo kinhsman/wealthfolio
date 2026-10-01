@@ -41,6 +41,10 @@ export interface Stream {
   confirmed?: boolean;
   hidden?: boolean;
   reminder?: string | null;
+  /** How often was set by the owner (owner, 10-01: "set the frequency editable too"). */
+  everySetByOwner?: boolean;
+  /** Remind this many days before each charge (owner, 10-01: "remind me # days before the charge"). */
+  remindBefore?: number | null;
   /** The next date was set by the owner, for the record (it never makes a transaction). */
   nextSetByOwner?: boolean;
   /** A service shared in Owly: each charge's friends' part and the owner's part. */
@@ -119,7 +123,12 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const subscriptionsApi = {
   get: () => call<SubscriptionsView>("GET", ""),
   rescan: () => call<SubscriptionsView>("POST", "/rescan"),
-  update: (key: string, patch: Partial<Pick<Stream, "hidden" | "confirmed" | "group" | "name" | "reminder"> & { nextDate: string | null }>) =>
+  update: (
+    key: string,
+    patch: Partial<
+      Pick<Stream, "hidden" | "confirmed" | "group" | "name" | "reminder" | "remindBefore"> & { nextDate: string | null; every: Every | null }
+    >,
+  ) =>
     call<SubscriptionsView>("PUT", `/entries/${encodeURIComponent(key)}`, patch),
   /** "Count only my part" for a shared bill: splits its charges (on) or puts them back whole (off). */
   setShared: (key: string, on: boolean) =>
@@ -154,7 +163,7 @@ export const ALERT_LABELS: Record<AlertKind, { title: string; text: string }> = 
   priceChange: { title: "Price changed", text: "The latest charge is higher or lower than usual." },
   doubleCharge: { title: "Charged twice", text: "Two charges close together for the same amount." },
   stopped: { title: "Stopped", text: "No charge for two periods. Cancelled, or a card changed." },
-  reminders: { title: "Cancel reminders", text: "The dates you set on a row." },
+  reminders: { title: "Charge coming up", text: "A few days before each charge, on the rows where you set a reminder." },
 };
 
 /** The status in words. `tone` picks the colour: green for fine, amber for a look, muted for over. */

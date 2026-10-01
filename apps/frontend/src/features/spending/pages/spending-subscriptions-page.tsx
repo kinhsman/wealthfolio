@@ -55,6 +55,26 @@ const TONE = {
   over: "bg-muted text-muted-foreground",
 } as const;
 
+/** How many days before each charge a reminder can come. */
+const REMIND_DAYS = [1, 2, 3, 5, 7, 14];
+/** One height for every button, box and list in a row's menu (the boxes' own height setting wins
+ *  over a plain one, hence the !). */
+const ctl = "h-8 text-xs";
+const box = "h-8! py-1 text-xs";
+
+/** A labelled setting in a row's menu: label above, a short note below. */
+function Field({ label, htmlFor, foot, children }: { label: string; htmlFor?: string; foot?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <Label htmlFor={htmlFor} className="text-muted-foreground text-[11px] font-medium">
+        {label}
+      </Label>
+      {children}
+      {foot ? <div className="text-muted-foreground text-[11px] leading-snug">{foot}</div> : null}
+    </div>
+  );
+}
+
 const day = (iso: string) =>
   new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 const errorText = (e: unknown) => (e as Error)?.message ?? String(e);
@@ -304,7 +324,6 @@ function StreamRow({
   onEditManual: (m: ManualEntry) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [reminder, setReminder] = useState(s.reminder ?? "");
   const [nextDate, setNextDate] = useState(s.next);
   const [sharing, setSharing] = useState(false);
   const st = statusLabel(s);
@@ -332,9 +351,14 @@ function StreamRow({
             <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", TONE[st.tone])}>{st.label}</span>
           </div>
           <div className="text-muted-foreground text-xs leading-snug">
-            {EVERY_LABELS[s.every]} · {dueLabel(s)}
+            {EVERY_LABELS[s.every]}
+            {s.everySetByOwner ? " (your choice)" : ""} · {dueLabel(s)}
             {s.nextSetByOwner ? " (your date)" : ""}
-            {s.reminder ? ` · Reminder ${day(s.reminder)}` : ""}
+            {s.remindBefore
+              ? ` · Reminder ${s.remindBefore} day${s.remindBefore === 1 ? "" : "s"} before`
+              : s.reminder
+                ? ` · Reminder ${day(s.reminder)}`
+                : ""}
             {s.count ? ` · ${s.count} charge${s.count === 1 ? "" : "s"}` : " · not charged yet"}
           </div>
         </div>
@@ -364,61 +388,102 @@ function StreamRow({
         </Button>
       </div>
       {open ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2 pl-12">
-          {manual ? (
-            <Button variant="outline" size="sm" className="h-7 text-xs" disabled={disabled} onClick={() => onEditManual(manual)}>
-              Edit
-            </Button>
-          ) : (
-            <>
-              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={disabled} onClick={() => change({ confirmed: !s.confirmed })}>
-                {s.confirmed ? "Untick" : "Looks right"}
+        <div className="mt-3 space-y-3 sm:pl-12">
+          {/* What to do with it: one row of buttons. */}
+          <div className="flex flex-wrap gap-2">
+            {manual ? (
+              <Button variant="outline" size="sm" className={ctl} disabled={disabled} onClick={() => onEditManual(manual)}>
+                Edit
               </Button>
-              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={disabled} onClick={() => change({ hidden: true }, `${s.name} marked not a subscription.`)}>
-                Not a subscription
-              </Button>
-            </>
-          )}
-          {s.shared ? (
-            <Button variant="outline" size="sm" className="h-7 text-xs" disabled={disabled} onClick={() => setSharing(true)}>
-              {s.sharedOn ? "Count the whole bill" : "Count only my part"}
-            </Button>
-          ) : null}
-          <Button variant="outline" size="sm" className="h-7 text-xs" disabled={disabled} onClick={() => change({ group: other })}>
-            Move to {other === "bills" ? "Bills" : "Subscriptions"}
-          </Button>
-          {s.status !== "stopped" ? (
-            <span className="flex items-center gap-1.5">
-              <Label htmlFor={`next-${s.key}`} className="text-muted-foreground text-xs">
-                Next charge
-              </Label>
-              <Input id={`next-${s.key}`} type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} className="h-7 w-36 text-xs" />
-              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={disabled || !nextDate || nextDate === s.next}
-                onClick={() => change({ nextDate }, "Date saved, for your records. No transaction was made.")}>
-                Save
-              </Button>
-              {s.nextSetByOwner ? (
-                <Button variant="ghost" size="sm" className="h-7 text-xs" disabled={disabled}
-                  onClick={() => change({ nextDate: null }, "Back to the date from its charges.")}>
-                  Use the usual date
+            ) : (
+              <>
+                <Button variant="outline" size="sm" className={ctl} disabled={disabled} onClick={() => change({ confirmed: !s.confirmed })}>
+                  {s.confirmed ? "Untick" : "Looks right"}
                 </Button>
-              ) : null}
-            </span>
-          ) : null}
-          <span className="flex items-center gap-1.5">
-            <Label htmlFor={`rem-${s.key}`} className="text-muted-foreground text-xs">
-              Remind me
-            </Label>
-            <Input id={`rem-${s.key}`} type="date" value={reminder} onChange={(e) => setReminder(e.target.value)} className="h-7 w-36 text-xs" />
-            <Button variant="outline" size="sm" className="h-7 text-xs" disabled={disabled || !reminder || reminder === (s.reminder ?? "")} onClick={() => change({ reminder }, "Reminder set.")}>
-              Set
-            </Button>
-            {s.reminder ? (
-              <Button variant="ghost" size="sm" className="h-7 text-xs" disabled={disabled} onClick={() => { setReminder(""); void change({ reminder: null }); }}>
-                Clear
+                <Button variant="outline" size="sm" className={ctl} disabled={disabled} onClick={() => change({ hidden: true }, `${s.name} marked not a subscription.`)}>
+                  Not a subscription
+                </Button>
+              </>
+            )}
+            {s.shared ? (
+              <Button variant="outline" size="sm" className={ctl} disabled={disabled} onClick={() => setSharing(true)}>
+                {s.sharedOn ? "Count the whole bill" : "Count only my part"}
               </Button>
             ) : null}
-          </span>
+            <Button variant="outline" size="sm" className={ctl} disabled={disabled} onClick={() => change({ group: other })}>
+              Move to {other === "bills" ? "Bills" : "Subscriptions"}
+            </Button>
+          </div>
+
+          {/* Its settings: three fields of one size, side by side, stacked on a phone. */}
+          <div className="grid gap-3 sm:grid-cols-3">
+            {s.status !== "stopped" ? (
+              <Field label="Next charge" htmlFor={`next-${s.key}`}
+                foot={s.nextSetByOwner ? (
+                  <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={disabled}
+                    onClick={() => change({ nextDate: null }, "Back to the date from its charges.")}>
+                    Use the date from its charges
+                  </button>
+                ) : "For your records: no transaction is made."}>
+                <div className="flex gap-2">
+                  <Input id={`next-${s.key}`} type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} className={`${box} min-w-0 flex-1`} />
+                  <Button variant="outline" size="sm" className={ctl} disabled={disabled || !nextDate || nextDate === s.next}
+                    onClick={() => change({ nextDate }, "Date saved, for your records. No transaction was made.")}>
+                    Save
+                  </Button>
+                </div>
+              </Field>
+            ) : null}
+            {!s.manualId ? (
+              <Field label="How often"
+                foot={s.everySetByOwner ? (
+                  <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={disabled}
+                    onClick={() => change({ every: null }, "Back to what its charges show.")}>
+                    Use what its charges show
+                  </button>
+                ) : "As its charges show."}>
+                <Select value={s.every} disabled={disabled}
+                  onValueChange={(v) => change({ every: v as Every }, `${s.name}: ${EVERY_LABELS[v as Every].toLowerCase()}.`)}>
+                  <SelectTrigger className={`${box} w-full`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(EVERY_LABELS) as Every[]).map((k) => (
+                      <SelectItem key={k} value={k}>{EVERY_LABELS[k]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : null}
+            {s.status !== "stopped" ? (
+              <Field label="Remind me"
+                foot={s.reminder ? (
+                  <span>
+                    Also once on {day(s.reminder)}.{" "}
+                    <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={disabled}
+                      onClick={() => void change({ reminder: null })}>
+                      Clear
+                    </button>
+                  </span>
+                ) : "On Discord and your phone, in the daytime."}>
+                <Select value={s.remindBefore ? String(s.remindBefore) : "off"} disabled={disabled}
+                  onValueChange={(v) => change(
+                    { remindBefore: v === "off" ? null : Number(v) },
+                    v === "off" ? "Reminder off." : `You'll hear ${v} day${v === "1" ? "" : "s"} before each ${s.name} charge.`,
+                  )}>
+                  <SelectTrigger className={`${box} w-full`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="off">Off</SelectItem>
+                    {REMIND_DAYS.map((n) => (
+                      <SelectItem key={n} value={String(n)}>{n} day{n === 1 ? "" : "s"} before each charge</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : null}
+          </div>
         </div>
       ) : null}
       {sharing && s.shared ? (
