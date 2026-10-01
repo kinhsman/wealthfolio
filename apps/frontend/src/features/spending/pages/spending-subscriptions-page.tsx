@@ -306,6 +306,7 @@ function StreamRow({
   const [open, setOpen] = useState(false);
   const [reminder, setReminder] = useState(s.reminder ?? "");
   const [nextDate, setNextDate] = useState(s.next);
+  const [sharing, setSharing] = useState(false);
   const st = statusLabel(s);
   const other: StreamGroup = s.group === "bills" ? "subscriptions" : "bills";
   const change = (patch: Parameters<typeof subscriptionsApi.update>[1], done?: string) => act(s.key, () => subscriptionsApi.update(s.key, patch), done);
@@ -323,6 +324,11 @@ function StreamRow({
               {s.name}
             </Link>
             {s.confirmed ? <Icons.Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="Looks right" /> : null}
+            {s.shared ? (
+              <span className="bg-primary/10 text-primary shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium">
+                {s.sharedOn ? "Your part" : "Shared in Owly"}
+              </span>
+            ) : null}
             <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", TONE[st.tone])}>{st.label}</span>
           </div>
           <div className="text-muted-foreground text-xs leading-snug">
@@ -334,10 +340,14 @@ function StreamRow({
         </div>
         <div className="shrink-0 text-right">
           <div className="text-sm tabular-nums">
-            {s.variable ? <span className="text-muted-foreground">about </span> : null}
+            {s.variable && !s.sharedOn ? <span className="text-muted-foreground">about </span> : null}
             <PrivacyAmount value={s.usual} currency={currency} />
           </div>
-          {s.variable ? (
+          {s.sharedOn && s.billUsual != null ? (
+            <div className="text-muted-foreground text-[11px] tabular-nums">
+              of <PrivacyAmount value={s.billUsual} currency={currency} /> bill
+            </div>
+          ) : s.variable ? (
             <div className="text-muted-foreground text-[11px]">varies</div>
           ) : s.every !== "month" ? (
             <div className="text-muted-foreground text-[11px] tabular-nums">
@@ -369,6 +379,11 @@ function StreamRow({
               </Button>
             </>
           )}
+          {s.shared ? (
+            <Button variant="outline" size="sm" className="h-7 text-xs" disabled={disabled} onClick={() => setSharing(true)}>
+              {s.sharedOn ? "Count the whole bill" : "Count only my part"}
+            </Button>
+          ) : null}
           <Button variant="outline" size="sm" className="h-7 text-xs" disabled={disabled} onClick={() => change({ group: other })}>
             Move to {other === "bills" ? "Bills" : "Subscriptions"}
           </Button>
@@ -406,7 +421,95 @@ function StreamRow({
           </span>
         </div>
       ) : null}
+      {sharing && s.shared ? (
+        <SharedDialog
+          s={s}
+          currency={currency}
+          busy={disabled}
+          onClose={() => setSharing(false)}
+          onConfirm={() =>
+            act(
+              s.key,
+              () => subscriptionsApi.setShared(s.key, !s.sharedOn),
+              s.sharedOn ? `${s.name}: whole bill counted again.` : `${s.name}: only your part counts now. The friends' part is in Counted elsewhere.`,
+            ).then(() => setSharing(false))
+          }
+        />
+      ) : null}
     </div>
+  );
+}
+
+/** What "Count only my part" does to each charge, before it does it. */
+function SharedDialog({
+  s,
+  currency,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  s: Stream;
+  currency: string;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const plan = [...(s.shared?.plan ?? [])].reverse();
+  const split = plan.filter((p) => p.ok);
+  const sum = (f: (p: (typeof plan)[number]) => number) => split.reduce((a, p) => a + f(p), 0);
+  return (
+    <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle>{s.sharedOn ? `Count the whole ${s.name} bill again?` : `Count only your part of ${s.name}?`}</DialogTitle>
+          <DialogDescription>
+            {s.sharedOn
+              ? "Each charge goes back whole into its category, as the bank sent it."
+              : `Owly's ${s.shared?.service} shares say what your friends owe for each charge. Your part stays in its category; the friends' part moves to Counted elsewhere, out of Spending. New charges are split the same way as they come in.`}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="rounded-lg border">
+          <div className="text-muted-foreground grid grid-cols-[1fr_auto_auto_auto] gap-x-4 border-b px-3 py-2 text-[11px] font-medium">
+            <span>Charge</span>
+            <span className="text-right">Bill</span>
+            <span className="text-right">Friends</span>
+            <span className="text-right">Yours</span>
+          </div>
+          <div className="max-h-72 divide-y overflow-y-auto">
+            {plan.map((p) => (
+              <div key={p.id} className={cn("grid grid-cols-[1fr_auto_auto_auto] items-center gap-x-4 px-3 py-2 text-xs tabular-nums", !p.ok && "text-muted-foreground")}>
+                <span className="min-w-0">
+                  <span className="block">{day(p.date)}</span>
+                  <span className="text-muted-foreground block truncate text-[11px]">
+                    {p.ok ? p.people.join(", ") : p.tooMuch ? "Friends owe all of it: left whole" : "Not in Owly: left whole"}
+                  </span>
+                </span>
+                <span className="text-right"><PrivacyAmount value={p.amount} currency={currency} /></span>
+                <span className="text-right">{p.ok ? <PrivacyAmount value={p.friends} currency={currency} /> : "-"}</span>
+                <span className="text-right font-medium">{p.ok ? <PrivacyAmount value={p.mine} currency={currency} /> : <PrivacyAmount value={p.amount} currency={currency} />}</span>
+              </div>
+            ))}
+          </div>
+          {split.length ? (
+            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 border-t px-3 py-2 text-xs font-medium tabular-nums">
+              <span>{split.length} charge{split.length === 1 ? "" : "s"} split</span>
+              <span className="text-right"><PrivacyAmount value={sum((p) => p.amount)} currency={currency} /></span>
+              <span className="text-right"><PrivacyAmount value={sum((p) => p.friends)} currency={currency} /></span>
+              <span className="text-right"><PrivacyAmount value={sum((p) => p.mine)} currency={currency} /></span>
+            </div>
+          ) : null}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={onConfirm} disabled={busy || (!s.sharedOn && !split.length)}>
+            {busy ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {s.sharedOn ? "Count the whole bill" : `Split ${split.length} charge${split.length === 1 ? "" : "s"}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

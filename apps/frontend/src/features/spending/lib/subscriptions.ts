@@ -43,6 +43,31 @@ export interface Stream {
   reminder?: string | null;
   /** The next date was set by the owner, for the record (it never makes a transaction). */
   nextSetByOwner?: boolean;
+  /** A service shared in Owly: each charge's friends' part and the owner's part. */
+  shared?: SharedInfo;
+  /** "Count only my part" is on: `usual`, `monthly` and `yearly` are the owner's part. */
+  sharedOn?: boolean;
+  /** With sharedOn: the usual whole bill. */
+  billUsual?: number;
+}
+
+export interface SharedCharge {
+  id: string;
+  date: string;
+  amount: number;
+  friends: number;
+  mine: number;
+  people: string[];
+  ok: boolean;
+  tooMuch: boolean;
+}
+
+export interface SharedInfo {
+  service: string;
+  plan: SharedCharge[];
+  count: number;
+  latest: SharedCharge | null;
+  myUsual: number | null;
 }
 
 export interface ManualEntry {
@@ -96,6 +121,9 @@ export const subscriptionsApi = {
   rescan: () => call<SubscriptionsView>("POST", "/rescan"),
   update: (key: string, patch: Partial<Pick<Stream, "hidden" | "confirmed" | "group" | "name" | "reminder"> & { nextDate: string | null }>) =>
     call<SubscriptionsView>("PUT", `/entries/${encodeURIComponent(key)}`, patch),
+  /** "Count only my part" for a shared bill: splits its charges (on) or puts them back whole (off). */
+  setShared: (key: string, on: boolean) =>
+    call<SubscriptionsView & { changed: number }>("PUT", `/entries/${encodeURIComponent(key)}`, { shared: on }),
   addManual: (input: ManualInput) => call<SubscriptionsView>("POST", "/manual", input),
   updateManual: (id: string, input: ManualInput) => call<SubscriptionsView>("PUT", `/manual/${encodeURIComponent(id)}`, input),
   removeManual: (id: string) => call<SubscriptionsView>("DELETE", `/manual/${encodeURIComponent(id)}`),
