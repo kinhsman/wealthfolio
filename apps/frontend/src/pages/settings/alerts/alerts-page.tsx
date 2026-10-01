@@ -26,6 +26,7 @@ import {
   type AlertKind,
 } from "@/features/spending/lib/subscriptions";
 import { RETURN_ALERT_LABELS, RETURNS_KEY, returnsApi, useReturns, type ReturnAlertKind } from "@/features/spending/lib/returns";
+import { BILL_DAYS, FREE_CASH_ALERT_LABELS, FREE_CASH_KEY, freeCashApi, useFreeCash, type FreeCashAlertKind } from "@/features/spending/lib/free-cash";
 import { SettingsHeader } from "../settings-header";
 
 const BASE = "/api/money-hub/alerts";
@@ -126,6 +127,7 @@ function GroupAlerts<K extends string>({
   busy,
   onSwitch,
   onTest,
+  extra,
 }: {
   icon: ReactNode;
   title: string;
@@ -138,6 +140,8 @@ function GroupAlerts<K extends string>({
   busy: string | null;
   onSwitch: (patch: Partial<Record<K | "on", boolean>>) => void;
   onTest: (kind: K) => void;
+  /** A setting of the feature's own, above its kinds (Free cash: how far ahead bills count). */
+  extra?: ReactNode;
 }) {
   return (
     <div className="px-4 py-3">
@@ -151,6 +155,7 @@ function GroupAlerts<K extends string>({
       <p className="text-muted-foreground mt-0.5 pl-7 text-xs">{text}</p>
       {on ? (
         <div className="mt-3 space-y-2.5 pl-7 text-xs">
+          {extra}
           {(Object.keys(labels) as K[]).map((k) => (
             <div key={k} className="flex items-start gap-2">
               <Checkbox
@@ -253,6 +258,7 @@ export default function AlertsSettingsPage() {
   // and tests live here too; each page points back to this one.
   const { data: subs } = useSubscriptions();
   const { data: returns } = useReturns();
+  const { data: freeCash } = useFreeCash();
   const runGroup = async <V,>(what: string, key: readonly unknown[], fn: () => Promise<V>, ok?: (v: V) => string) => {
     setBusy(what);
     setNote(null);
@@ -524,6 +530,36 @@ export default function AlertsSettingsPage() {
               busy={busy}
               onSwitch={(patch) => runGroup("returns-set", RETURNS_KEY, () => returnsApi.setAlerts(patch))}
               onTest={(k) => runGroup(`returns-test-${k}`, RETURNS_KEY, () => returnsApi.testAlert(k), (v) => sentTo(v.went, v.sample))}
+            />
+          ) : null}
+          {freeCash ? (
+            <GroupAlerts<FreeCashAlertKind>
+              icon={<Icons.Wallet className="text-muted-foreground size-4 shrink-0" />}
+              title="Free cash vs cards"
+              to="/dashboard?tab=spending"
+              text="Your free cash against the cards and the bills coming up"
+              on={freeCash.alerts.on !== false}
+              kinds={freeCash.alerts}
+              labels={FREE_CASH_ALERT_LABELS}
+              busyKey="cash"
+              busy={busy}
+              onSwitch={(patch) => runGroup("cash-set", FREE_CASH_KEY, () => freeCashApi.setAlerts(patch))}
+              onTest={(k) => runGroup(`cash-test-${k}`, FREE_CASH_KEY, () => freeCashApi.testAlert(k), (v) => sentTo(v.went, v.sample))}
+              extra={
+                <label className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted-foreground">Count bills due in the next</span>
+                  <select
+                    value={freeCash.bills.days}
+                    disabled={!!busy}
+                    onChange={(e) => runGroup("cash-days", FREE_CASH_KEY, () => freeCashApi.setDays(Number(e.target.value)))}
+                    className="h-8 rounded-md border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+                  >
+                    {[...new Set([...BILL_DAYS, freeCash.bills.days])].sort((a, b) => a - b).map((d) => (
+                      <option key={d} value={d}>{d} days</option>
+                    ))}
+                  </select>
+                </label>
+              }
             />
           ) : null}
           <div className="px-4 py-3">

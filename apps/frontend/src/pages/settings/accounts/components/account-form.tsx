@@ -10,6 +10,7 @@ import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { newAccountSchema } from "@/lib/schemas";
 import { AccountType } from "@/lib/constants";
 import { RENTAL_DISPLAY_TYPE, isRentalMeta, setDisplayTypeInMeta } from "@/lib/account-display";
+import { countsAsFreeCash, setFreeCashInMeta } from "@/features/spending/lib/free-cash";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { cn } from "@/lib/utils";
 import {
@@ -489,6 +490,32 @@ export function AccountForm({ defaultValues, onSuccess = () => undefined }: Acco
                 </FormItem>
               )}
             />
+
+            {/* money-hub patch: whether this account's cash pays the cards (Spending, Free cash; lib/free-cash.ts). */}
+            {!isCreditCardAccount && currentAccountType ? (
+              <section className={formCardClassName}>
+                <h3 className={formSectionLabelClassName}>Free cash</h3>
+                <div className="mt-4 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <label htmlFor="account-free-cash" className="text-sm font-normal">
+                      Count as free cash
+                    </label>
+                    <p className="text-muted-foreground text-xs">
+                      {currentAccountType === AccountType.CASH
+                        ? "Its balance shows in Free cash on the Spending page, set against your cards and bills"
+                        : "Its uninvested cash shows in Free cash on the Spending page, set against your cards and bills"}
+                    </p>
+                  </div>
+                  <Switch
+                    id="account-free-cash"
+                    checked={countsAsFreeCash({ accountType: currentAccountType, meta: form.watch("meta") })}
+                    onCheckedChange={(on) =>
+                      form.setValue("meta", setFreeCashInMeta(form.getValues("meta"), on), { shouldDirty: true })
+                    }
+                  />
+                </div>
+              </section>
+            ) : null}
 
             <section className={formCardClassName}>
               <h3 className={formSectionLabelClassName}>
