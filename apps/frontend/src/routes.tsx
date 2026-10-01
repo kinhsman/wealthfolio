@@ -50,6 +50,7 @@ import TaxonomiesPage from "./pages/settings/taxonomies/taxonomies-page";
 import ConnectSettingsPage from "./pages/settings/wealthfolio-connect/connect-settings-page";
 import SpendingInsightsPage from "./features/spending/pages/spending-insights-page";
 import SpendingBudgetPage from "./features/spending/pages/spending-budget-page";
+import SpendingSubscriptionsPage from "./features/spending/pages/spending-subscriptions-page";
 import SpendingSettingsPage from "./pages/settings/spending/spending-settings-page";
 import SpendingSettingsCategoriesPage from "./pages/settings/spending/categories/spending-categories-page";
 import SpendingSettingsEventsPage from "./pages/settings/spending/events/spending-events-page";
@@ -128,6 +129,7 @@ export function AppRoutes() {
           <Route path="goals/:goalId" element={<GoalDetailPage />} />
           <Route path="spending/insights" element={<SpendingInsightsPage />} />
           <Route path="spending/budget" element={<SpendingBudgetPage />} />
+          <Route path="spending/subscriptions" element={<SpendingSubscriptionsPage />} />
           {/* Dynamic addon routes */}
           {dynamicRoutes.map(({ path, addonId, routeId }) => (
             <Route

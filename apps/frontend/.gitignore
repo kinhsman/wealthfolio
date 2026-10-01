@@ -1,0 +1,5 @@
+
+# money-hub preview builds (vite.preview.config.ts): real data and copied logos, never committed
+preview/*.fixture.json
+preview/public/
+preview-dist/

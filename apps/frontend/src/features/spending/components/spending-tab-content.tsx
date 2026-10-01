@@ -80,6 +80,7 @@ import { BudgetLineChartCard } from "./budget-line-chart-card";
 import { CashFlowStrip } from "./cash-flow-strip";
 import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
+import { SubscriptionsCard } from "./subscriptions-card";
 import { SpendingPeriodSelector } from "./spending-period-toggle";
 
 const FUTURE_BAR = "#E5E7EB";
@@ -1196,6 +1197,11 @@ export default function SpendingTabContent() {
                     to: dateRange?.to ? formatDateISO(dateRange.to) : undefined,
                   }}
                 />
+              </div>
+
+              {/* money-hub patch: the charges that repeat (lib/subscriptions.ts). */}
+              <div className="order-3 lg:order-none">
+                <SubscriptionsCard currency={currency} />
               </div>
 
               <div className="order-6 lg:order-none">
