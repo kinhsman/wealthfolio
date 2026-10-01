@@ -143,6 +143,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
             ? `Rule created. ${done.changed} filed as ${categoryName}.`
             : "Rule created. New transactions like it will be filed.",
       );
+      offer.onDone?.();
       onClose();
     } catch (e) {
       toast.error(`The rule was not created: ${(e as Error)?.message ?? String(e)}`);

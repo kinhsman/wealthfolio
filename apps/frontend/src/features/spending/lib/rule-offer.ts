@@ -32,6 +32,8 @@ export interface RuleOffer {
   pattern: string;
   taxonomyId: string;
   categoryId: string;
+  /** Runs once the rule is made (a subscription's edit window: scan again so its charges join). */
+  onDone?: () => void;
 }
 
 // The one open offer, for the dialog host (a tiny store: the toast outlives the form that raised it).

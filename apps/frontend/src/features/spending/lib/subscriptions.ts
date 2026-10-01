@@ -63,6 +63,8 @@ export interface Stream {
   charges?: { id: string; date: string; amount: number }[];
   /** The charges the owner put in it by hand (owner, 10-01). */
   linkedIds?: string[];
+  /** The owner's rules that file its charges as a subscription or bill: what they match joins it, on any card. */
+  rules?: { id: string; name: string; categoryId: string }[];
 }
 
 export interface SharedCharge {

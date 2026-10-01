@@ -3,6 +3,7 @@
 // cancel reminder and picks which alerts go out.
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import {
@@ -31,9 +32,11 @@ import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 import { StreamLogo } from "../components/stream-logo";
+import { ruleOfferStore } from "../lib/rule-offer";
 import {
   ALERT_LABELS,
   EVERY_LABELS,
+  SUBSCRIPTIONS_KEY,
   dueLabel,
   statusLabel,
   subscriptionsApi,
@@ -81,7 +84,7 @@ export default function SpendingSubscriptionsPage() {
   const currency = data?.currency || "USD";
   const set = useSetSubscriptions();
   const [busy, setBusy] = useState<string | null>(null);
-  const [adding, setAdding] = useState<ManualEntry | "new" | null>(null);
+  const [adding, setAdding] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
 
   /** One change at a time; the view the helper returns replaces what is shown. */
@@ -105,7 +108,7 @@ export default function SpendingSubscriptionsPage() {
   ];
   const stopped = items.filter((s) => s.status === "stopped");
 
-  const rowProps = { currency, busy, act, onEditManual: (m: ManualEntry) => setAdding(m) };
+  const rowProps = { currency, busy, act };
 
   return (
     <Page>
@@ -129,7 +132,7 @@ export default function SpendingSubscriptionsPage() {
               <span className="hidden sm:inline">Check again</span>
               <span className="sr-only sm:hidden">Check again</span>
             </Button>
-            <Button size="sm" onClick={() => setAdding("new")}>
+            <Button size="sm" onClick={() => setAdding(true)}>
               <Icons.Plus className="h-3.5 w-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Add one</span>
               <span className="sr-only sm:hidden">Add one</span>
@@ -268,13 +271,9 @@ export default function SpendingSubscriptionsPage() {
       </PageContent>
       {adding ? (
         <ManualDialog
-          entry={adding === "new" ? null : adding}
           busy={busy !== null}
-          onClose={() => setAdding(null)}
-          onSave={(input, id) =>
-            act("manual", () => (id ? subscriptionsApi.updateManual(id, input) : subscriptionsApi.addManual(input)), id ? "Saved." : `${input.name} added.`).then(() => setAdding(null))
-          }
-          onRemove={(id) => act("manual", () => subscriptionsApi.removeManual(id), "Removed.").then(() => setAdding(null))}
+          onClose={() => setAdding(false)}
+          onSave={(input) => act("manual", () => subscriptionsApi.addManual(input), `${input.name} added.`).then(() => setAdding(false))}
         />
       ) : null}
     </Page>
@@ -311,19 +310,19 @@ function StreamRow({
   currency,
   busy,
   act,
-  onEditManual,
 }: {
   s: Stream;
   currency: string;
   busy: string | null;
   act: (label: string, fn: () => Promise<SubscriptionsView>, done?: string) => Promise<void>;
-  onEditManual: (m: ManualEntry) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const st = statusLabel(s);
   const { data } = useSubscriptions();
   const manual = s.manualId ? data?.manual.find((m) => m.id === s.manualId) : undefined;
-  const openEdit = () => (manual ? onEditManual(manual) : setEditing(true));
+  // One window for every row (owner, 10-01: "why the edit modal look different between each
+  // subscriptions"): a hand-added one shows its amount and words in it too.
+  const openEdit = () => setEditing(true);
 
   return (
     // A click anywhere on the row opens it; the pencil is the keyboard's way in (no button inside a button).
@@ -391,7 +390,7 @@ function StreamRow({
       </div>
       {editing ? (
         <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <EditStreamDialog s={s} currency={currency} busy={busy !== null} act={act} onClose={() => setEditing(false)} />
+          <EditStreamDialog s={s} manual={manual} currency={currency} busy={busy !== null} act={act} onClose={() => setEditing(false)} />
         </div>
       ) : null}
     </div>
@@ -403,12 +402,15 @@ function StreamRow({
  *  is saved together; splitting a shared bill keeps its own preview window. */
 function EditStreamDialog({
   s,
+  manual,
   currency,
   busy,
   act,
   onClose,
 }: {
   s: Stream;
+  /** Added by hand: its own amount and words, saved with it; Remove instead of Not a subscription. */
+  manual?: ManualEntry;
   currency: string;
   busy: boolean;
   act: (label: string, fn: () => Promise<SubscriptionsView>, done?: string) => Promise<void>;
@@ -421,29 +423,65 @@ function EditStreamDialog({
   const [remind, setRemind] = useState(s.remindBefore ? String(s.remindBefore) : "off");
   const [confirmed, setConfirmed] = useState(!!s.confirmed);
   const [sendTotal, setSendTotal] = useState(!!s.sendTotal);
+  const [amount, setAmount] = useState(manual ? String(manual.amount) : "");
+  const [words, setWords] = useState(manual ? manual.words.join(", ") : "");
   const [sharing, setSharing] = useState(false);
   const [confirmHide, setConfirmHide] = useState(false);
+  const qc = useQueryClient();
 
   const patch: Parameters<typeof subscriptionsApi.update>[1] = {};
-  if (name.trim() && name.trim() !== s.name) patch.name = name.trim();
-  if (group !== s.group) patch.group = group;
-  if (every !== s.every) patch.every = every;
-  if (nextDate && nextDate !== s.next) patch.nextDate = nextDate;
+  // A hand-added one keeps its name, group, rhythm and next date on itself (updateManual).
+  const own: ManualInput | null = manual
+    ? {
+        name: name.trim() || manual.name,
+        words: (words || name).split(",").map((w) => w.trim()).filter(Boolean),
+        amount: Number(amount),
+        every,
+        nextDate: nextDate || null,
+        group,
+      }
+    : null;
+  // Changed against what the window opened with (its date may come from the charges, not the entry).
+  const [shown] = useState(() => JSON.stringify([name, words, amount, every, nextDate, group]));
+  const ownChanged = !!manual && JSON.stringify([name, words, amount, every, nextDate, group]) !== shown;
+  if (!manual) {
+    if (name.trim() && name.trim() !== s.name) patch.name = name.trim();
+    if (group !== s.group) patch.group = group;
+    if (every !== s.every) patch.every = every;
+    if (nextDate && nextDate !== s.next) patch.nextDate = nextDate;
+  }
   if ((remind === "off" ? null : Number(remind)) !== (s.remindBefore ?? null)) patch.remindBefore = remind === "off" ? null : Number(remind);
   if (confirmed !== !!s.confirmed) patch.confirmed = confirmed;
   const sendChanged = sendTotal !== !!s.sendTotal;
-  const dirty = Object.keys(patch).length > 0 || sendChanged;
+  const dirty = Object.keys(patch).length > 0 || sendChanged || ownChanged;
+  const valid = !manual || (Number(amount) > 0 && name.trim().length > 0);
 
   const save = () =>
     act(
       s.key,
       async () => {
-        let view = Object.keys(patch).length ? await subscriptionsApi.update(s.key, patch) : undefined;
+        let view = ownChanged && manual && own ? await subscriptionsApi.updateManual(manual.id, own) : undefined;
+        if (Object.keys(patch).length) view = await subscriptionsApi.update(s.key, patch);
         if (sendChanged) view = await subscriptionsApi.setSendTotal(s.key, sendTotal);
         return view!;
       },
       `${name.trim() || s.name} saved.`,
     ).then(onClose);
+
+  // A rule for charges like these (owner, 10-01: "i clicked edit and i cant see a place to add any
+  // rule"): the rule window opens on its words; once made, a scan brings what it matches here.
+  const addRule = () => {
+    onClose();
+    ruleOfferStore.open({
+      pattern: s.search || s.name,
+      taxonomyId: "spending_categories",
+      categoryId: s.categoryId ?? s.rules?.[0]?.categoryId ?? "",
+      onDone: () => {
+        subscriptionsApi.rescan().then((v) => qc.setQueryData(SUBSCRIPTIONS_KEY, v)).catch(() => {});
+      },
+    });
+  };
+  const rules = s.rules ?? [];
 
   const latest = s.shared?.latest;
   const owly = s.owlyTotal;
@@ -481,8 +519,18 @@ function EditStreamDialog({
                   </SelectContent>
                 </Select>
               </Field>
+              {manual ? (
+                <>
+                  <Field label="Amount" htmlFor="edit-amount">
+                    <Input id="edit-amount" type="number" inputMode="decimal" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                  </Field>
+                  <Field label="Words to look for" htmlFor="edit-words" foot="Separate several with commas.">
+                    <Input id="edit-words" value={words} onChange={(e) => setWords(e.target.value)} placeholder={name} autoComplete="off" />
+                  </Field>
+                </>
+              ) : null}
               <Field label="How often"
-                foot={s.everySetByOwner ? (
+                foot={manual ? "As you set it." : s.everySetByOwner ? (
                   <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={busy}
                     onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { every: null }), "Back to what its charges show.").then(onClose)}>
                     Use what its charges show
@@ -500,13 +548,13 @@ function EditStreamDialog({
                 </Select>
               </Field>
               <Field label="Next charge" htmlFor="edit-next"
-                foot={s.nextSetByOwner ? (
+                foot={manual ? "For your records: no transaction is made." : s.nextSetByOwner ? (
                   <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={busy}
                     onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { nextDate: null }), "Back to the date from its charges.").then(onClose)}>
                     Use the date from its charges
                   </button>
                 ) : "For your records: no transaction is made."}>
-                <Input id="edit-next" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} disabled={s.status === "stopped"} />
+                <Input id="edit-next" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} disabled={s.status === "stopped" && !manual} />
               </Field>
               <Field label="Remind me" foot="On Discord and your phone, in the daytime.">
                 <Select value={remind} onValueChange={setRemind} disabled={s.status === "stopped"}>
@@ -526,6 +574,28 @@ function EditStreamDialog({
                   <Switch checked={confirmed} onCheckedChange={setConfirmed} aria-label="Looks right" />
                 </div>
               </Field>
+            </div>
+
+            <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium">Rules</div>
+                <div className="text-muted-foreground text-xs leading-snug">
+                  {rules.length ? (
+                    <>
+                      {rules.map((r) => r.name).join(", ")}. What {rules.length === 1 ? "it files" : "they file"} joins {s.name}, on any card.{" "}
+                    </>
+                  ) : (
+                    <>No rule yet. A rule files charges like these and keeps them in {s.name}, on any card.{" "}</>
+                  )}
+                  <Link to="/settings/spending/rules" className="text-foreground underline-offset-4 hover:underline">
+                    All rules
+                  </Link>
+                </div>
+              </div>
+              <Button type="button" variant="outline" size="sm" className="shrink-0 self-start" disabled={busy} onClick={addRule}>
+                <Icons.Plus className="mr-1 h-3.5 w-3.5" />
+                Add a rule
+              </Button>
             </div>
 
             {s.shared ? (
@@ -567,19 +637,23 @@ function EditStreamDialog({
           <DialogFooter className="gap-2 sm:justify-between">
             {confirmHide ? (
               <Button type="button" variant="destructive" disabled={busy}
-                onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { hidden: true }), `${s.name} marked not a subscription.`).then(onClose)}>
-                Yes, not a subscription
+                onClick={() =>
+                  manual
+                    ? act(s.key, () => subscriptionsApi.removeManual(manual.id), `${s.name} removed.`).then(onClose)
+                    : act(s.key, () => subscriptionsApi.update(s.key, { hidden: true }), `${s.name} marked not a subscription.`).then(onClose)
+                }>
+                {manual ? "Yes, remove it" : "Yes, not a subscription"}
               </Button>
             ) : (
               <Button type="button" variant="ghost" className="text-destructive" disabled={busy} onClick={() => setConfirmHide(true)}>
-                Not a subscription
+                {manual ? "Remove" : "Not a subscription"}
               </Button>
             )}
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
               <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
                 Cancel
               </Button>
-              <Button type="button" onClick={save} disabled={busy || !dirty}>
+              <Button type="button" onClick={save} disabled={busy || !dirty || !valid}>
                 {busy ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save
               </Button>
@@ -679,38 +753,33 @@ function SharedDialog({
   );
 }
 
+/** Add one by hand; changing it later is the same window as every other row (EditStreamDialog). */
 function ManualDialog({
-  entry,
   busy,
   onClose,
   onSave,
-  onRemove,
 }: {
-  entry: ManualEntry | null;
   busy: boolean;
   onClose: () => void;
-  onSave: (input: ManualInput, id?: string) => Promise<void>;
-  onRemove: (id: string) => Promise<void>;
+  onSave: (input: ManualInput) => Promise<void>;
 }) {
-  const [name, setName] = useState(entry?.name ?? "");
-  const [words, setWords] = useState(entry?.words.join(", ") ?? "");
-  const [amount, setAmount] = useState(entry ? String(entry.amount) : "");
-  const [every, setEvery] = useState<Every>(entry?.every ?? "year");
-  const [nextDate, setNextDate] = useState(entry?.nextDate ?? "");
-  const [group, setGroup] = useState<StreamGroup>(entry?.group ?? "subscriptions");
-  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [name, setName] = useState("");
+  const [words, setWords] = useState("");
+  const [amount, setAmount] = useState("");
+  const [every, setEvery] = useState<Every>("year");
+  const [nextDate, setNextDate] = useState("");
+  const [group, setGroup] = useState<StreamGroup>("subscriptions");
   const ready = name.trim().length > 0 && Number(amount) > 0;
   const submit = () =>
     onSave(
       { name: name.trim(), words: (words || name).split(",").map((w) => w.trim()).filter(Boolean), amount: Number(amount), every, nextDate: nextDate || null, group },
-      entry?.id,
     );
 
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[440px]">
         <DialogHeader>
-          <DialogTitle>{entry ? "Change this one" : "Add a subscription or bill"}</DialogTitle>
+          <DialogTitle>Add a subscription or bill</DialogTitle>
           <DialogDescription>For a charge the app has not seen repeat yet, like a yearly membership. Its words find the charges once they come.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -761,27 +830,14 @@ function ManualDialog({
             </div>
           </div>
         </div>
-        <DialogFooter className="gap-2 sm:justify-between">
-          {entry ? (
-            confirmRemove ? (
-              <Button type="button" variant="destructive" disabled={busy} onClick={() => onRemove(entry.id)}>
-                Yes, remove it
-              </Button>
-            ) : (
-              <Button type="button" variant="ghost" className="text-destructive" disabled={busy} onClick={() => setConfirmRemove(true)}>
-                Remove
-              </Button>
-            )
-          ) : (
-            <span />
-          )}
+        <DialogFooter className="gap-2 sm:justify-end">
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
               Cancel
             </Button>
             <Button type="button" onClick={submit} disabled={!ready || busy}>
               {busy ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {entry ? "Save" : "Add"}
+              Add
             </Button>
           </div>
         </DialogFooter>
