@@ -40,8 +40,12 @@ export function bankLineFor(lines: BankLines | undefined, activity: CashActivity
   return squash(line) === squash(activity.notes ?? "") ? null : line;
 }
 
-/** Every word the bank wrote for one entry (merchant logos match these when the payee matches none). */
-export const bankWordsFor = (lines: BankLines | undefined, id: string) => lines?.[id]?.[1] ?? null;
+/** Every word the bank wrote for one entry, plus the owner's note on it (lib/notes.ts): merchant logos
+ *  match these when the payee matches none (owner, 2026-10-01: "include notes to all"). */
+export function bankWordsFor(lines: BankLines | undefined, id: string, notes?: Record<string, string>) {
+  const words = [lines?.[id]?.[1], notes?.[id]].filter(Boolean);
+  return words.length ? words.join(" | ") : null;
+}
 
 async function bankHits(q: string): Promise<Set<string>> {
   try {

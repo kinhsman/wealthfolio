@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { CashActivity, CashActivitySearchRequest } from "../types/cash-activity";
-import { bankLineFor, netOf, searchWithBankFields } from "./bank-lines";
+import { bankLineFor, bankWordsFor, netOf, searchWithBankFields } from "./bank-lines";
 
 const row = (id: string, notes: string, netAmount: number, currency = "USD", netAmountBase: number | null = netAmount) =>
   ({ id, notes, netAmount, netAmountBase, currency }) as unknown as CashActivity;
@@ -37,5 +37,14 @@ describe("bank lines", () => {
     expect(r.totalCount).toBe(2);
     expect(r.net?.byCurrency).toEqual([{ currency: "USD", amount: -274.2 }]);
     expect(server.mock.calls[0][0].search).toBeUndefined();
+  });
+});
+
+describe("bank words with the owner's note", () => {
+  it("joins the bank's words and the note, either may be missing", () => {
+    const lines = { a: ["X", "CITY OF CHICAGO | City Of Chicago"] } as Record<string, [string, string]>;
+    expect(bankWordsFor(lines, "a", { a: "front porch" })).toBe("CITY OF CHICAGO | City Of Chicago | front porch");
+    expect(bankWordsFor(lines, "b", { b: "cash to mom" })).toBe("cash to mom");
+    expect(bankWordsFor(lines, "c", {})).toBeNull();
   });
 });

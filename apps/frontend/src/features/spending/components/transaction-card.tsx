@@ -82,9 +82,9 @@ function TransactionCardImpl({
   const { t } = useTranslation();
   const a = row.activity;
   const { data: bankLines } = useBankLines();
-  const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id));
-  const bankLine = bankLineFor(bankLines, a);
   const { data: notesById } = useNotes();
+  const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id, notesById));
+  const bankLine = bankLineFor(bankLines, a);
   const note = notesById?.[a.id];
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
