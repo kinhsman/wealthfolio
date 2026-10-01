@@ -7,6 +7,7 @@
 //! extension trait in `wealthfolio-ai`. Hosts (Tauri, Axum) implement this
 //! by delegating to their already-composed service graphs.
 
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use wealthfolio_core::{
     accounts::AccountServiceTrait,
@@ -27,6 +28,29 @@ use wealthfolio_core::{
 };
 use wealthfolio_spending::cash_activities::CashActivityServiceTrait;
 use wealthfolio_spending::categorization_rules::CategorizationRulesServiceTrait;
+
+/// money-hub: what another service knows about one activity that the
+/// activities table does not hold: the owner's own note, the bank's full
+/// description, the bills or subscriptions the charge belongs to.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryExtras {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub my_note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bank_text: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bills: Vec<String>,
+}
+
+/// money-hub: search that other service. Hosts without one return `None`
+/// from [`AgentEnvironment::entry_lookup`].
+#[async_trait::async_trait]
+pub trait EntryLookup: Send + Sync {
+    /// Activities whose note, bank text or bill name contains `text` (any case).
+    async fn search(&self, text: &str) -> Result<Vec<EntryExtras>, String>;
+}
 
 /// Data-service surface available to agent tools.
 pub trait AgentEnvironment: Send + Sync {
@@ -86,4 +110,9 @@ pub trait AgentEnvironment: Send + Sync {
 
     /// Get the categorization-rules service for the rules-first pass in category proposals.
     fn categorization_rules_service(&self) -> Arc<dyn CategorizationRulesServiceTrait>;
+
+    /// money-hub: the owner's notes, bank text and bills, when the host has them.
+    fn entry_lookup(&self) -> Option<Arc<dyn EntryLookup>> {
+        None
+    }
 }
