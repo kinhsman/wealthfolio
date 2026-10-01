@@ -498,6 +498,7 @@ function EditStreamDialog({
   const [remind, setRemind] = useState(s.remindBefore ? String(s.remindBefore) : "off");
   const [confirmed, setConfirmed] = useState(!!s.confirmed);
   const [sendTotal, setSendTotal] = useState(!!s.sendTotal);
+  const [excludeFromForecast, setExcludeFromForecast] = useState(!!s.excludeFromForecast);
   const [amount, setAmount] = useState(manual ? String(manual.amount) : "");
   const [words, setWords] = useState(manual ? manual.words.join(", ") : "");
   const [sharing, setSharing] = useState(false);
@@ -549,6 +550,7 @@ function EditStreamDialog({
   }
   if ((remind === "off" ? null : Number(remind)) !== (s.remindBefore ?? null)) patch.remindBefore = remind === "off" ? null : Number(remind);
   if (confirmed !== !!s.confirmed) patch.confirmed = confirmed;
+  if (excludeFromForecast !== !!s.excludeFromForecast) patch.excludeFromForecast = excludeFromForecast;
   const sendChanged = sendTotal !== !!s.sendTotal;
   const dirty = Object.keys(patch).length > 0 || sendChanged || ownChanged || outChanged;
   // Every charge out of a found one would drop it with no way back from here: Not a subscription is that.
@@ -679,6 +681,13 @@ function EditStreamDialog({
                 <Field label="Looks right" foot="It really is a subscription or bill.">
                   <div className="flex h-9 items-center">
                     <Switch checked={confirmed} onCheckedChange={setConfirmed} aria-label="Looks right" />
+                  </div>
+                </Field>
+              )}
+              {escrow ? null : (
+                <Field label="Exclude from forecast" foot="A fixed bill: the Monthly budget takes it off the budget as it is. Spending still counts it.">
+                  <div className="flex h-9 items-center">
+                    <Switch checked={excludeFromForecast} onCheckedChange={setExcludeFromForecast} aria-label="Exclude from forecast" />
                   </div>
                 </Field>
               )}

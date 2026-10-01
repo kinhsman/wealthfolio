@@ -57,6 +57,9 @@ export interface Stream {
   sharedOn?: boolean;
   /** With sharedOn: the usual whole bill. */
   billUsual?: number;
+  /** Exclude from forecast (owner, 10-01: the mortgage): a fixed bill the Monthly budget takes off the
+   *  budget as it is instead of forecasting it (lib/budget-forecast.ts). Spending still counts it. */
+  excludeFromForecast?: boolean;
   /** "Send the bank's amount to Owly" is on (owner, 10-01). */
   sendTotal?: boolean;
   /** What was last sent to Owly as this bill's total, or why Owly refused. */
@@ -191,7 +194,7 @@ export const subscriptionsApi = {
   update: (
     key: string,
     patch: Partial<
-      Pick<Stream, "hidden" | "confirmed" | "group" | "name" | "reminder" | "remindBefore"> & {
+      Pick<Stream, "hidden" | "confirmed" | "group" | "name" | "reminder" | "remindBefore" | "excludeFromForecast"> & {
         nextDate: string | null;
         every: Every | null;
         /** Reactivate a stopped one (true), or let its charges say again (false). */

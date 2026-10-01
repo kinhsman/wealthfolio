@@ -12,7 +12,7 @@ import {
   useDateFormatting,
 } from "@wealthfolio/ui";
 
-import { forecastFrom, type ForecastParts } from "../lib/budget-forecast";
+import { againstBudget, type ForecastParts } from "../lib/budget-forecast";
 import { topCategoryId } from "../lib/category-rollup";
 import type { BudgetCategoryRow } from "../types/budget";
 import type { DayBucket } from "../types/report";
@@ -227,11 +227,17 @@ export function BudgetLineChartCard({
   }, [historicalPace, target, daysInMonth, innerW, innerH, padL, padT, yMax]);
 
   const haveHistory = historicalDailyAvg > 0;
+  // money-hub patch: with the bills apart (lib/budget-forecast.ts), the forecast is everything but the
+  // bills switched to "Exclude from forecast", set against the budget less those (`fixed`).
+  const sums =
+    forecastParts && haveHistory && isCurrentMonth && target > 0
+      ? againstBudget(target, spent, forecastParts, daysRemaining)
+      : null;
   const forecast =
     target > 0 && isCurrentMonth
       ? haveHistory
-        ? forecastParts
-          ? forecastFrom(spent, forecastParts, daysRemaining)
+        ? sums
+          ? sums.others
           : spent + historicalDailyAvg * daysRemaining
         : dayOfMonth > 0
           ? (spent / dayOfMonth) * daysInMonth
@@ -270,7 +276,7 @@ export function BudgetLineChartCard({
   const overBy = spent - target;
   const isOver = overBy > 0;
   const forecastReliable = isCurrentMonth && (haveHistory || dayOfMonth >= 7);
-  const forecastDelta = forecast - target;
+  const forecastDelta = sums ? sums.over : forecast - target;
   const willOverspend = forecastReliable && forecastDelta > 0;
 
   const historicalPaceAtToday = historicalPace?.pctByDay[dayOfMonth];
@@ -482,14 +488,15 @@ export function BudgetLineChartCard({
       </div>
 
       {isCurrentMonth && haveHistory && forecastParts ? (
-        // money-hub patch: what the forecast is made of, so a bill paid early never reads as overspending.
-        <p className="text-muted-foreground/80 mt-3 text-[11px] leading-snug tabular-nums">
-          Forecast: spent so far +{" "}
-          <PrivacyAmount value={forecastParts.billsLeftTotal} currency={currency} /> in{" "}
-          {forecastParts.billsLeft.length} {forecastParts.billsLeft.length === 1 ? "bill" : "bills"} still due +{" "}
-          <PrivacyAmount value={forecastParts.everydayDaily} currency={currency} /> a day of everyday spending
-          for the {daysRemaining} {daysRemaining === 1 ? "day" : "days"} left
-        </p>
+        // money-hub patch: what the forecast is made of, the owner's way (lib/budget-forecast.ts): the
+        // fixed bills paid come off the budget, everything else is forecast against what is left.
+        <ForecastSums
+          parts={forecastParts}
+          sums={sums ?? againstBudget(target, spent, forecastParts, daysRemaining)}
+          target={target}
+          daysRemaining={daysRemaining}
+          currency={currency}
+        />
       ) : null}
       <div className="border-border mt-4 grid grid-cols-2 gap-3 border-t pt-3 text-xs">
         <div>
@@ -808,5 +815,65 @@ function BudgetRing({
         {isOver ? t("spending:budgetChart.overLower") : t("spending:budgetChart.leftLower")}
       </div>
     </Link>
+  );
+}
+
+/** money-hub patch: the forecast in plain sums, under the chart. */
+function ForecastSums({
+  parts,
+  sums,
+  target,
+  daysRemaining,
+  currency,
+}: {
+  parts: ForecastParts;
+  sums: ReturnType<typeof againstBudget>;
+  target: number;
+  daysRemaining: number;
+  currency: string;
+}) {
+  const over = sums.over;
+  const line = "flex items-baseline justify-between gap-2";
+  return (
+    <div className="text-muted-foreground mt-3 space-y-1 text-[11px] leading-snug tabular-nums">
+      {sums.fixed > 0 ? (
+        <>
+          <div className={line}>
+            <span className="min-w-0 truncate">Budget</span>
+            <PrivacyAmount value={target} currency={currency} />
+          </div>
+          <div className={line}>
+            <span className="min-w-0 truncate">Fixed: {parts.fixedNames.join(", ")}</span>
+            <span className="shrink-0">
+              - <PrivacyAmount value={sums.fixed} currency={currency} />
+            </span>
+          </div>
+          <div className={`${line} text-foreground/90 font-medium`}>
+            <span>Left for everything else</span>
+            <PrivacyAmount value={sums.room} currency={currency} />
+          </div>
+        </>
+      ) : null}
+      <div className={`${line} text-foreground/90 font-medium`}>
+        <span className="min-w-0 truncate">{sums.fixed > 0 ? "Everything else, forecast" : "Forecast"}</span>
+        <PrivacyAmount value={sums.others} currency={currency} />
+      </div>
+      <div className="text-muted-foreground/80">
+        Made of <PrivacyAmount value={sums.spentOthers} currency={currency} /> spent so far{sums.fixed > 0 ? " besides fixed bills" : ""},{" "}
+        <PrivacyAmount value={parts.billsLeftTotal} currency={currency} /> in {parts.billsLeft.length}{" "}
+        {parts.billsLeft.length === 1 ? "bill" : "bills"} still due, and{" "}
+        <PrivacyAmount value={parts.everydayDaily} currency={currency} /> a day of everyday spending for the{" "}
+        {daysRemaining} {daysRemaining === 1 ? "day" : "days"} left.{" "}
+        {over > 0 ? (
+          <>
+            That is <PrivacyAmount value={over} currency={currency} /> {sums.fixed > 0 ? "more than is left" : "over the budget"}.
+          </>
+        ) : (
+          <>
+            That leaves <PrivacyAmount value={-over} currency={currency} /> to spare.
+          </>
+        )}
+      </div>
+    </div>
   );
 }

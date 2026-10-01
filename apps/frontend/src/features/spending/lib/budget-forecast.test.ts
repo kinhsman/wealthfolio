@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { addMonthsISO, forecastFrom, forecastParts } from "./budget-forecast";
+import { addMonthsISO, againstBudget, forecastParts } from "./budget-forecast";
 import type { Stream } from "./subscriptions";
 
 const stream = (name: string, extra: Partial<Stream> = {}): Stream =>
@@ -75,13 +75,64 @@ describe("budget forecast, bills apart", () => {
     // Out of the 3 months: 3 mortgages, ComEd, your part of T-Mobile, the fee, the gas.
     expect(parts.billsInHistory).toBeCloseTo(3 * 2505.76 + 157 + 95.18 + 561.25 + 185, 2);
     expect(parts.everydayDaily).toBeCloseTo((19954 - parts.billsInHistory) / 92, 6);
-    // Spent $2,505.76 (the mortgage) + bills still due + 30 everyday days.
-    expect(forecastFrom(2505.76, parts, 30)).toBeCloseTo(
-      2505.76 + 252.18 + parts.everydayDaily * 30,
-      6,
-    );
+    // Nothing switched to fixed: spent $2,505.76 (the mortgage) + bills still due + 30 everyday days.
+    const sums = againstBudget(4000, 2505.76, parts, 30);
+    expect(sums.fixed).toBe(0);
+    expect(sums.others).toBeCloseTo(2505.76 + 252.18 + parts.everydayDaily * 30, 6);
+    expect(sums.over).toBeCloseTo(sums.others - 4000, 6);
     // Wealthfolio's forecast counted the mortgage again inside the average: about $2,500 more.
-    expect(2505.76 + (19954 / 92) * 30 - forecastFrom(2505.76, parts, 30)).toBeGreaterThan(2500);
+    expect(2505.76 + (19954 / 92) * 30 - sums.others).toBeGreaterThan(2500);
+  });
+
+  it("Exclude from forecast: the mortgage comes off the $4,000, everything else is forecast against the rest", () => {
+    const streams = [
+      stream("US Bank", {
+        usual: 2505.76,
+        next: "2026-11-01",
+        excludeFromForecast: true,
+        charges: mortgageCharges,
+      }),
+      stream("ComEd", {
+        usual: 157,
+        next: "2026-10-03",
+        charges: [{ id: "c1", date: "2026-09-03", amount: 157 }],
+      }),
+    ];
+    const parts = forecastParts(streams, { ...OCT, historyOutflow: 19954 });
+    expect(parts.fixedNames).toEqual(["US Bank"]);
+    expect(parts.fixedPaid.map((b) => `${b.date} ${b.amount}`)).toEqual(["2026-10-01 2505.76"]);
+    expect(parts.fixedDue).toEqual([]);
+    expect(parts.billsLeft.map((b) => b.name)).toEqual(["ComEd"]);
+    // The mortgage is still a bill of the 3 months: out of the everyday day.
+    expect(parts.billsInHistory).toBeCloseTo(3 * 2505.76 + 157, 2);
+    const sums = againstBudget(4000, 2505.76, parts, 30);
+    expect(sums.fixed).toBe(2505.76);
+    expect(sums.room).toBeCloseTo(1494.24, 2);
+    expect(sums.spentOthers).toBe(0);
+    expect(sums.others).toBeCloseTo(157 + parts.everydayDaily * 30, 6);
+    // The verdict is the same as with the mortgage forecast by date; only the way it is said changes.
+    const asBill = againstBudget(
+      4000,
+      2505.76,
+      forecastParts([{ ...streams[0], excludeFromForecast: false }, streams[1]], {
+        ...OCT,
+        historyOutflow: 19954,
+      }),
+      30,
+    );
+    expect(sums.over).toBeCloseTo(asBill.over, 6);
+    // Fixed paid is never more than what was spent (paid from an account Spending does not count).
+    expect(againstBudget(4000, 100, parts, 30).fixed).toBe(100);
+  });
+
+  it("a fixed bill not paid yet this month comes off the budget at its usual amount", () => {
+    const parts = forecastParts(
+      [stream("Rent", { usual: 1800, next: "2026-10-05", excludeFromForecast: true })],
+      { ...OCT, historyOutflow: 0 },
+    );
+    expect(parts.fixedDue.map((b) => `${b.date} ${b.amount}`)).toEqual(["2026-10-05 1800"]);
+    const sums = againstBudget(4000, 0, parts, 30);
+    expect([sums.fixed, sums.room, sums.others]).toEqual([1800, 2200, 0]);
   });
 
   it("a monthly bill due twice in the month counts twice; a late one this month still counts", () => {
