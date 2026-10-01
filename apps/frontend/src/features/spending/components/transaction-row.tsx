@@ -33,6 +33,7 @@ import { QuickEventPopover } from "./quick-event-popover";
 import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
+import { useNotes } from "../lib/notes";
 
 interface TransactionRowProps {
   row: TransactionRowVM;
@@ -93,6 +94,8 @@ function TransactionRowImpl({
   const { data: bankLines } = useBankLines();
   const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id));
   const bankLine = bankLineFor(bankLines, a);
+  const { data: notesById } = useNotes();
+  const note = notesById?.[a.id];
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,
@@ -156,6 +159,13 @@ function TransactionRowImpl({
           ) : (
             <span className="text-muted-foreground text-sm italic">—</span>
           )}
+          {/* money-hub patch: the owner's own note, an icon beside the name (lib/notes.ts). */}
+          {note ? (
+            <span className="text-muted-foreground shrink-0" title={note}>
+              <Icons.FileText className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="sr-only">Note: {note}</span>
+            </span>
+          ) : null}
           {/* money-hub patch: the bank's own line after the payee (lib/bank-lines.ts). */}
           {bankLine ? <TruncatedText text={bankLine} className="text-muted-foreground flex-1 text-xs" /> : null}
           {showAccount && (

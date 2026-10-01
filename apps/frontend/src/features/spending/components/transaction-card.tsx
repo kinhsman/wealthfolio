@@ -18,6 +18,7 @@ import { QuickCategorizePopover } from "./quick-categorize-popover";
 import { SelectionCheckbox } from "./selection-checkbox";
 import { QuickEventPopover } from "./quick-event-popover";
 import { bankLineFor, bankWordsFor, useBankLines } from "../lib/bank-lines";
+import { useNotes } from "../lib/notes";
 import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
@@ -83,6 +84,8 @@ function TransactionCardImpl({
   const { data: bankLines } = useBankLines();
   const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id));
   const bankLine = bankLineFor(bankLines, a);
+  const { data: notesById } = useNotes();
+  const note = notesById?.[a.id];
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,
@@ -164,6 +167,13 @@ function TransactionCardImpl({
           {/* money-hub patch: the bank's own line under the payee (lib/bank-lines.ts). */}
           {bankLine ? (
             <div className="text-muted-foreground mt-0.5 truncate text-[11px]">{bankLine}</div>
+          ) : null}
+          {/* money-hub patch: the owner's own note, its own line (lib/notes.ts). */}
+          {note ? (
+            <div className="text-muted-foreground mt-0.5 flex min-w-0 items-center gap-1 text-[11px]">
+              <Icons.FileText className="h-3 w-3 shrink-0" aria-hidden="true" />
+              <span className="truncate">{note}</span>
+            </div>
           ) : null}
 
           {/* Everything secondary shares one line: the day heading above owns

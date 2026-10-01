@@ -64,6 +64,7 @@ import { AdvancedOptionsSection } from "@/pages/activity/components/forms/fields
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
 import { QuickEventPopover } from "./quick-event-popover";
+import { saveNote, useNotes } from "../lib/notes";
 import type { CashFlowBucket } from "../types/cash-activity";
 import {
   cashActivityFlowMetadata,
@@ -91,6 +92,8 @@ function buildFormSchema(t: TFunction) {
     activityDate: z.date({ required_error: t("spending:cashForm.pickDate") }),
     amount: z.coerce.number().min(0, { message: t("spending:cashForm.amountNonNegative") }),
     notes: z.string().optional(),
+    // money-hub patch: the owner's own note, apart from the name (lib/notes.ts).
+    memo: z.string().optional(),
     // Advanced options. Currency defaults to the account's, so the common case
     // never sees these; a foreign charge on a domestic card needs both.
     currency: z.string().optional(),
@@ -120,6 +123,7 @@ interface FormValues {
   currency?: string;
   fxRate?: number;
   notes?: string;
+  memo?: string;
   category?: string;
 }
 
@@ -188,6 +192,7 @@ export function CashActivityForm({
   const isMobile = useIsMobileViewport();
   const [currentStep, setCurrentStep] = useState<1 | 2>(isEditing ? 2 : 1);
   const qc = useQueryClient();
+  const { data: notesById } = useNotes();
   const { accounts } = useAccounts({ filterActive: false });
   const { settings } = useSpendingSettings();
   const { data: appSettings } = useSettings();
@@ -246,6 +251,7 @@ export function CashActivityForm({
       currency: activity?.currency ?? "",
       fxRate: activity?.fxRate != null ? Number(activity.fxRate) : undefined,
       notes: activity?.notes ?? "",
+      memo: "",
       category:
         activity?.categoryTaxonomyId && activity?.categoryId
           ? `${activity.categoryTaxonomyId}:${activity.categoryId}`
@@ -265,6 +271,7 @@ export function CashActivityForm({
         currency: activity?.currency ?? "",
         fxRate: activity?.fxRate != null ? Number(activity.fxRate) : undefined,
         notes: activity?.notes ?? "",
+        memo: activity?.id ? (notesById?.[activity.id] ?? "") : "",
         category:
           activity?.categoryTaxonomyId && activity?.categoryId
             ? `${activity.categoryTaxonomyId}:${activity.categoryId}`
@@ -273,7 +280,15 @@ export function CashActivityForm({
       setEventId(activity?.eventId ?? null);
       setCurrentStep(activity?.id ? 2 : 1);
     }
+    // notesById is left out on purpose: a late load fills the box below, never a reset.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activity, spendingAccounts, form]);
+
+  // The notes may arrive after the window opened: fill the box unless the owner already typed.
+  useEffect(() => {
+    if (!open || !activity?.id || form.getFieldState("memo").isDirty) return;
+    form.setValue("memo", notesById?.[activity.id] ?? "");
+  }, [open, activity?.id, notesById, form]);
 
   const watchType = form.watch("activityType");
   const watchAccountId = form.watch("accountId");
@@ -406,6 +421,9 @@ export function CashActivityForm({
           await assignActivityCategory(saved.id, tax, cat);
         }
       }
+
+      // money-hub patch: the owner's note, kept apart from the name.
+      await saveNote(qc, saved.id, values.memo ?? "");
 
       // Sync event_id if changed
       const oldEventId = activity?.eventId ?? null;
@@ -856,6 +874,25 @@ export function CashActivityForm({
                               activityType={watchType}
                             />
                           ) : null}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* money-hub patch: the owner's own note, never shown as the name. */}
+                    <FormField
+                      control={form.control}
+                      name="memo"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Notes</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Only for you, the name stays as it is"
+                              className="min-h-16 resize-none"
+                              {...field}
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}

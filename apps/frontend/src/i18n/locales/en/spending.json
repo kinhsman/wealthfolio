@@ -806,7 +806,7 @@
     "pickCategoryOptional": "Pick a category (optional)",
     "tagAnEvent": "Tag an event",
     "tagEventOptional": "Tag an event (optional)",
-    "notesPayee": "Notes / Payee",
+    "notesPayee": "Name",
     "notesPlaceholder": "e.g., AMAZON*MARKETPLACE, STARBUCKS COFFEE",
     "updateTransaction": "Update Transaction",
     "createTransaction": "Create Transaction"
