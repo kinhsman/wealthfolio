@@ -43,6 +43,8 @@ interface PreviewItem {
   to: string;
   /** Filed by hand: listed, but re-filed only when ticked (they start unticked). */
   byHand?: boolean;
+  /** Already in that category: listed so the matches add up, nothing to re-file. */
+  already?: boolean;
 }
 
 async function hub<T>(path: string, body: unknown): Promise<T> {
@@ -106,7 +108,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
   const preview = useQuery({
     queryKey: ["money-hub", "rule-preview", debounced, target.taxonomyId, target.categoryId],
     queryFn: () =>
-      hub<{ count: number; already?: number; existing?: { name: string; categoryId: string } | null; items: PreviewItem[] }>("/preview-rule", {
+      hub<{ count: number; already?: number; alreadyItems?: PreviewItem[]; existing?: { name: string; categoryId: string } | null; items: PreviewItem[] }>("/preview-rule", {
         ...keywordsToRule(debounced.split("\u0001").filter(Boolean)),
         taxonomyId: target.taxonomyId,
         categoryId: target.categoryId,
@@ -127,6 +129,9 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
   const count = preview.data?.count ?? 0;
   const byHand = items.filter((it) => it.byHand).length;
   const already = preview.data?.already ?? 0;
+  // Every match, for the list and its count: what would move, then what is in that category already.
+  const shown: PreviewItem[] = [...items, ...(preview.data?.alreadyItems ?? []).map((it) => ({ ...it, already: true }))];
+  const total = count + already;
   const alreadyText = already > 0 ? `${already} already filed as ${categoryName}.` : "";
   const auto = count - byHand;
   const ticked = items.filter((it) => !unticked.has(it.id));
@@ -172,7 +177,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
 
   const matchesList = (withTicks: boolean) => (
     <div className="max-h-[45dvh] divide-y overflow-y-auto">
-      {items.map((it) => {
+      {shown.map((it) => {
         const from = it.from ? categories.get(it.from) : undefined;
         return (
           <label key={it.id} className={`flex items-center gap-3 px-3 py-2.5 ${withTicks ? "cursor-pointer" : ""}`}>
@@ -182,13 +187,13 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm">{it.notes}</span>
               <span className="text-muted-foreground block truncate text-xs">
-                {[day(it.date), accountName.get(it.accountId), from ? `now ${from.name}${it.byHand ? ", filed by hand" : ""}` : "no category now"].filter(Boolean).join(" · ")}
+                {[day(it.date), accountName.get(it.accountId), it.already ? `already ${from?.name ?? categoryName}` : from ? `now ${from.name}${it.byHand ? ", filed by hand" : ""}` : "no category now"].filter(Boolean).join(" · ")}
               </span>
             </span>
             <span className="shrink-0 text-sm tabular-nums">
               <PrivacyAmount value={Math.abs(it.amount)} currency="USD" />
             </span>
-            {withTicks ? (
+            {withTicks && !it.already ? (
               <Checkbox
                 checked={!unticked.has(it.id)}
                 onCheckedChange={(v) =>
@@ -250,7 +255,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
                   : !settled
                     ? "Looking for transactions like it"
                     : preview.data?.existing
-                      ? `You already have a rule for these words: ${preview.data.existing.name}, filing as ${categories.get(preview.data.existing.categoryId)?.name ?? "its category"}. Change it in Settings, Spending, Rules.`
+                      ? `You already have a rule for these words: ${preview.data.existing.name}, filing as ${categories.get(preview.data.existing.categoryId)?.name ?? "its category"}. ${total ? `It matches ${total} transaction${total === 1 ? "" : "s"}${count === 0 ? `, all filed ${total === 1 ? "that way" : "that way"} already` : ""}. ` : ""}Change it in Settings, Spending, Rules.`
                     : count === 0
                       ? already > 0
                         ? `${alreadyText} New ones like it will get this category too.`
@@ -263,15 +268,15 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
                           alreadyText,
                         ].filter(Boolean).join(" ")}
             </p>
-            {showMatches && settled && count > 0 ? <div className="rounded-lg border">{matchesList(false)}</div> : null}
+            {showMatches && settled && total > 0 ? <div className="rounded-lg border">{matchesList(false)}</div> : null}
 
             <DialogFooter className="gap-2 sm:justify-between">
               <Button type="button" variant="ghost" onClick={onClose}>
                 Cancel
               </Button>
               <div className="flex flex-col-reverse gap-2 sm:flex-row">
-                <Button type="button" variant="outline" onClick={() => setShowMatches((v) => !v)} disabled={!settled || count === 0}>
-                  {showMatches && count > 0 ? "Hide matches" : `Preview ${settled ? count : "…"} ${count === 1 ? "match" : "matches"}`}
+                <Button type="button" variant="outline" onClick={() => setShowMatches((v) => !v)} disabled={!settled || total === 0}>
+                  {showMatches && total > 0 ? "Hide matches" : `Preview ${settled ? total : "…"} ${total === 1 ? "match" : "matches"}`}
                 </Button>
                 <Button type="button" onClick={() => setStep("review")} disabled={!settled || preview.isError || !!preview.data?.existing}>
                   Review rule
@@ -309,7 +314,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
               <div className="rounded-lg border">
                 <div className="flex items-center justify-between gap-3 border-b px-3 py-2.5">
                   <span className={caps}>
-                    {count} {count === 1 ? "transaction" : "transactions"} matched
+                    {total} {total === 1 ? "transaction" : "transactions"} matched
                   </span>
                   {items.length > 0 ? (
                     <label className={`${caps} flex cursor-pointer items-center gap-3`}>
@@ -322,7 +327,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
                     </label>
                   ) : null}
                 </div>
-                {items.length > 0 ? (
+                {shown.length > 0 ? (
                   matchesList(true)
                 ) : (
                   <p className="text-muted-foreground px-3 py-4 text-sm">None yet. New transactions like it will be filed as they come in.</p>
