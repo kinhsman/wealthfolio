@@ -101,12 +101,16 @@ export default function SpendingSubscriptionsPage() {
   };
 
   const items = data?.items ?? [];
-  const live = items.filter((s) => s.status !== "stopped");
+  // The next one due on top (owner, 10-01: "sort the subscription by due day, up coming on top");
+  // stopped ones by when they were last paid, the latest first.
+  const live = items.filter((s) => s.status !== "stopped").sort((a, b) => a.dueInDays - b.dueInDays || a.name.localeCompare(b.name));
   const groups: { group: StreamGroup; title: string; monthly: number; blurb: string }[] = [
     { group: "subscriptions", title: "Subscriptions", monthly: data?.totals.subscriptionsMonthly ?? 0, blurb: "Services you pay for again and again." },
     { group: "bills", title: "Bills", monthly: data?.totals.billsMonthly ?? 0, blurb: "Utilities, phone, insurance and the like." },
   ];
-  const stopped = items.filter((s) => s.status === "stopped");
+  const stopped = items
+    .filter((s) => s.status === "stopped")
+    .sort((a, b) => (b.last?.date ?? "").localeCompare(a.last?.date ?? "") || a.name.localeCompare(b.name));
 
   const rowProps = { currency, busy, act };
 
@@ -334,13 +338,36 @@ function StreamRow({
             <Link to={transactionsHref(s)} onClick={(e) => e.stopPropagation()} className="text-sm font-medium underline-offset-4 hover:underline">
               {s.name}
             </Link>
-            {s.confirmed ? <Icons.Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="Looks right" /> : null}
+            {/* A reminder is on (owner, 10-01: "show a notification bell next to a subscription whenever a reminder is turned on"). */}
+            {s.remindBefore || (s.reminder && s.reminder >= new Date().toISOString().slice(0, 10)) ? (
+              <span
+                title={s.remindBefore ? `Reminder ${s.remindBefore} day${s.remindBefore === 1 ? "" : "s"} before each charge` : `Reminder on ${day(s.reminder!)}`}
+                className="inline-flex"
+              >
+                <Icons.Bell className="h-3.5 w-3.5 shrink-0" style={{ color: "#d97706" }} aria-label="Reminder on" />
+              </span>
+            ) : null}
             {s.shared ? (
               <span className="bg-primary/10 text-primary shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium">
                 {s.sharedOn ? "Your part" : "Shared in Owly"}
               </span>
             ) : null}
-            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", TONE[st.tone])}>{st.label}</span>
+            {/* Active is a green circle with a check (owner, 10-01); Stopped a grey pause; the rest keep their words.
+                The old small check ("Looks right" ticked) is gone: two checks side by side read the same. */}
+            {st.label === "Active" ? (
+              // The green is fixed: the dark theme turns emerald utilities white, and this one must stay green.
+              <span title="Active" aria-label="Active" className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "#16a34a" }}>
+                <Icons.Check className="h-2.5 w-2.5 text-white" strokeWidth={3.5} />
+              </span>
+            ) : s.status === "stopped" ? (
+              // Stopped: a grey pause, the same badge as Active (owner, 10-01: "stopped just show a grey pause icon").
+              <span title="Stopped" aria-label="Stopped" className="bg-muted-foreground/70 inline-flex h-4 w-4 shrink-0 items-center justify-center gap-[2px] rounded-full">
+                <span className="bg-background h-[7px] w-[2px] rounded-[1px]" />
+                <span className="bg-background h-[7px] w-[2px] rounded-[1px]" />
+              </span>
+            ) : (
+              <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", TONE[st.tone])}>{st.label}</span>
+            )}
           </div>
           <div className="text-muted-foreground text-xs leading-snug">
             {EVERY_LABELS[s.every]}
