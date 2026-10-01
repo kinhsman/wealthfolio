@@ -1,4 +1,4 @@
-import { getAccounts } from "@/adapters";
+import { getAccounts, searchActivities } from "@/adapters";
 import { ActionPalette, type ActionPaletteGroup } from "@/components/action-palette";
 import { SwipablePage, type SwipablePageView } from "@/components/page";
 import {
@@ -400,6 +400,20 @@ const ActivityPage = () => {
     () => investmentAccounts.map((a) => a.id),
     [investmentAccounts],
   );
+
+  // money-hub: the Investments tab only shows while it has something to list: an activity in
+  // an investment account (WheelTradr accounts carry daily values, not activities), or a link
+  // to one account or one activity on that side. Otherwise Activities is just Spending.
+  const investmentActivityCount = useQuery({
+    queryKey: [QueryKeys.ACTIVITY_DATA, "investment-tab-count", investmentAccountIds],
+    queryFn: () => searchActivities(0, 1, { accountIds: investmentAccountIds }, ""),
+    enabled: isSpendingEnabled && investmentAccountIds.length > 0,
+  });
+  const showInvestmentsTab =
+    (investmentAccountIds.length > 0 && (investmentActivityCount.data?.meta.totalRowCount ?? 0) > 0) ||
+    resolveActivityTabFromUrlFilters(searchParams, spendingAccountIds) === "investments" ||
+    searchParams.has("activity") ||
+    searchParams.has("needsReview");
 
   const activityFormAccounts = useMemo(() => {
     const source = isSpendingEnabled ? investmentAccounts : accounts;
@@ -909,13 +923,17 @@ const ActivityPage = () => {
   }
 
   const views: SwipablePageView[] = [
-    {
-      value: "investments",
-      label: t("activity:page.investments"),
-      icon: Icons.TrendingUp,
-      content: investmentContent,
-      actions: investmentActions,
-    },
+    ...(showInvestmentsTab
+      ? [
+          {
+            value: "investments",
+            label: t("activity:page.investments"),
+            icon: Icons.TrendingUp,
+            content: investmentContent,
+            actions: investmentActions,
+          },
+        ]
+      : []),
     {
       value: "spending",
       label: t("activity:page.spending"),
@@ -929,7 +947,7 @@ const ActivityPage = () => {
     <>
       <SwipablePage
         views={views}
-        defaultView="investments"
+        defaultView={showInvestmentsTab ? "investments" : "spending"}
         persistKey="activity-page-tab"
         desktopContentClassName="overflow-y-visible"
       />
