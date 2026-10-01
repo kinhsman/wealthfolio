@@ -60,9 +60,13 @@ export interface Stream {
   /** What was last sent to Owly as this bill's total, or why Owly refused. */
   owlyTotal?: { chargeId: string; amount: number | null; from: string | null; at: string; error: string | null } | null;
   /** Every charge in it. */
-  charges?: { id: string; date: string; amount: number }[];
+  charges?: { id: string; date: string; amount: number; notes?: string; accountId?: string | null }[];
+  /** Charges the owner took out by hand: in no subscription, whatever words or rules say (owner, 10-01). */
+  excluded?: ExcludedCharge[];
   /** The charges the owner put in it by hand (owner, 10-01). */
   linkedIds?: string[];
+  /** The charges an owner's rule brought here (another card, other words). */
+  ruledIds?: string[];
   /** The owner's rules that file its charges as a subscription or bill: what they match joins it, on any card. */
   rules?: { id: string; name: string; categoryId: string }[];
   /** The owner's merchant words that bring its charges here (Settings, Spending, Merchants). */
@@ -99,11 +103,21 @@ export interface ManualEntry {
   merchantId: string | null;
 }
 
+export interface ExcludedCharge {
+  id: string;
+  date: string;
+  amount: number;
+  notes: string;
+  accountId: string | null;
+}
+
 export interface SubscriptionsView {
   items: Stream[];
   hidden: Stream[];
   totals: { monthly: number; yearly: number; count: number; subscriptionsMonthly: number; billsMonthly: number };
   manual: ManualEntry[];
+  /** Taken out by hand from a subscription that is gone since: put back from the page. */
+  leftOut?: (ExcludedCharge & { key: string })[];
   alerts: Record<AlertKind, boolean>;
   last: { at: string; scanned: number; found: number } | null;
   /** The money app's base currency, for the amounts. */
@@ -169,6 +183,9 @@ export const subscriptionsApi = {
   which: (charge: { id: string; notes: string; amount: number; date: string }) => call<WhichOne>("POST", "/which", charge),
   /** Put a charge in a stream by hand (null: back to where its words put it). */
   link: (activityId: string, key: string | null) => call<SubscriptionsView>("PUT", `/links/${encodeURIComponent(activityId)}`, { key }),
+  /** Take charges out of a subscription by hand (no word or rule brings them back), or put them back. */
+  exclusions: (key: string, change: { exclude?: string[]; include?: string[] }) =>
+    call<SubscriptionsView>("POST", "/exclusions", { key, ...change }),
 };
 
 export function useSubscriptions() {

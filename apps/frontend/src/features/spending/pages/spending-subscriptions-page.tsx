@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -29,6 +30,7 @@ import {
 } from "@wealthfolio/ui";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
+import { useAccounts } from "@/hooks/use-accounts";
 import { cn } from "@/lib/utils";
 
 import { StreamLogo } from "../components/stream-logo";
@@ -86,6 +88,7 @@ export default function SpendingSubscriptionsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
+  const [showLeftOut, setShowLeftOut] = useState(false);
 
   /** One change at a time; the view the helper returns replaces what is shown. */
   const act = async (label: string, fn: () => Promise<SubscriptionsView>, done?: string) => {
@@ -205,6 +208,36 @@ export default function SpendingSubscriptionsPage() {
                           <PrivacyAmount value={s.usual} currency={currency} /> {s.everyLabel}
                         </span>
                         <Button variant="outline" size="sm" className="h-7 text-xs" disabled={busy !== null} onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { hidden: false }))}>
+                          Put back
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {data.leftOut?.length ? (
+              <div>
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+                  onClick={() => setShowLeftOut((v) => !v)}
+                >
+                  {showLeftOut ? "Hide" : "Show"} the {data.leftOut.length} charge{data.leftOut.length === 1 ? "" : "s"} you left out of a subscription that is gone now
+                </button>
+                {showLeftOut ? (
+                  <div className="bg-card/70 border-border/40 mt-2 divide-y rounded-xl border backdrop-blur-xl">
+                    {data.leftOut.map((c) => (
+                      <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm">{c.notes || "No description"}</span>
+                          <span className="text-muted-foreground block text-xs">{day(c.date)}</span>
+                        </span>
+                        <span className="text-muted-foreground text-xs tabular-nums">
+                          <PrivacyAmount value={Math.abs(c.amount)} currency={currency} />
+                        </span>
+                        <Button variant="outline" size="sm" className="h-7 text-xs" disabled={busy !== null} onClick={() => act(c.id, () => subscriptionsApi.exclusions(c.key, { include: [c.id] }), "Put back.")}>
                           Put back
                         </Button>
                       </div>
@@ -455,6 +488,22 @@ function EditStreamDialog({
   const [sharing, setSharing] = useState(false);
   const [confirmHide, setConfirmHide] = useState(false);
   const qc = useQueryClient();
+  // Its charges, newest first, with the ones taken out by hand (unticked). A tick change is saved with
+  // the rest (owner, 10-01: "see all linked transactions in the subscription and a check box to
+  // manually exclude (will by pass all rules)").
+  const charges = [
+    ...(s.charges ?? []).map((c) => ({ ...c, notes: c.notes ?? "", accountId: c.accountId ?? null, wasOut: false })),
+    ...(s.excluded ?? []).map((c) => ({ ...c, wasOut: true })),
+  ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const [out, setOut] = useState<Set<string>>(() => new Set((s.excluded ?? []).map((c) => c.id)));
+  const toExclude = charges.filter((c) => !c.wasOut && out.has(c.id)).map((c) => c.id);
+  const toInclude = charges.filter((c) => c.wasOut && !out.has(c.id)).map((c) => c.id);
+  const outChanged = toExclude.length + toInclude.length > 0;
+  const keptCount = charges.length - out.size;
+  const { accounts } = useAccounts({ filterActive: false });
+  const accountName = new Map((accounts ?? []).map((a) => [a.id, a.name]));
+  const linked = new Set(s.linkedIds ?? []);
+  const ruled = new Set(s.ruledIds ?? []);
 
   const patch: Parameters<typeof subscriptionsApi.update>[1] = {};
   // A hand-added one keeps its name, group, rhythm and next date on itself (updateManual).
@@ -480,14 +529,18 @@ function EditStreamDialog({
   if ((remind === "off" ? null : Number(remind)) !== (s.remindBefore ?? null)) patch.remindBefore = remind === "off" ? null : Number(remind);
   if (confirmed !== !!s.confirmed) patch.confirmed = confirmed;
   const sendChanged = sendTotal !== !!s.sendTotal;
-  const dirty = Object.keys(patch).length > 0 || sendChanged || ownChanged;
-  const valid = !manual || (Number(amount) > 0 && name.trim().length > 0);
+  const dirty = Object.keys(patch).length > 0 || sendChanged || ownChanged || outChanged;
+  // Every charge out of a found one would drop it with no way back from here: Not a subscription is that.
+  const allOut = !manual && charges.length > 0 && keptCount === 0;
+  const valid = (!manual || (Number(amount) > 0 && name.trim().length > 0)) && !allOut;
 
   const save = () =>
     act(
       s.key,
       async () => {
         let view = ownChanged && manual && own ? await subscriptionsApi.updateManual(manual.id, own) : undefined;
+        // Before the key-bound changes below: taking charges out can change what it finds.
+        if (outChanged) view = await subscriptionsApi.exclusions(s.key, { exclude: toExclude, include: toInclude });
         if (Object.keys(patch).length) view = await subscriptionsApi.update(s.key, patch);
         if (sendChanged) view = await subscriptionsApi.setSendTotal(s.key, sendTotal);
         return view!;
@@ -637,6 +690,56 @@ function EditStreamDialog({
                 Add a rule
               </Button>
             </div>
+
+            {charges.length ? (
+              <div className="rounded-lg border">
+                <div className="flex items-start justify-between gap-3 border-b px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">Charges</div>
+                    <div className="text-muted-foreground text-xs leading-snug">
+                      {keptCount} of {charges.length} in {s.name}. Untick one to leave it out: no word, merchant or rule brings it back.
+                    </div>
+                  </div>
+                </div>
+                <div className="max-h-[40dvh] divide-y overflow-y-auto">
+                  {charges.map((c) => {
+                    const isOut = out.has(c.id);
+                    const why = c.wasOut ? "left out by you" : linked.has(c.id) ? "linked by you" : ruled.has(c.id) ? "by a rule" : null;
+                    return (
+                      <label key={c.id} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2", isOut && "opacity-60")}>
+                        <span className="min-w-0 flex-1">
+                          <span className={cn("block truncate text-sm", isOut && "line-through")}>{c.notes || "No description"}</span>
+                          <span className="text-muted-foreground block truncate text-xs">
+                            {[day(c.date), c.accountId ? accountName.get(c.accountId) : null, why].filter(Boolean).join(" · ")}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-sm tabular-nums">
+                          <PrivacyAmount value={Math.abs(c.amount)} currency={currency} />
+                        </span>
+                        <Checkbox
+                          checked={!isOut}
+                          disabled={busy}
+                          onCheckedChange={(v) =>
+                            setOut((prev) => {
+                              const next = new Set(prev);
+                              if (v === true) next.delete(c.id);
+                              else next.add(c.id);
+                              return next;
+                            })
+                          }
+                          aria-label={`${isOut ? "Put back" : "Leave out"} ${c.notes}, ${day(c.date)}`}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+                {allOut ? (
+                  <p className="border-t px-3 py-2 text-xs" style={{ color: "#d97706" }}>
+                    Every charge is unticked. To drop {s.name} altogether, use Not a subscription below.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
             {s.shared ? (
               <div className="divide-y rounded-lg border">
