@@ -1,5 +1,5 @@
 // money-hub patch: the Subscriptions & bills screens with fixture data, for a picture before shipping
-// (vite.preview.config.ts). ?view=page|card|alerts|track|pending|rows, ?theme=light|dark; track: ?case=likely|member|new. The fixture is the helper's view
+// (vite.preview.config.ts). ?view=page|card|alerts|track|pending|rows|filter, ?theme=light|dark; track: ?case=likely|member|new. The fixture is the helper's view
 // over the owner's real transactions (preview/subscriptions.fixture.json, not committed).
 // Returns: ?view=returns|returns-empty|returns-card|return-new|return-edit|return-pick over sample returns at the
 // owner's real stores (preview/returns.fixture.json, not committed; ?id=r2 picks the one the window opens on).
@@ -34,6 +34,8 @@ import type { TransactionRowVM } from "../src/features/spending/lib/transactions
 import { Table, TableBody, TooltipProvider } from "@wealthfolio/ui";
 import { PrivacyProvider } from "../src/context/privacy-context";
 import { EventDialogProvider } from "../src/features/spending/components/event-dialog-provider";
+import { TransactionsFilterBar } from "../src/features/spending/components/transactions-filter-bar";
+import { subscriptionFilterOptions } from "../src/features/spending/lib/subscriptions";
 import returnsFixture from "./returns.fixture.json";
 
 const params = new URLSearchParams(location.search);
@@ -180,7 +182,33 @@ function ReturnPreview() {
   );
 }
 
+/** The Activities filter row with the Subscription filter on, as a subscription's name opens it. */
+function FilterPreview() {
+  const items = (fixture as unknown as SubscriptionsView).items;
+  const options = subscriptionFilterOptions(items);
+  const [picked, setPicked] = React.useState(new Set([options.find((o) => /youtube/i.test(o.label))?.value ?? options[0].value]));
+  const noop = () => {};
+  const none = new Set<string>();
+  return (
+    <div className="bg-background text-foreground min-h-screen px-4 py-6 md:px-10">
+      <TransactionsFilterBar
+        searchInput="" onSearchInputChange={noop} statusFilter="all" onStatusFilterChange={noop}
+        dateRange={undefined} onDateRangeChange={noop} selectedAccounts={none} onAccountsChange={noop}
+        selectedTypes={none} onTypesChange={noop} selectedCategories={none} onCategoriesChange={noop}
+        selectedSubcategories={none} onSubcategoriesChange={noop} selectedEvents={none} onEventsChange={noop}
+        selectedSubscriptions={picked} onSubscriptionsChange={setPicked} amountRange={{ min: null, max: null }}
+        onAmountRangeChange={noop} accountOptions={[]} typeOptions={[]} categoryOptions={[]} subcategoryOptions={[]}
+        eventOptions={[]} hasEvents subscriptionOptions={options} filtersActive onClearAll={noop}
+        visibleCount={12} totalCount={12} selectedNet={{ byCurrency: [], converted: null }}
+        filteredNet={{ byCurrency: [{ currency: "USD", amount: -312.4 }], converted: null }}
+        isRefreshing={false} isMobile={params.get("mobile") === "1"}
+      />
+    </div>
+  );
+}
+
 function Shell() {
+  if (view === "filter") return <FilterPreview />;
   if (view === "track") return <TrackPreview />;
   if (view === "pending") return <SpendingPendingChangesPage />;
   if (view === "rows") return <RowsPreview />;

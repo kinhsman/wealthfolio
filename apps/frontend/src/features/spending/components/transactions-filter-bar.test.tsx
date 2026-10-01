@@ -35,6 +35,8 @@ function renderBar(
       onSubcategoriesChange={vi.fn()}
       selectedEvents={new Set()}
       onEventsChange={vi.fn()}
+      selectedSubscriptions={new Set()}
+      onSubscriptionsChange={vi.fn()}
       amountRange={{ min: null, max: null }}
       onAmountRangeChange={vi.fn()}
       accountOptions={[]}
@@ -43,6 +45,7 @@ function renderBar(
       subcategoryOptions={[]}
       eventOptions={[]}
       hasEvents={false}
+      subscriptionOptions={[]}
       filtersActive={false}
       onClearAll={vi.fn()}
       visibleCount={2}

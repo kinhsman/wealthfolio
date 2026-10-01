@@ -38,6 +38,28 @@ describe("bank lines", () => {
     expect(r.net?.byCurrency).toEqual([{ currency: "USD", amount: -274.2 }]);
     expect(server.mock.calls[0][0].search).toBeUndefined();
   });
+
+  it("the Subscription filter keeps only the listed entries, never sends them to the server", async () => {
+    global.fetch = vi.fn(async () => new Response(JSON.stringify({ ids: [] }))) as typeof fetch;
+    const all = [row("a", "Youtube", -25), row("b", "Costco", -50), row("c", "Google Youtube", -29), row("d", "Aldi", -5)];
+    const server = vi.fn(async (r: CashActivitySearchRequest) => {
+      const hits = all.filter((a) => !r.search || (a.notes ?? "").toLowerCase().includes(r.search));
+      return { items: hits.slice(r.offset ?? 0, (r.offset ?? 0) + (r.limit ?? 50)), totalCount: hits.length, baseCurrency: "USD" };
+    });
+    const r = await searchWithBankFields({ activityIds: ["a", "c"], offset: 0, limit: 50 }, server);
+    expect(r.items.map((a) => a.id)).toEqual(["a", "c"]);
+    expect(r.totalCount).toBe(2);
+    expect(r.net?.byCurrency).toEqual([{ currency: "USD", amount: -54 }]);
+    expect(server.mock.calls.every(([q]) => !("activityIds" in q))).toBe(true);
+    // With words too, both must match; the server still narrows by the words.
+    const both = await searchWithBankFields({ activityIds: ["a", "c"], search: "google", offset: 0, limit: 50 }, server);
+    expect(both.items.map((a) => a.id)).toEqual(["c"]);
+    // A subscription with no charges lists none, without asking the server.
+    server.mockClear();
+    const none = await searchWithBankFields({ activityIds: [], offset: 0, limit: 50 }, server);
+    expect(none.totalCount).toBe(0);
+    expect(server).not.toHaveBeenCalled();
+  });
 });
 
 describe("bank words with the owner's note", () => {

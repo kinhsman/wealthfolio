@@ -90,6 +90,7 @@ import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { invalidateSpendingCaches } from "../lib/invalidation";
 import { offerRule } from "../lib/rule-offer";
 import { askWhichOne } from "../lib/track-charge";
+import { subscriptionCharges, subscriptionFilterOptions, useSubscriptions } from "../lib/subscriptions";
 import type {
   CashActivitySearchRequest,
   CashActivityStatusFilter,
@@ -125,6 +126,18 @@ function parseLocalDate(value: string): Date | undefined {
   if (!y || !m || !d) return undefined;
   return new Date(y, m - 1, d);
 }
+
+/** A YYYY-MM-DD day moved by some days, as the start of that local day (the date picker's way). */
+function dayEdge(day: string, days: number): string | undefined {
+  const d = parseLocalDate(day);
+  if (!d) return undefined;
+  d.setDate(d.getDate() + days);
+  return d.toISOString();
+}
+
+/** The later and the earlier of two optional instants (both `toISOString`, so they sort as text). */
+const later = (a?: string, b?: string) => (a && b ? (a > b ? a : b) : (a ?? b));
+const earlier = (a?: string, b?: string) => (a && b ? (a < b ? a : b) : (a ?? b));
 
 function parseSetParam(value: string | null): Set<string> {
   return new Set(value ? value.split(",").filter(Boolean) : []);
@@ -225,6 +238,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
     const urlAccount = searchParams.get("account");
     const urlAccounts = searchParams.get("accounts") ?? urlAccount;
     const urlEvents = searchParams.get("events");
+    const urlSubscriptions = searchParams.get("subscriptions");
     const urlSearchQuery = searchParams.get("q");
     const urlAmountMin = searchParams.get("amountMin");
     const urlAmountMax = searchParams.get("amountMax");
@@ -270,6 +284,9 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
     const [selectedEvents, setSelectedEvents] = useState<Set<string>>(() =>
       parseSetParam(urlEvents),
     );
+    const [selectedSubscriptions, setSelectedSubscriptions] = useState<Set<string>>(() =>
+      parseSetParam(urlSubscriptions),
+    );
     const [amountRange, setAmountRange] = useState<AmountRange>(() =>
       parseAmountRange(urlAmountMin, urlAmountMax),
     );
@@ -307,6 +324,10 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
         const next = parseSetParam(urlEvents);
         return setsEqual(prev, next) ? prev : next;
       });
+      setSelectedSubscriptions((prev) => {
+        const next = parseSetParam(urlSubscriptions);
+        return setsEqual(prev, next) ? prev : next;
+      });
       setAmountRange((prev) => {
         const next = parseAmountRange(urlAmountMin, urlAmountMax);
         return sameAmountRange(prev, next) ? prev : next;
@@ -326,6 +347,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       urlStartDate,
       urlStatus,
       urlSubcategoryId,
+      urlSubscriptions,
       urlTypes,
     ]);
 
@@ -354,6 +376,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       setSet("category", selectedCategories);
       setSet("subcategory", selectedSubcategories);
       setSet("events", selectedEvents);
+      setSet("subscriptions", selectedSubscriptions);
       setOrDelete("q", searchInputRef.current || null);
       setOrDelete("amountMin", amountRange.min != null ? String(amountRange.min) : null);
       setOrDelete("amountMax", amountRange.max != null ? String(amountRange.max) : null);
@@ -371,6 +394,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       selectedCategories,
       selectedSubcategories,
       selectedEvents,
+      selectedSubscriptions,
       debouncedSearch,
       amountRange,
       dateRange,
@@ -471,7 +495,28 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       return [...out].sort();
     }, [selectedCategories, allCategories]);
 
+    // money-hub patch: the Subscription filter (owner, 2026-10-01), exactly the charges in the chosen
+    // subscriptions. `undefined` while their list loads, so the search waits instead of showing all.
+    const subscriptions = useSubscriptions();
+    const subscriptionFilter = useMemo(() => {
+      if (selectedSubscriptions.size === 0) return null;
+      if (subscriptions.data) return subscriptionCharges(subscriptions.data.items, selectedSubscriptions);
+      return subscriptions.isError ? { ids: [], from: null, to: null } : undefined;
+    }, [selectedSubscriptions, subscriptions.data, subscriptions.isError]);
+
     const searchRequest: Omit<CashActivitySearchRequest, "offset" | "limit"> = useMemo(() => {
+      // The server reads only the days the chosen charges span (a day either side), and the
+      // browser keeps the charges themselves (lib/bank-lines.ts).
+      const chargesFrom = subscriptionFilter?.from ? dayEdge(subscriptionFilter.from, -1) : undefined;
+      const chargesTo = subscriptionFilter?.to ? dayEdge(subscriptionFilter.to, 2) : undefined;
+      const pickedFrom = dateRange?.from ? dateRange.from.toISOString() : undefined;
+      const pickedTo = dateRange?.to
+        ? (() => {
+            const end = new Date(dateRange.to);
+            end.setHours(23, 59, 59, 999);
+            return end.toISOString();
+          })()
+        : undefined;
       return {
         search: debouncedSearch || undefined,
         accountIds: stableArr(selectedAccounts),
@@ -480,16 +525,11 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
         subcategoryIds: stableArr(selectedSubcategories),
         eventIds: stableArr(selectedEvents),
         status: statusFilter,
-        startDate: dateRange?.from ? dateRange.from.toISOString() : undefined,
-        endDate: dateRange?.to
-          ? (() => {
-              const end = new Date(dateRange.to);
-              end.setHours(23, 59, 59, 999);
-              return end.toISOString();
-            })()
-          : undefined,
+        startDate: later(pickedFrom, chargesFrom),
+        endDate: earlier(pickedTo, chargesTo),
         minAmount: amountRange.min ?? undefined,
         maxAmount: amountRange.max ?? undefined,
+        activityIds: subscriptionFilter?.ids,
         sortBy: "date",
         sortDir: "desc",
       };
@@ -503,6 +543,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       statusFilter,
       dateRange,
       amountRange,
+      subscriptionFilter,
     ]);
 
     const {
@@ -519,7 +560,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       hasNextPage,
       fetchNextPage,
       refetch,
-    } = useCashActivitySearch(searchRequest);
+    } = useCashActivitySearch(searchRequest, { enabled: subscriptionFilter !== undefined });
 
     const accountById = useMemo(() => {
       const m = new Map<string, Account>();
@@ -537,6 +578,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
         selectedCategories.size > 0 ||
         selectedSubcategories.size > 0 ||
         selectedEvents.size > 0 ||
+        selectedSubscriptions.size > 0 ||
         amountRange.min != null ||
         amountRange.max != null ||
         !!dateRange?.from ||
@@ -558,6 +600,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       selectedCategories,
       selectedSubcategories,
       selectedEvents,
+      selectedSubscriptions,
       amountRange,
       dateRange,
       selectedAccounts,
@@ -616,6 +659,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       selectedCategories.size > 0 ||
       selectedSubcategories.size > 0 ||
       selectedEvents.size > 0 ||
+      selectedSubscriptions.size > 0 ||
       amountRange.min != null ||
       amountRange.max != null ||
       !!dateRange?.from ||
@@ -635,6 +679,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       setSelectedCategories(new Set());
       setSelectedSubcategories(new Set());
       setSelectedEvents(new Set());
+      setSelectedSubscriptions(new Set());
       setAmountRange({ min: null, max: null });
       setDateRange(undefined);
     }, []);
@@ -955,6 +1000,10 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       () => events.map((e) => ({ value: e.id, label: e.name })),
       [events],
     );
+    const subscriptionOptions = useMemo<FilterOption[]>(
+      () => subscriptionFilterOptions(subscriptions.data?.items ?? []),
+      [subscriptions.data],
+    );
 
     const handleCategoriesChange = useCallback(
       (next: Set<string>) => {
@@ -1185,6 +1234,9 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
           onSubcategoriesChange={setSelectedSubcategories}
           selectedEvents={selectedEvents}
           onEventsChange={setSelectedEvents}
+          selectedSubscriptions={selectedSubscriptions}
+          onSubscriptionsChange={setSelectedSubscriptions}
+          subscriptionOptions={subscriptionOptions}
           amountRange={amountRange}
           onAmountRangeChange={setAmountRange}
           accountOptions={accountOptions}

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { dueLabel, statusLabel, transactionsHref, upcoming, type Stream } from "@/features/spending/lib/subscriptions";
+import {
+  dueLabel,
+  statusLabel,
+  subscriptionCharges,
+  subscriptionFilterOptions,
+  transactionsHref,
+  upcoming,
+  type Stream,
+} from "@/features/spending/lib/subscriptions";
 
 const base: Stream = {
   key: "p:YOUTUBE PREMIUM", name: "Youtube Premium", logoUrl: null, useBank: false, merchantId: null, group: "subscriptions",
@@ -43,9 +51,26 @@ describe("subscriptions wording", () => {
     expect(upcoming(list).map((s) => s.key)).toEqual(["c", "b", "a"]);
     expect(upcoming(list, 5).map((s) => s.key)).toEqual(["c", "b", "a", "f"]);
   });
-  it("the transactions link searches the bank's own words, else the payee's first words", () => {
-    expect(transactionsHref(mk({ name: "City Sticker", search: "Ctychgo" }))).toBe("/activities?tab=spending&q=Ctychgo");
-    expect(transactionsHref(base)).toBe("/activities?tab=spending&q=Youtube%20Premium");
-    expect(transactionsHref(mk({ name: "Rose Pest Solutions Il", last: null }))).toBe("/activities?tab=spending&q=Rose%20Pest%20Solutions%20Il");
+  it("the transactions link turns on the Subscription filter, never a word search", () => {
+    expect(transactionsHref(base)).toBe("/activities?tab=spending&subscriptions=p%3AYOUTUBE%20PREMIUM");
+    expect(transactionsHref(mk({ key: "manual:abc" }))).toBe("/activities?tab=spending&subscriptions=manual%3Aabc");
+  });
+  it("the filter's choices: every one with charges, by name, how many; escrow bills left out", () => {
+    const ch = (id: string, date: string) => ({ id, date, amount: 10 });
+    const list = [
+      mk({ key: "y", name: "Youtube", charges: [ch("1", "2026-01-01"), ch("2", "2026-02-01")] }),
+      mk({ key: "a1", name: "Apple", everyLabel: "every month", charges: [ch("3", "2026-01-05")] }),
+      mk({ key: "a2", name: "Apple", everyLabel: "every year", charges: [ch("4", "2025-06-01")] }),
+      mk({ key: "none", name: "Gym", charges: [] }),
+      mk({ key: "esc", name: "Property tax", charges: [ch("5", "2026-01-01")], escrow: {} as Stream["escrow"] }),
+    ];
+    expect(subscriptionFilterOptions(list)).toEqual([
+      { value: "a1", label: "Apple (every month)", count: 1 },
+      { value: "a2", label: "Apple (every year)", count: 1 },
+      { value: "y", label: "Youtube", count: 2 },
+    ]);
+    // Every charge of the chosen ones, whatever words found them, and the days they span.
+    expect(subscriptionCharges(list, new Set(["y", "a2", "gone"]))).toEqual({ ids: ["1", "2", "4"], from: "2025-06-01", to: "2026-02-01" });
+    expect(subscriptionCharges(list, new Set(["gone"]))).toEqual({ ids: [], from: null, to: null });
   });
 });

@@ -59,6 +59,9 @@ export interface CashActivitySearchRequest {
   endDate?: string;
   minAmount?: number;
   maxAmount?: number;
+  /** money-hub patch: only these entries (the Subscription filter). Kept in the browser, never sent
+   *  to the server (lib/bank-lines.ts searchWithBankFields); an empty list matches nothing. */
+  activityIds?: string[];
   sortBy?: CashActivitySortField;
   sortDir?: CashActivitySortDirection;
   offset?: number;

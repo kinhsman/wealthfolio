@@ -290,14 +290,44 @@ export function dueLabel(s: Pick<Stream, "status" | "dueInDays" | "next" | "last
 export const rentalSettingsHref = (e: Pick<EscrowInfo, "rentalId">) =>
   `/addons/rental-tracker?rental=${encodeURIComponent(e.rentalId)}&tab=settings`;
 
-/** The transactions list filtered to this stream's charges: by the words in the bank's text (owner,
- *  10-01: City Sticker's link searched its name, the bank says CTYCHGO), else by its name. */
-export function transactionsHref(s: Pick<Stream, "name" | "last" | "search">): string {
-  const q = s.search || (s.last ? payeeSearch(s.name) : s.name);
-  return `/activities?tab=spending&q=${encodeURIComponent(q)}`;
+/** The transactions list with its Subscription filter on: exactly the charges in it (owner, 10-01: a
+ *  word search missed the charges of one with several words or rules). */
+export function transactionsHref(s: Pick<Stream, "key">): string {
+  return `/activities?tab=spending&subscriptions=${encodeURIComponent(s.key)}`;
 }
-/** The first word of the name is what the bank text has in common ("Youtube" for "Youtube Premium Ca"). */
-const payeeSearch = (name: string) => name.split(/\s+/).slice(0, 2).join(" ");
+
+/** The Subscription filter's choices on the transactions list: every one with charges, by name, with
+ *  how many it has. Bills paid from the mortgage escrow have none of their own. */
+export function subscriptionFilterOptions(items: Stream[]): { value: string; label: string; count: number }[] {
+  const listed = items.filter((s) => !s.escrow && (s.charges?.length ?? 0) > 0);
+  const names = new Map<string, number>();
+  for (const s of listed) names.set(s.name, (names.get(s.name) ?? 0) + 1);
+  return listed
+    .map((s) => ({
+      value: s.key,
+      // Two with one name (two Apple charges) tell themselves apart by how often they come.
+      label: (names.get(s.name) ?? 0) > 1 ? `${s.name} (${s.everyLabel})` : s.name,
+      count: s.charges?.length ?? 0,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** The charges of the chosen subscriptions, for the transactions list. One no longer found has none. */
+export function subscriptionCharges(items: Stream[], keys: Set<string>): { ids: string[]; from: string | null; to: string | null } {
+  const ids = new Set<string>();
+  let from: string | null = null;
+  let to: string | null = null;
+  for (const s of items) {
+    if (!keys.has(s.key)) continue;
+    for (const c of s.charges ?? []) {
+      ids.add(c.id);
+      const d = c.date.slice(0, 10);
+      if (!from || d < from) from = d;
+      if (!to || d > to) to = d;
+    }
+  }
+  return { ids: [...ids].sort(), from, to };
+}
 
 /** The live streams nearest their next charge, for the dashboard card. */
 export function upcoming(items: Stream[], limit = 3): Stream[] {

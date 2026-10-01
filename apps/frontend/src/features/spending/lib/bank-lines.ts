@@ -81,21 +81,28 @@ const PAGE = 1000; // the server's own cap per request
 let full: { key: string; at: number; items: CashActivity[]; baseCurrency?: string | null } | null = null;
 
 /**
- * A search over the payee AND every bank field. Without bank matches it is the server's own search,
- * untouched. With them, every row the other filters keep is read (pages of 1,000; reused for the
- * later pages of the same search for a minute) and narrowed here.
+ * A search over the payee AND every bank field, and the Subscription filter (owner, 2026-10-01: only
+ * the charges in the chosen subscriptions, `activityIds`; the server has no such filter and we do not
+ * rebuild it). Without bank matches or `activityIds` it is the server's own search, untouched. With
+ * them, every row the other filters keep is read (pages of 1,000; reused for the later pages of the
+ * same search for a minute) and narrowed here.
  */
 export async function searchWithBankFields(
   request: CashActivitySearchRequest,
   serverSearch: (r: CashActivitySearchRequest) => Promise<CashActivitySearchResponse>,
 ): Promise<CashActivitySearchResponse> {
-  const needle = request.search?.trim().toLowerCase();
-  if (!needle) return serverSearch(request);
-  const hits = await bankHits(needle);
-  if (!hits.size) return serverSearch(request);
+  const { offset = 0, limit = 50, activityIds, search, ...others } = request;
+  const needle = search?.trim().toLowerCase();
+  const hits = needle ? await bankHits(needle) : new Set<string>();
+  if (!activityIds && !hits.size) return serverSearch(request);
+  if (activityIds?.length === 0) {
+    return { items: [], totalCount: 0, net: offset === 0 ? { byCurrency: [], converted: null } : null };
+  }
 
-  const { offset = 0, limit = 50, search: _search, ...filters } = request;
-  const key = JSON.stringify({ ...filters, needle });
+  // Without bank matches the server still narrows by the payee words.
+  const filters = hits.size ? others : { ...others, search };
+  const only = activityIds ? new Set(activityIds) : null;
+  const key = JSON.stringify({ ...filters, needle, activityIds });
   if (!full || full.key !== key || offset === 0 || Date.now() - full.at > 60_000) {
     const items: CashActivity[] = [];
     let baseCurrency: string | null | undefined;
@@ -105,7 +112,12 @@ export async function searchWithBankFields(
       items.push(...r.items);
       if (!r.items.length || items.length >= r.totalCount) break;
     }
-    full = { key, at: Date.now(), baseCurrency, items: items.filter((a) => (a.notes ?? "").toLowerCase().includes(needle) || hits.has(a.id)) };
+    const kept = items.filter(
+      (a) =>
+        (!only || only.has(a.id)) &&
+        (!hits.size || (a.notes ?? "").toLowerCase().includes(needle!) || hits.has(a.id)),
+    );
+    full = { key, at: Date.now(), baseCurrency, items: kept };
   }
   const net = offset === 0 ? netOf(full.items) : null;
   if (net?.converted) net.converted.currency = full.baseCurrency ?? "";

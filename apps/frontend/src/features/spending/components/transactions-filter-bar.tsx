@@ -28,6 +28,7 @@ import type { CashActivityStatusFilter } from "../types/cash-activity";
 export interface FilterOption {
   value: string;
   label: string;
+  count?: number;
 }
 
 /**
@@ -117,6 +118,9 @@ interface TransactionsFilterBarProps {
   onSubcategoriesChange: (next: Set<string>) => void;
   selectedEvents: Set<string>;
   onEventsChange: (next: Set<string>) => void;
+  /** money-hub patch: the Subscription filter, exactly the charges in the chosen ones. */
+  selectedSubscriptions: Set<string>;
+  onSubscriptionsChange: (next: Set<string>) => void;
   amountRange: AmountRange;
   onAmountRangeChange: (next: AmountRange) => void;
 
@@ -127,6 +131,7 @@ interface TransactionsFilterBarProps {
   subcategoryOptions: FilterOption[];
   eventOptions: FilterOption[];
   hasEvents: boolean;
+  subscriptionOptions: FilterOption[];
 
   // Status
   filtersActive: boolean;
@@ -160,6 +165,8 @@ export function TransactionsFilterBar({
   onSubcategoriesChange,
   selectedEvents,
   onEventsChange,
+  selectedSubscriptions,
+  onSubscriptionsChange,
   amountRange,
   onAmountRangeChange,
   accountOptions,
@@ -168,6 +175,7 @@ export function TransactionsFilterBar({
   subcategoryOptions,
   eventOptions,
   hasEvents,
+  subscriptionOptions,
   filtersActive,
   onClearAll,
   visibleCount,
@@ -191,6 +199,7 @@ export function TransactionsFilterBar({
     selectedCategories.size > 0 ||
     selectedSubcategories.size > 0 ||
     selectedEvents.size > 0 ||
+    selectedSubscriptions.size > 0 ||
     amountRange.min != null ||
     amountRange.max != null ||
     !!dateRange?.from ||
@@ -247,6 +256,15 @@ export function TransactionsFilterBar({
           options={eventOptions}
           selectedValues={selectedEvents}
           onFilterChange={onEventsChange}
+        />
+      )}
+      {(subscriptionOptions.length > 0 || selectedSubscriptions.size > 0) && (
+        <FacetedFilter
+          title="Subscription"
+          options={subscriptionOptions}
+          selectedValues={selectedSubscriptions}
+          onFilterChange={onSubscriptionsChange}
+          contentClassName="w-[280px]"
         />
       )}
     </>
