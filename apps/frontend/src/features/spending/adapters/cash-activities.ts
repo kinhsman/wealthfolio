@@ -1,6 +1,8 @@
 import { invoke, logger } from "#platform";
 import type { Activity } from "@/lib/types";
 
+import { searchWithBankFields } from "../lib/bank-lines";
+
 import type {
   ActivityTaxonomyAssignment,
   ActivitySplit,
@@ -24,7 +26,10 @@ export const searchCashActivities = async (
   request: CashActivitySearchRequest,
 ): Promise<CashActivitySearchResponse> => {
   try {
-    return await invoke<CashActivitySearchResponse>("search_cash_activities", { request });
+    // money-hub patch: the search also reads every bank field (lib/bank-lines.ts).
+    return await searchWithBankFields(request, (r) =>
+      invoke<CashActivitySearchResponse>("search_cash_activities", { request: r }),
+    );
   } catch (error) {
     logger.error("Error searching cash activities.");
     throw error;

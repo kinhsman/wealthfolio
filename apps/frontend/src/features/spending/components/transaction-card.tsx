@@ -17,6 +17,7 @@ import { ActionPalette } from "@/components/action-palette";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
 import { SelectionCheckbox } from "./selection-checkbox";
 import { QuickEventPopover } from "./quick-event-popover";
+import { bankLineFor, useBankLines } from "../lib/bank-lines";
 import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
@@ -80,6 +81,8 @@ function TransactionCardImpl({
   const { t } = useTranslation();
   const a = row.activity;
   const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a));
+  const { data: bankLines } = useBankLines();
+  const bankLine = bankLineFor(bankLines, a);
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,
@@ -157,6 +160,11 @@ function TransactionCardImpl({
               <PrivacyAmount value={Math.abs(safeAmount)} currency={a.currency} />
             </span>
           </div>
+
+          {/* money-hub patch: the bank's own line under the payee (lib/bank-lines.ts). */}
+          {bankLine ? (
+            <div className="text-muted-foreground mt-0.5 truncate text-[11px]">{bankLine}</div>
+          ) : null}
 
           {/* Everything secondary shares one line: the day heading above owns
               the date, and the category sits inline the way the table row shows

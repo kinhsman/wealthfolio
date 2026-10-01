@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 
 import type { Account } from "@/lib/types";
 import { TruncatedText } from "@/components/truncated-text";
+
+import { bankLineFor, useBankLines } from "../lib/bank-lines";
 import { HOVER_SLOT } from "@/lib/hover-slot";
 import { cn } from "@/lib/utils";
 import {
@@ -89,6 +91,8 @@ function TransactionRowImpl({
   const { t } = useTranslation();
   const a = row.activity;
   const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a));
+  const { data: bankLines } = useBankLines();
+  const bankLine = bankLineFor(bankLines, a);
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,
@@ -148,10 +152,12 @@ function TransactionRowImpl({
           {/* money-hub patch: the owner's merchant logo (lib/merchants.ts). */}
           {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} /> : null}
           {a.notes != null ? (
-            <TruncatedText text={a.notes} className="text-sm" />
+            <TruncatedText text={a.notes} className={cn("text-sm", bankLine && "max-w-[50%] shrink-0")} />
           ) : (
             <span className="text-muted-foreground text-sm italic">—</span>
           )}
+          {/* money-hub patch: the bank's own line after the payee (lib/bank-lines.ts). */}
+          {bankLine ? <TruncatedText text={bankLine} className="text-muted-foreground flex-1 text-xs" /> : null}
           {showAccount && (
             <span className="text-muted-foreground max-w-[8rem] shrink-0 truncate text-xs">
               {accountName}
