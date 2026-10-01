@@ -73,6 +73,26 @@ export interface Stream {
   rules?: { id: string; name: string; categoryId: string }[];
   /** The owner's merchant words that bring its charges here (Settings, Spending, Merchants). */
   merchantWords?: { id: string; name: string; words: string[] } | null;
+  /** Paid from a mortgage's escrow (home insurance, property tax), from the Rental page: already in
+   *  the mortgage payment, so the totals leave it out (owner, 10-01). */
+  escrow?: EscrowInfo;
+}
+
+export interface EscrowInfo {
+  /** The rental it belongs to (its Rental page: /addons/rental-tracker?rental=<id>). */
+  rentalId: string;
+  part: "insurance" | "tax";
+  /** The company the owner picked for it (its logo is the stream's). */
+  company: string | null;
+  /** The mortgage payment it is part of, on this list. */
+  mortgageKey: string | null;
+  mortgageName: string | null;
+  /** What escrow paid each year, from the Form 1098s, newest first. */
+  years: { year: number; amount: number }[];
+  /** What each mortgage payment puts aside for it now. */
+  monthlyNow: number | null;
+  /** That amount is a guess from a statement, not the lender's figure. */
+  estimated: boolean;
 }
 
 export interface SharedCharge {
@@ -116,7 +136,8 @@ export interface ExcludedCharge {
 export interface SubscriptionsView {
   items: Stream[];
   hidden: Stream[];
-  totals: { monthly: number; yearly: number; count: number; subscriptionsMonthly: number; billsMonthly: number };
+  /** Escrow's bills are left out of these (they are in the mortgage); `inMortgageMonthly` is what they come to. */
+  totals: { monthly: number; yearly: number; count: number; subscriptionsMonthly: number; billsMonthly: number; inMortgageMonthly?: number };
   manual: ManualEntry[];
   /** Taken out by hand from a subscription that is gone since: put back from the page. */
   leftOut?: (ExcludedCharge & { key: string })[];
@@ -134,6 +155,8 @@ export interface ManualInput {
   every: Every;
   nextDate?: string | null;
   group: StreamGroup;
+  /** The company whose logo it shows (a bill with no charge to find one from). */
+  merchantId?: string | null;
   /** Charges that are its own whatever their words (the one it was made from). */
   linkIds?: string[];
 }
@@ -166,7 +189,12 @@ export const subscriptionsApi = {
   update: (
     key: string,
     patch: Partial<
-      Pick<Stream, "hidden" | "confirmed" | "group" | "name" | "reminder" | "remindBefore"> & { nextDate: string | null; every: Every | null }
+      Pick<Stream, "hidden" | "confirmed" | "group" | "name" | "reminder" | "remindBefore"> & {
+        nextDate: string | null;
+        every: Every | null;
+        /** The company whose logo it shows (escrow's bills: no charge to find one from). */
+        merchantId: string | null;
+      }
     >,
   ) =>
     call<SubscriptionsView>("PUT", `/entries/${encodeURIComponent(key)}`, patch),
@@ -249,6 +277,10 @@ export function dueLabel(s: Pick<Stream, "status" | "dueInDays" | "next" | "last
   if (s.dueInDays === -1) return `Was due yesterday, ${date}`;
   return `Was due ${date}, ${-s.dueInDays} days ago`;
 }
+
+/** Its Rental page's Settings, where its 1098 years and escrow are kept. */
+export const rentalSettingsHref = (e: Pick<EscrowInfo, "rentalId">) =>
+  `/addons/rental-tracker?rental=${encodeURIComponent(e.rentalId)}&tab=settings`;
 
 /** The transactions list filtered to this stream's charges: by the words in the bank's text (owner,
  *  10-01: City Sticker's link searched its name, the bank says CTYCHGO), else by its name. */

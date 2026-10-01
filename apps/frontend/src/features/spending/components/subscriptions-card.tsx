@@ -59,7 +59,7 @@ export function SubscriptionsCard({ currency = "USD" }: { currency?: string }) {
               {next.map((s) => (
                 <Link
                   key={s.key}
-                  to={transactionsHref(s)}
+                  to={s.escrow ? "/spending/subscriptions" : transactionsHref(s)}
                   className="hover:bg-muted/40 flex items-center gap-2.5 rounded-md py-1.5 transition-colors"
                 >
                   <StreamLogo s={s} className="h-6 w-6 text-[10px]" />

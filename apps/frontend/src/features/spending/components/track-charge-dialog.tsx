@@ -102,7 +102,7 @@ function TrackChargeDialog({ charge, onClose }: { charge: TrackCharge; onClose: 
         {settled ? (
           <Choose
             charge={charge}
-            items={list.data?.items ?? []}
+            items={(list.data?.items ?? []).filter((s) => !s.escrow)}
             listError={list.isError ? errorText(list.error) : null}
             w={which.data ?? null}
             currency={currency}

@@ -27,7 +27,16 @@ import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
 import { searchCashActivities } from "../adapters/cash-activities";
 
-import { matchLength, merchantsApi, useMerchantFor, useSetMerchants, wordsOf, type MerchantDraft } from "../lib/merchants";
+import {
+  matchLength,
+  merchantsApi,
+  useMerchantFor,
+  useMerchants,
+  useSetMerchants,
+  wordsOf,
+  type Merchant,
+  type MerchantDraft,
+} from "../lib/merchants";
 import { KeywordChips, withTyped } from "./keyword-chips";
 import { bankWordsFor, useBankLines } from "../lib/bank-lines";
 import { useNotes } from "../lib/notes";
@@ -90,8 +99,18 @@ export function MerchantShortcut({
   );
 }
 
-export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClose: () => void }) {
+export function MerchantDialog({
+  draft,
+  onClose,
+  onSaved,
+}: {
+  draft: MerchantDraft;
+  onClose: () => void;
+  /** The merchant as saved (a new one with its id), for what opened the window to pick it. */
+  onSaved?: (m: Merchant) => void;
+}) {
   const setMerchants = useSetMerchants();
+  const { data: known } = useMerchants();
   const editing = draft.merchant;
   const [name, setName] = useState(editing?.name ?? draft.name ?? "");
   const [words, setWords] = useState<string[]>(editing ? wordsOf(editing) : draft.pattern ? [draft.pattern] : []);
@@ -204,6 +223,9 @@ export function MerchantDialog({ draft, onClose }: { draft: MerchantDraft; onClo
         ? await merchantsApi.update(editing.id, { ...fields, logo: file })
         : await merchantsApi.create({ ...fields, logo: file });
       setMerchants(list);
+      const had = new Set((known ?? []).map((m) => m.id));
+      const saved = editing ? list.find((m) => m.id === editing.id) : list.find((m) => !had.has(m.id) && m.name === fields.name);
+      if (saved) onSaved?.(saved);
       toast.success(
         editing
           ? `${fields.name} saved.`

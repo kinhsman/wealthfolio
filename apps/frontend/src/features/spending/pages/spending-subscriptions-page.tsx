@@ -33,12 +33,14 @@ import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { useAccounts } from "@/hooks/use-accounts";
 import { cn } from "@/lib/utils";
 
+import { CompanyButton, CompanyPicker } from "../components/company-picker";
 import { StreamLogo } from "../components/stream-logo";
 import { ruleOfferStore } from "../lib/rule-offer";
 import {
   EVERY_LABELS,
   SUBSCRIPTIONS_KEY,
   dueLabel,
+  rentalSettingsHref,
   statusLabel,
   subscriptionsApi,
   transactionsHref,
@@ -170,12 +172,24 @@ export default function SpendingSubscriptionsPage() {
             {groups.map((g) => {
               const rows = live.filter((s) => s.group === g.group);
               if (!rows.length) return null;
+              // Paid from a mortgage's escrow: shown, but counted once, in the mortgage payment.
+              const inMortgage = rows.filter((s) => s.escrow);
+              const lenders = [...new Set(inMortgage.map((s) => s.escrow?.mortgageName).filter(Boolean))];
               return (
-                <Section key={g.group} title={g.title} blurb={g.blurb} aside={<><PrivacyAmount value={g.monthly} currency={currency} /> a month</>}>
-                  {rows.map((s) => (
-                    <StreamRow key={s.key} s={s} {...rowProps} />
-                  ))}
-                </Section>
+                <div key={g.group} className="space-y-2">
+                  <Section title={g.title} blurb={g.blurb} aside={<><PrivacyAmount value={g.monthly} currency={currency} /> a month</>}>
+                    {rows.map((s) => (
+                      <StreamRow key={s.key} s={s} {...rowProps} />
+                    ))}
+                  </Section>
+                  {inMortgage.length ? (
+                    <p className="text-muted-foreground text-xs leading-snug">
+                      {inMortgage.map((s) => s.name).join(" and ")} {inMortgage.length === 1 ? "is" : "are"} paid from your{" "}
+                      {lenders.length === 1 ? `${lenders[0]} ` : ""}mortgage escrow, so the totals count{" "}
+                      {inMortgage.length === 1 ? "it" : "them"} once, in the mortgage payment.
+                    </p>
+                  ) : null}
+                </div>
               );
             })}
 
@@ -324,9 +338,14 @@ function StreamRow({
         <StreamLogo s={s} className="h-9 w-9 text-sm" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <Link to={transactionsHref(s)} onClick={(e) => e.stopPropagation()} className="text-sm font-medium underline-offset-4 hover:underline">
-              {s.name}
-            </Link>
+            {s.escrow ? (
+              // No bank charge names it: nothing to list in the transactions.
+              <span className="text-sm font-medium">{s.name}</span>
+            ) : (
+              <Link to={transactionsHref(s)} onClick={(e) => e.stopPropagation()} className="text-sm font-medium underline-offset-4 hover:underline">
+                {s.name}
+              </Link>
+            )}
             {/* A reminder is on (owner, 10-01: "show a notification bell next to a subscription whenever a reminder is turned on"). */}
             {s.remindBefore || (s.reminder && s.reminder >= new Date().toISOString().slice(0, 10)) ? (
               <span
@@ -339,6 +358,14 @@ function StreamRow({
             {s.shared ? (
               <span className="bg-primary/10 text-primary shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium">
                 {s.sharedOn ? "Your part" : "Shared in Owly"}
+              </span>
+            ) : null}
+            {s.escrow ? (
+              <span
+                title={s.escrow.mortgageName ? `Paid from your ${s.escrow.mortgageName} mortgage escrow` : "Paid from your mortgage escrow"}
+                className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
+              >
+                In mortgage
               </span>
             ) : null}
             {/* Active is a green circle with a check (owner, 10-01); Stopped a grey pause; the rest keep their words.
@@ -359,6 +386,7 @@ function StreamRow({
             )}
           </div>
           <div className="text-muted-foreground text-xs leading-snug">
+            {s.escrow?.company ? `${s.escrow.company} · ` : ""}
             {EVERY_LABELS[s.every]}
             {s.everySetByOwner ? " (your choice)" : ""} · {dueLabel(s)}
             {s.nextSetByOwner ? " (your date)" : ""}
@@ -367,7 +395,11 @@ function StreamRow({
               : s.reminder
                 ? ` · Reminder ${day(s.reminder)}`
                 : ""}
-            {s.count ? ` · ${s.count} charge${s.count === 1 ? "" : "s"}` : " · not charged yet"}
+            {s.escrow
+              ? ` · paid by ${s.escrow.mortgageName ?? "your lender"} from escrow`
+              : s.count
+                ? ` · ${s.count} charge${s.count === 1 ? "" : "s"}`
+                : " · not charged yet"}
           </div>
         </div>
         <div className="shrink-0 text-right">
@@ -443,6 +475,10 @@ function EditStreamDialog({
   const [words, setWords] = useState(manual ? manual.words.join(", ") : "");
   const [sharing, setSharing] = useState(false);
   const [confirmHide, setConfirmHide] = useState(false);
+  const escrow = s.escrow;
+  // The company whose logo it shows: for the ones no charge names (escrow's, hand-added).
+  const [company, setCompany] = useState<string | null>(manual ? manual.merchantId : escrow ? s.merchantId : null);
+  const [pickingCompany, setPickingCompany] = useState(false);
   const qc = useQueryClient();
   // Its charges, newest first, with the ones taken out by hand (unticked). A tick change is saved with
   // the rest (owner, 10-01: "see all linked transactions in the subscription and a check box to
@@ -471,16 +507,18 @@ function EditStreamDialog({
         every,
         nextDate: nextDate || null,
         group,
+        merchantId: company,
       }
     : null;
   // Changed against what the window opened with (its date may come from the charges, not the entry).
-  const [shown] = useState(() => JSON.stringify([name, words, amount, every, nextDate, group]));
-  const ownChanged = !!manual && JSON.stringify([name, words, amount, every, nextDate, group]) !== shown;
+  const [shown] = useState(() => JSON.stringify([name, words, amount, every, nextDate, group, company]));
+  const ownChanged = !!manual && JSON.stringify([name, words, amount, every, nextDate, group, company]) !== shown;
   if (!manual) {
     if (name.trim() && name.trim() !== s.name) patch.name = name.trim();
     if (group !== s.group) patch.group = group;
     if (every !== s.every) patch.every = every;
     if (nextDate && nextDate !== s.next) patch.nextDate = nextDate;
+    if (escrow && company !== s.merchantId) patch.merchantId = company;
   }
   if ((remind === "off" ? null : Number(remind)) !== (s.remindBefore ?? null)) patch.remindBefore = remind === "off" ? null : Number(remind);
   if (confirmed !== !!s.confirmed) patch.confirmed = confirmed;
@@ -533,7 +571,7 @@ function EditStreamDialog({
                 <DialogTitle className="truncate">{s.name}</DialogTitle>
                 <DialogDescription>
                   {EVERY_LABELS[s.every]} · {dueLabel(s)}
-                  {s.count ? ` · ${s.count} charge${s.count === 1 ? "" : "s"}` : ""}
+                  {escrow ? " · paid from escrow" : s.count ? ` · ${s.count} charge${s.count === 1 ? "" : "s"}` : ""}
                 </DialogDescription>
               </div>
             </div>
@@ -555,6 +593,11 @@ function EditStreamDialog({
                   </SelectContent>
                 </Select>
               </Field>
+              {escrow || manual ? (
+                <Field label="Company" foot={escrow ? "Your insurer or the one it is paid to: its logo shows here." : "Its logo shows here."}>
+                  <CompanyButton merchantId={company} disabled={busy} onClick={() => setPickingCompany(true)} />
+                </Field>
+              ) : null}
               {manual ? (
                 <>
                   <Field label="Amount" htmlFor="edit-amount">
@@ -566,7 +609,7 @@ function EditStreamDialog({
                 </>
               ) : null}
               <Field label="How often"
-                foot={manual ? "As you set it." : s.everySetByOwner ? (
+                foot={escrow ? "The year's cost is spread over it." : manual ? "As you set it." : s.everySetByOwner ? (
                   <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={busy}
                     onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { every: null }), "Back to what its charges show.").then(onClose)}>
                     Use what its charges show
@@ -583,13 +626,13 @@ function EditStreamDialog({
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Next charge" htmlFor="edit-next"
+              <Field label={escrow ? "Next date" : "Next charge"} htmlFor="edit-next"
                 foot={manual ? "For your records: no transaction is made." : s.nextSetByOwner ? (
                   <button type="button" className="hover:text-foreground underline-offset-4 hover:underline" disabled={busy}
-                    onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { nextDate: null }), "Back to the date from its charges.").then(onClose)}>
-                    Use the date from its charges
+                    onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { nextDate: null }), escrow ? "Back to the end of the year." : "Back to the date from its charges.").then(onClose)}>
+                    {escrow ? "Use the end of the year" : "Use the date from its charges"}
                   </button>
-                ) : "For your records: no transaction is made."}>
+                ) : escrow ? "Its renewal or due date, for your records and the reminder." : "For your records: no transaction is made."}>
                 <Input id="edit-next" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} disabled={s.status === "stopped" && !manual} />
               </Field>
               <Field label="Remind me" foot="On Discord and your phone, in the daytime.">
@@ -605,13 +648,18 @@ function EditStreamDialog({
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Looks right" foot="It really is a subscription or bill.">
-                <div className="flex h-9 items-center">
-                  <Switch checked={confirmed} onCheckedChange={setConfirmed} aria-label="Looks right" />
-                </div>
-              </Field>
+              {escrow ? null : (
+                <Field label="Looks right" foot="It really is a subscription or bill.">
+                  <div className="flex h-9 items-center">
+                    <Switch checked={confirmed} onCheckedChange={setConfirmed} aria-label="Looks right" />
+                  </div>
+                </Field>
+              )}
             </div>
 
+            {escrow ? <EscrowBox s={s} currency={currency} /> : null}
+
+            {escrow ? null : (
             <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
               <div className="min-w-0">
                 <div className="text-sm font-medium">Rules</div>
@@ -646,6 +694,7 @@ function EditStreamDialog({
                 Add a rule
               </Button>
             </div>
+            )}
 
             {charges.length ? (
               <div className="rounded-lg border">
@@ -736,19 +785,30 @@ function EditStreamDialog({
             ) : null}
           </div>
 
+          {pickingCompany ? (
+            <CompanyPicker
+              merchantId={company}
+              onPick={(m) => {
+                setCompany(m?.id ?? null);
+                setPickingCompany(false);
+              }}
+              onClose={() => setPickingCompany(false)}
+            />
+          ) : null}
+
           <DialogFooter className="gap-2 sm:justify-between">
             {confirmHide ? (
               <Button type="button" variant="destructive" disabled={busy}
                 onClick={() =>
                   manual
                     ? act(s.key, () => subscriptionsApi.removeManual(manual.id), `${s.name} removed.`).then(onClose)
-                    : act(s.key, () => subscriptionsApi.update(s.key, { hidden: true }), `${s.name} marked not a subscription.`).then(onClose)
+                    : act(s.key, () => subscriptionsApi.update(s.key, { hidden: true }), escrow ? `${s.name} hidden.` : `${s.name} marked not a subscription.`).then(onClose)
                 }>
-                {manual ? "Yes, remove it" : "Yes, not a subscription"}
+                {manual ? "Yes, remove it" : escrow ? "Yes, hide it" : "Yes, not a subscription"}
               </Button>
             ) : (
               <Button type="button" variant="ghost" className="text-destructive" disabled={busy} onClick={() => setConfirmHide(true)}>
-                {manual ? "Remove" : "Not a subscription"}
+                {manual ? "Remove" : escrow ? "Hide it" : "Not a subscription"}
               </Button>
             )}
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
@@ -779,6 +839,54 @@ function EditStreamDialog({
         />
       ) : null}
     </>
+  );
+}
+
+/** Where an escrow bill's figures come from: what each mortgage payment puts aside now, and what
+ *  escrow paid each year by the lender's Form 1098, as kept on the Rental page. */
+function EscrowBox({ s, currency }: { s: Stream; currency: string }) {
+  const e = s.escrow!;
+  const lender = e.mortgageName ?? "Your lender";
+  return (
+    <div className="rounded-lg border">
+      <div className="border-b px-3 py-2.5">
+        <div className="text-sm font-medium">Paid from the mortgage</div>
+        <div className="text-muted-foreground text-xs leading-snug">
+          {lender} pays it out of escrow, so no bank charge names it. It is part of each mortgage payment and counted there, not
+          again here.
+        </div>
+      </div>
+      <div className="divide-y">
+        {e.monthlyNow ? (
+          <div className="flex items-center gap-3 px-3 py-2">
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm">Each payment now</span>
+              <span className="text-muted-foreground block text-xs">{e.estimated ? "Estimate from a statement" : "Escrow"}</span>
+            </span>
+            <span className="shrink-0 text-sm tabular-nums">
+              <PrivacyAmount value={e.monthlyNow} currency={currency} />
+            </span>
+          </div>
+        ) : null}
+        {e.years.map((y) => (
+          <div key={y.year} className="flex items-center gap-3 px-3 py-2">
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm">{y.year}</span>
+              <span className="text-muted-foreground block text-xs">Paid in the year, Form 1098</span>
+            </span>
+            <span className="shrink-0 text-sm tabular-nums">
+              <PrivacyAmount value={y.amount} currency={currency} />
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="border-t px-3 py-2 text-xs">
+        <Link to={rentalSettingsHref(e)} className="text-foreground underline-offset-4 hover:underline">
+          Change on the Rental page
+        </Link>
+        <span className="text-muted-foreground"> · add each new 1098 there in January.</span>
+      </div>
+    </div>
   );
 }
 
