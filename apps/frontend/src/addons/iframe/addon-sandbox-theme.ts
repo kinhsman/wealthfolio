@@ -1,3 +1,5 @@
+import { readProfilePreference } from "@/hooks/use-persistent-state";
+
 export interface AddonThemeSnapshot {
   backgroundColor: string;
   colorScheme: string;
@@ -22,6 +24,18 @@ export function collectAddonThemeSnapshot(): AddonThemeSnapshot {
     if (propertyName.startsWith("--")) {
       cssVariables[propertyName] = rootStyle.getPropertyValue(propertyName).trim();
     }
+  }
+  // money-hub patch: the dashboard theme picked for each mode (Meadow or Bronze Titanium, Settings,
+  // Appearance) rides along, so an add-on (the Rental page) can wear it too (owner, 10-02).
+  for (const mode of ["light", "dark"] as const) {
+    let skin = "meadow";
+    try {
+      const raw = readProfilePreference(`dashboard-skin-${mode}`);
+      if (raw && JSON.parse(raw) === "bronze") skin = "bronze";
+    } catch {
+      // Browser storage can be unavailable: Meadow, the default.
+    }
+    cssVariables[`--mh-skin-${mode}`] = skin;
   }
 
   return {

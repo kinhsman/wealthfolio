@@ -1693,6 +1693,24 @@ summary {
   margin-top: 6px;
 }
 
+/* The Rental add-on runs in its own frame, which loads this same stylesheet: its stock cards become
+   Meadow cards there, glass in Bronze (owner, 10-02). */
+[data-mrental] .bg-card.shadow-xs.rounded-lg {
+  border-radius: 20px;
+  border-color: var(--m-line);
+  background: var(--m-surface);
+  box-shadow: none;
+}
+:is(.light [data-mrental][data-light-skin="bronze"], .dark [data-mrental][data-dark-skin="bronze"])
+  .bg-card.shadow-xs.rounded-lg {
+  background: linear-gradient(145deg, var(--bt-sheen) 0.6%, transparent 60%), var(--bt-glass);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid var(--bt-glass-line);
+  box-shadow: var(--bt-glass-edge);
+  border-radius: 14px;
+}
+
 /* A money figure on a fill (the Net tile) is data, not a button: in Bronze it sits on glass and reads green
    or red by its sign (owner, 10-02). */
 :is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
