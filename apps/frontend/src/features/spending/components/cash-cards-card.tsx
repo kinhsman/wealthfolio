@@ -3,7 +3,7 @@
 // reads the same two views as the Free cash and Credit cards cards (lib/free-cash.ts, lib/credit-cards.ts):
 // Free cash = your cash less what is already promised (card balance, the bills due soon, your cushion).
 // The bills themselves are listed once, in Subscriptions & bills (Next due); here only their total.
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { useAccounts } from "@/hooks/use-accounts";
@@ -146,18 +146,22 @@ export function CashCardsCard({
                   )
                 }
               >
-                {cc.cards.map((c) => {
-                  const account = accounts?.find((a) => a.id === c.wfAccountId);
-                  return (
-                    <CardRow
-                      key={c.id}
-                      c={c}
-                      name={cardName(c, account?.name)}
-                      logo={accountLogoUrl(account) ?? c.bankLogo}
-                      currency={currency}
-                    />
-                  );
-                })}
+                <FoldedCards
+                  cards={cc.cards}
+                  keep={Math.max(3, hasCash && fc ? fc.accounts.length : 0)}
+                  render={(c) => {
+                    const account = accounts?.find((a) => a.id === c.wfAccountId);
+                    return (
+                      <CardRow
+                        key={c.id}
+                        c={c}
+                        name={cardName(c, account?.name)}
+                        logo={accountLogoUrl(account) ?? c.bankLogo}
+                        currency={currency}
+                      />
+                    );
+                  }}
+                />
               </List>
             ) : null}
           </div>
@@ -319,6 +323,56 @@ function Legend({
       </Link>
     );
   return <div className="flex min-w-0 flex-col">{body}</div>;
+}
+
+// money-hub patch: the Cards list shows as many cards as the Cash list has accounts (at least 3) so the
+// two columns end level, and folds the rest behind a Show more row (owner, 10-02). A card that needs a
+// sign-in or is heavily used always stays in view, so a warning never hides behind the fold.
+function FoldedCards({
+  cards,
+  keep,
+  render,
+}: {
+  cards: CreditCard[];
+  keep: number;
+  render: (c: CreditCard) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const needsLook = (c: CreditCard) => {
+    const share = usedShare(c);
+    return c.needsLogin || (share != null && share >= HIGH_USE);
+  };
+  const shown = cards.filter((c, i) => i < keep || needsLook(c));
+  const folded = cards.filter((c) => !shown.includes(c));
+  return (
+    <>
+      {(open ? cards : shown).map(render)}
+      {folded.length > 0 ? (
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          className="flex min-h-9 items-center justify-between gap-2 rounded-xl px-2.5 text-left text-[12.5px] text-[var(--m-mint-ink)] hover:bg-[var(--m-mint-tile)]"
+        >
+          <span>
+            {open
+              ? "Show less"
+              : `Show ${folded.length} more ${folded.length === 1 ? "card" : "cards"}`}
+          </span>
+          <span
+            aria-hidden
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--m-mint-tile)]"
+          >
+            {open ? (
+              <Icons.ChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <Icons.ChevronDown className="h-3.5 w-3.5" />
+            )}
+          </span>
+        </button>
+      ) : null}
+    </>
+  );
 }
 
 function List({ title, children }: { title: ReactNode; children: ReactNode }) {
