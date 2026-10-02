@@ -14,9 +14,9 @@ import { Card, CardContent, CardHeader } from "@wealthfolio/ui/components/ui/car
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import { Suspense, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { NetWorthContent } from "../net-worth/net-worth-content";
+import { MeadowNetWorthTab } from "@/features/meadow-dash/net-worth-tab";
 import { DashboardActions } from "./dashboard-actions";
-import { DashboardContent } from "./dashboard-content";
+import { MeadowInvestmentsTab } from "@/features/meadow-dash/investments-tab";
 
 // Tab icons rendered as duotone Phosphor glyphs
 const InvestmentsTabIcon: Icon = (props) => <TrendUpIcon weight="duotone" {...props} />;
@@ -116,7 +116,8 @@ export default function PortfolioPage() {
         icon: InvestmentsTabIcon,
         content: (
           <Suspense fallback={<PageLoader />}>
-            <DashboardContent />
+            {/* money-hub patch: the Investments tab in the Spending dashboard's look (owner, 10-02) */}
+            <MeadowInvestmentsTab />
           </Suspense>
         ),
         actions: investmentActions,
@@ -127,7 +128,8 @@ export default function PortfolioPage() {
         icon: NetWorthTabIcon,
         content: (
           <Suspense fallback={<PageLoader />}>
-            <NetWorthContent />
+            {/* money-hub patch: the Net worth tab in the Spending dashboard's look (owner, 10-02) */}
+            <MeadowNetWorthTab />
           </Suspense>
         ),
         actions: netWorthActions,

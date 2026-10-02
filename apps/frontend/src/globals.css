@@ -1188,6 +1188,17 @@ summary {
   --m-seg-cards: var(--m-forest);
   --m-free: var(--m-forest-soft);
   --m-tint: 17%;
+  --m-cat-1: #3f6b4f;
+  --m-cat-2: #5f9381;
+  --m-cat-3: #3b7d8a;
+  --m-cat-4: #6f8c42;
+  --m-cat-5: #b47630;
+  --m-cat-6: #a8604a;
+  --m-cat-7: #9c8130;
+  --m-cat-8: #5d7891;
+  --m-cat-9: #8b7aa8;
+  --m-cat-10: #c27596;
+  --m-cat-11: #8f6a8a;
 
   --background: var(--m-page);
   --foreground: var(--m-ink);
@@ -1240,6 +1251,17 @@ summary {
   --m-cat-other: #4d4943;
   --m-bills: #5e8f80;
   --m-chart-2: #74b2c4;
+  --m-cat-1: #74a886;
+  --m-cat-2: #7fb4a2;
+  --m-cat-3: #74b2c4;
+  --m-cat-4: #a6c27a;
+  --m-cat-5: #d8a061;
+  --m-cat-6: #d98a76;
+  --m-cat-7: #d4b25a;
+  --m-cat-8: #8fa3cc;
+  --m-cat-9: #a996d0;
+  --m-cat-10: #cf97aa;
+  --m-cat-11: #bf97c4;
 }
 /* Meadow never goes bold: hierarchy comes from size and colour (owner rule). */
 .meadow :is(.font-semibold, .font-bold, .font-extrabold) {
@@ -1368,6 +1390,17 @@ summary {
   --m-seg-cards: #4356b0;
   --m-free: #7fb98e;
   --m-tint: 18%;
+  --m-cat-1: #9a6a10;
+  --m-cat-2: #2e7d72;
+  --m-cat-3: #3f5ba8;
+  --m-cat-4: #5e7a2a;
+  --m-cat-5: #a8562a;
+  --m-cat-6: #a8466a;
+  --m-cat-7: #6e52b0;
+  --m-cat-8: #4e6a85;
+  --m-cat-9: #7346a8;
+  --m-cat-10: #a8487a;
+  --m-cat-11: #7a5532;
   --bt-glass: rgba(255, 252, 248, 0.55);
   --bt-glass-line: rgba(255, 255, 255, 0.78);
   --bt-sheen: rgba(255, 255, 255, 0.6);
@@ -1452,6 +1485,17 @@ summary {
   --m-seg-cards: #9aa8f0;
   --m-free: #6fb383;
   --m-tint: 30%;
+  --m-cat-1: #e3b868;
+  --m-cat-2: #7fc4b8;
+  --m-cat-3: #8fa8e8;
+  --m-cat-4: #a9c77a;
+  --m-cat-5: #e39a6e;
+  --m-cat-6: #d98fa6;
+  --m-cat-7: #c9b4f0;
+  --m-cat-8: #9bb3c9;
+  --m-cat-9: #b79be0;
+  --m-cat-10: #e8a0b8;
+  --m-cat-11: #c7a57e;
   --bt-glass: rgba(46, 38, 35, 0.5);
   --bt-glass-line: rgba(237, 226, 214, 0.13);
   --bt-sheen: rgba(255, 240, 222, 0.16);
@@ -1597,6 +1641,33 @@ summary {
   background: linear-gradient(180deg, var(--bt-fill-top), var(--bt-fill-bottom));
   box-shadow: var(--bt-fill-shine);
   color: var(--m-on-forest);
+}
+
+/* The redesigned Investments and Net worth tabs reuse some stock cards: there, too, labels are sentence
+   case (Meadow), never small capitals. */
+[data-mdash] .uppercase {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Investments: the stock Accounts list inside one Meadow card, each account a tile (the canvas design). */
+[data-mdash] [data-acct] > div {
+  margin-bottom: 0;
+}
+[data-mdash] [data-acct] h2 {
+  font-size: 14px;
+  font-weight: 500;
+}
+[data-mdash] [data-acct] :is(.rounded-xl.border, .rounded-lg.border) {
+  border-color: transparent;
+  background: var(--m-tile);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-radius: 12px;
+}
+[data-mdash] [data-acct] .space-y-2 > :not(:first-child) {
+  margin-top: 6px;
 }
 
 /* A money figure on a fill (the Net tile) is data, not a button: in Bronze it sits on glass and reads green
