@@ -419,8 +419,8 @@ export function sumLines(e: TaxEstimate, year: number, setup: TaxSetup): SumLine
         r.held > 0
           ? "a loss this size cannot be used this year"
           : r.extra > 0
-            ? "rent less its share of the mortgage, and your depreciation"
-            : "rent less its share of the mortgage, no depreciation typed in",
+            ? "rent less its share of the mortgage and bills, and your depreciation"
+            : "rent less its share of the mortgage and bills, no depreciation",
     });
   }
   out.push({ label: "Income", value: e.income.total, total: true });

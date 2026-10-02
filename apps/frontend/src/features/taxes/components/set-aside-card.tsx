@@ -219,7 +219,7 @@ function SetupForm({
       {s.hasRental ? (
         <Field
           label={`Rental: depreciation and other costs for ${view.year} (optional)`}
-          hint="Rent, mortgage interest, property tax and insurance come from the Rental page. Depreciation is on last year's Schedule E."
+          hint="Rent, the mortgage and the Housing bills linked to the rental come from the Rental page. Type depreciation (last year's Schedule E) and costs paid outside the app."
         >
           <Money
             value={extra}
