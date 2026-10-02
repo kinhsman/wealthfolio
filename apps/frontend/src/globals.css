@@ -1650,6 +1650,12 @@ summary {
   letter-spacing: normal;
 }
 
+/* The redesigned pages' stock buttons (Add one, Add activities) take Meadow's forest, or Bronze's accent. */
+[data-mdash] {
+  --primary: var(--m-forest);
+  --primary-foreground: var(--m-on-forest);
+}
+
 /* Investments: the stock Accounts list inside one Meadow card, each account a tile (the canvas design). */
 [data-mdash] [data-acct] > div {
   margin-bottom: 0;

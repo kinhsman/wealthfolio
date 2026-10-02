@@ -38,10 +38,13 @@ import {
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
 import { useAccounts } from "@/hooks/use-accounts";
+import { useIsMobileViewport } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
 
 import { CompanyButton, CompanyPicker } from "../components/company-picker";
 import { BillMonthPanel } from "../components/bill-calendar";
+import { PhoneFold } from "../components/phone-fold";
+import { useDashboardSkins } from "../lib/dashboard-skin";
 import { StreamCategory, useStreamCategory } from "../components/stream-category";
 import { StreamLogo } from "../components/stream-logo";
 import { billMonth, ymd } from "../lib/bill-calendar";
@@ -66,14 +69,25 @@ import {
   type SubscriptionsView,
 } from "../lib/subscriptions";
 
-const TONE = {
-  fine: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  look: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  over: "bg-muted text-muted-foreground",
-} as const;
+// The page sits in the Spending dashboard's look (Meadow or Bronze, owner 10-02): good news green, things
+// to look at amber, the rest quiet.
+// On a phone a row's second line keeps its keywords (owner, 10-02: "keep only keywords"): how often and
+// when; the rest is in its Edit window.
+const EVERY_SHORT: Record<Every, string> = { month: "Monthly", quarter: "Every 3 mo", "half-year": "Every 6 mo", year: "Yearly" };
 
-/** Owly's amber (its logo), fixed: the dark theme turns amber utilities white. */
-const OWLY_AMBER = "#d9861a";
+function phoneDue(label: string) {
+  return label
+    .replace(/^(Due (today|tomorrow)),.*$/, "$1")
+    .replace(/, in \d+ days?$/, "")
+    .replace(/, \d+ days? ago$/, "")
+    .replace(/, \d{4}/, "");
+}
+
+const TONE = {
+  fine: "bg-[var(--m-good-soft)] text-[var(--m-up)]",
+  look: "bg-[var(--m-warn-soft)] text-[var(--m-warn)]",
+  over: "bg-[var(--m-tile)] text-[var(--m-muted)]",
+} as const;
 
 /** Owly's mark, the owl its app header draws (owly web/public/logo.svg). */
 function OwlyMark({ className }: { className?: string }) {
@@ -109,6 +123,7 @@ const errorText = (e: unknown) => (e as Error)?.message ?? String(e);
 
 export default function SpendingSubscriptionsPage() {
   const navigate = useNavigate();
+  const skins = useDashboardSkins();
   const { data, isLoading, isError, error } = useSubscriptions();
   const currency = data?.currency || "USD";
   const set = useSetSubscriptions();
@@ -145,6 +160,8 @@ export default function SpendingSubscriptionsPage() {
   const rowProps = { currency, busy, act };
 
   return (
+    // The Spending dashboard's look, Meadow or Bronze per mode (owner, 10-02: "redesign ... subs and bills").
+    <div className="meadow min-h-screen" data-mdash data-light-skin={skins.light} data-dark-skin={skins.dark}>
     <Page>
       {/* Its own title, not `heading`: a phone cut it to "Subscriptions & Bi…". A size smaller there, and on a
           very narrow screen it wraps instead (owner, 10-01: "the Bills title must be capital"). */}
@@ -183,38 +200,35 @@ export default function SpendingSubscriptionsPage() {
           <p className="text-destructive text-sm">{errorText(error)}</p>
         ) : !data ? null : (
           <>
-            {/* This month's paid and still to pay first (owner, 10-02: "track how many was paid and the left to
-                paid"), then the totals; all of them tighter (same day: "reduce the padding and spacing"). */}
-            <div className="grid grid-cols-3 gap-2 lg:grid-cols-5">
-              <ThisMonth items={items} currency={currency} className="col-span-3 lg:col-span-2" />
-              <Tile label="A month" value={<PrivacyAmount value={data.totals.monthly} currency={currency} />} />
-              <Tile label="A year" value={<PrivacyAmount value={data.totals.yearly} currency={currency} />} />
-              <Tile label="Repeating" value={<span>{live.length}</span>} sub={stopped.length ? `${stopped.length} stopped` : undefined} />
-            </div>
-
-            {/* The month's bills on a calendar beside the lists (owner, 10-02: "add the same calendar to the
-                subscriptions page too"), the dashboard card's own; on a phone, under the boxes above. */}
-            {/* overflow visible: at 1024 and below the app clips every grid (globals.css), which made this
-                one the calendar's scroll box and dropped the sticky calendar 16 px below the lists. */}
+            {/* The canvas design (owner, 10-02): this month is the one hero, its totals inside it; the lists in
+                two thirds; the calendar beside them, sticky (on a phone, under the hero). overflow visible: at
+                1024 and below the app clips every grid (globals.css). */}
             <div
-              className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem]"
+              className="grid items-start gap-3.5 max-md:gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
               style={{ overflowX: "visible" }}
             >
+              <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+                <ThisMonth
+                  items={items}
+                  currency={currency}
+                  totals={{ monthly: data.totals.monthly, yearly: data.totals.yearly, repeating: live.length, stopped: stopped.length }}
+                />
+              </div>
               {items.length > 0 ? (
-                <aside className="lg:sticky lg:top-4 lg:order-2">
-                  {/* A heading like the lists' own, so its box starts level with theirs. */}
-                  <div className="flex items-baseline gap-2 pb-2">
-                    <h2 className="text-sm font-semibold tracking-tight">Calendar</h2>
-                    <span className="text-muted-foreground/60 hidden text-xs sm:inline">When each one comes.</span>
+                <aside
+                  data-m="card"
+                  className="min-w-0 self-start rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-[18px] py-3.5 max-md:px-3 max-md:py-2.5 lg:sticky lg:top-4 lg:col-start-2 lg:row-span-2 lg:row-start-1"
+                >
+                  <div className="flex items-baseline gap-2 pb-1">
+                    <h2 className="text-sm font-medium">Calendar</h2>
+                    <span className="hidden text-[12.5px] text-[var(--m-muted)] sm:inline">When each one comes.</span>
                   </div>
-                  <div className="border-border/40 bg-card/70 rounded-xl border px-3 py-3 backdrop-blur-xl md:px-4">
-                    <BillMonthPanel items={items} currency={currency} totals={false} />
-                  </div>
+                  <BillMonthPanel items={items} currency={currency} totals={false} />
                 </aside>
               ) : null}
-              <div className="min-w-0 space-y-6 lg:order-1">
+              <div className="flex min-w-0 flex-col gap-3.5 max-md:gap-2 lg:col-start-1 lg:row-start-2">
                 {items.length === 0 ? (
-                  <div className="border-border/40 bg-card/70 rounded-xl border p-6 text-center backdrop-blur-xl">
+                  <div data-m="card" className="rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] p-6 text-center">
                     <p className="text-sm">No repeating charges found yet.</p>
                     <p className="text-muted-foreground mt-1 text-xs">
                       One shows up once it has come back a few months in a row. A yearly one you already know about can be added by hand.
@@ -229,20 +243,32 @@ export default function SpendingSubscriptionsPage() {
                   const inMortgage = rows.filter((s) => s.escrow);
                   const lenders = [...new Set(inMortgage.map((s) => s.escrow?.mortgageName).filter(Boolean))];
                   return (
-                    <div key={g.group} className="space-y-2">
-                      <Section title={g.title} blurb={g.blurb} aside={<><PrivacyAmount value={g.monthly} currency={currency} /> a month</>}>
-                        {rows.map((s) => (
-                          <StreamRow key={s.key} s={s} {...rowProps} />
-                        ))}
-                      </Section>
-                      {inMortgage.length ? (
-                        <p className="text-muted-foreground text-xs leading-snug">
-                          {inMortgage.map((s) => s.name).join(" and ")} {inMortgage.length === 1 ? "is" : "are"} paid from your{" "}
-                          {lenders.length === 1 ? `${lenders[0]} ` : ""}mortgage escrow, so the totals count{" "}
-                          {inMortgage.length === 1 ? "it" : "them"} once, in the mortgage payment.
-                        </p>
+                    <Section
+                      key={g.group}
+                      title={g.title}
+                      blurb={g.blurb}
+                      aside={<><PrivacyAmount value={g.monthly} currency={currency} /> a month</>}
+                      note={
+                        inMortgage.length ? (
+                          <>
+                            {inMortgage.map((s) => s.name).join(" and ")} {inMortgage.length === 1 ? "is" : "are"} paid from your{" "}
+                            {lenders.length === 1 ? `${lenders[0]} ` : ""}mortgage escrow, so the totals count{" "}
+                            {inMortgage.length === 1 ? "it" : "them"} once, in the mortgage payment.
+                          </>
+                        ) : null
+                      }
+                    >
+                      {rows.slice(0, 6).map((s) => (
+                        <StreamRow key={s.key} s={s} {...rowProps} />
+                      ))}
+                      {rows.length > 6 ? (
+                        <PhoneFold id={`subscriptions-${g.group}`} closedLabel={`Show ${rows.length - 6} more`} openLabel="Show less">
+                          {rows.slice(6).map((s) => (
+                            <StreamRow key={s.key} s={s} {...rowProps} />
+                          ))}
+                        </PhoneFold>
                       ) : null}
-                    </div>
+                    </Section>
                   );
                 })}
 
@@ -254,6 +280,11 @@ export default function SpendingSubscriptionsPage() {
                   </Section>
                 ) : null}
 
+                {/* Rarely used: under a quiet More divider (Meadow). */}
+                <div className="mt-1 flex items-center gap-2.5">
+                  <span className="text-[12.5px] text-[var(--m-muted)]">More</span>
+                  <span className="h-px flex-1 bg-[var(--m-line)]" />
+                </div>
                 {data.hidden.length ? (
                   <div>
                     <button
@@ -264,7 +295,7 @@ export default function SpendingSubscriptionsPage() {
                       {showHidden ? "Hide" : "Show"} the {data.hidden.length} marked not a subscription
                     </button>
                     {showHidden ? (
-                      <div className="bg-card/70 border-border/40 mt-2 divide-y rounded-xl border backdrop-blur-xl">
+                      <div className="bg-card border-border mt-2 divide-y rounded-[14px] border">
                         {data.hidden.map((s) => (
                           <div key={s.key} className="flex items-center gap-3 px-4 py-2.5">
                             <StreamLogo s={s} className="h-7 w-7 text-[10px]" />
@@ -292,7 +323,7 @@ export default function SpendingSubscriptionsPage() {
                       {showLeftOut ? "Hide" : "Show"} the {data.leftOut.length} charge{data.leftOut.length === 1 ? "" : "s"} you left out of a subscription that is gone now
                     </button>
                     {showLeftOut ? (
-                      <div className="bg-card/70 border-border/40 mt-2 divide-y rounded-xl border backdrop-blur-xl">
+                      <div className="bg-card border-border mt-2 divide-y rounded-[14px] border">
                         {data.leftOut.map((c) => (
                           <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
                             <span className="min-w-0 flex-1">
@@ -338,28 +369,26 @@ export default function SpendingSubscriptionsPage() {
         />
       ) : null}
     </Page>
-  );
-}
-
-function Tile({ label, value, sub }: { label: string; value: ReactNode; sub?: string }) {
-  return (
-    <div className="border-border/40 bg-card/70 min-w-0 rounded-xl border px-2.5 py-2 backdrop-blur-xl md:px-3">
-      <div className="text-muted-foreground/70 truncate text-[10px] font-semibold uppercase tracking-wide">{label}</div>
-      <div className="whitespace-nowrap text-[15px] font-semibold tabular-nums sm:text-lg">{value}</div>
-      {sub ? <div className="text-muted-foreground text-[11px] leading-tight">{sub}</div> : null}
     </div>
   );
 }
 
-/** The paid part of the bar: green, fixed (the dark theme turns emerald utilities white). */
-const PAID_GREEN = "#16a34a";
-
 /**
- * This month so far: what the subscriptions and bills charged (your part of a shared one) and what is
- * still to come by the month's end, at the usual amount (lib/bill-calendar.ts, counted like the Monthly
- * budget card's "bills still due"). A tap lists both.
+ * This month so far, the page's hero (owner, 10-02 canvas): what is still to pay by the month's end at the
+ * usual amount, the bar of paid and to pay, what was paid, then the totals (a month, a year, how many
+ * repeat). The figures are lib/bill-calendar.ts's, counted like the Monthly budget card's "bills still
+ * due". Paid is green in both looks (Bronze gives progress its own colour). The button lists both.
  */
-function ThisMonth({ items, currency, className }: { items: Stream[]; currency: string; className?: string }) {
+function ThisMonth({
+  items,
+  currency,
+  totals,
+}: {
+  items: Stream[];
+  currency: string;
+  totals: { monthly: number; yearly: number; repeating: number; stopped: number };
+}) {
+  const phone = useIsMobileViewport();
   const today = ymd(new Date());
   const m = useMemo(() => ({ ...billMonth(items, today), month: new Date().toLocaleDateString(undefined, { month: "long" }), today }), [items, today]);
   const byKey = useMemo(() => new Map(items.map((s) => [s.key, s])), [items]);
@@ -382,78 +411,129 @@ function ThisMonth({ items, currency, className }: { items: Stream[]; currency: 
     );
   };
 
+  const tiles: { label: string; value: ReactNode; sub?: string }[] = [
+    { label: "A month", value: <PrivacyAmount value={totals.monthly} currency={currency} /> },
+    { label: "A year", value: <PrivacyAmount value={totals.yearly} currency={currency} /> },
+    { label: "Repeating", value: <span>{totals.repeating}</span>, sub: totals.stopped ? `${totals.stopped} stopped` : undefined },
+  ];
+
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "border-border/40 bg-card/70 hover:bg-muted/40 min-w-0 rounded-xl border px-2.5 py-2 text-left backdrop-blur-xl transition-colors md:px-3",
-            className,
-          )}
-          aria-label={`${m.month}: what was paid and what is left to pay`}
-        >
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-muted-foreground/70 truncate text-[10px] font-semibold uppercase tracking-wide">{m.month}</span>
-            <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
-              {m.paidCount} of {m.count} paid
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between gap-3 whitespace-nowrap">
-            <span className="min-w-0 truncate">
-              <span className="text-[15px] font-semibold tabular-nums sm:text-lg">
+    <section
+      data-m="hero"
+      aria-label={m.month}
+      className="flex flex-col gap-3 rounded-[20px] bg-[var(--m-mint)] px-5 py-4 text-[var(--m-mint-ink)] max-md:gap-1.5 max-md:px-3 max-md:py-2.5"
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-sm font-medium">{m.month}</h2>
+          <span className="text-[12.5px] tabular-nums text-[var(--m-mint-muted)] max-md:text-xs">
+            {m.paidCount} of {m.count} paid
+          </span>
+        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="min-h-8 shrink-0 rounded-full bg-[var(--m-mint-tile)] px-3 text-[12.5px] text-[var(--m-mint-ink)] hover:opacity-85 max-md:min-h-7 max-md:bg-transparent max-md:px-0"
+              aria-label={`${m.month}: what was paid and what is left to pay`}
+            >
+              {phone ? "This month" : "What was paid, what is left"}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-3">
+            <div className="text-muted-foreground flex items-baseline justify-between text-[11px] font-medium">
+              <span>Paid in {m.month}</span>
+              <span className="text-foreground tabular-nums">
                 <PrivacyAmount value={m.paidTotal} currency={currency} />
               </span>
-              <span className="text-muted-foreground text-[11px]"> paid</span>
-            </span>
-            <span className="min-w-0 truncate text-right">
-              <span className="text-[15px] font-semibold tabular-nums sm:text-lg">
+            </div>
+            {m.paid.length ? m.paid.map((b, i) => line(b, i, false)) : <p className="text-muted-foreground py-1 text-xs">Nothing yet.</p>}
+            <div className="text-muted-foreground mt-2 flex items-baseline justify-between border-t pt-2 text-[11px] font-medium">
+              <span>Left to pay by {shortDate(m.end)}</span>
+              <span className="text-foreground tabular-nums">
                 <PrivacyAmount value={m.leftTotal} currency={currency} />
               </span>
-              <span className="text-muted-foreground text-[11px]"> left to pay</span>
+            </div>
+            {m.left.length ? m.left.map((b, i) => line(b, i, true)) : <p className="text-muted-foreground py-1 text-xs">All paid for {m.month}.</p>}
+            <p className="text-muted-foreground mt-2 border-t pt-2 text-[11px] leading-snug">
+              Your part of a shared bill. Still to pay is the usual amount; a bill paid from your mortgage escrow is in the
+              mortgage payment.
+            </p>
+          </PopoverContent>
+        </Popover>
+      </div>
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <span data-m-num={phone ? "big" : "hero"} className="text-[38px] font-medium leading-[1.1] tracking-[-0.03em] tabular-nums max-md:text-[30px]">
+          <PrivacyAmount value={m.leftTotal} currency={currency} />
+        </span>
+        <span className="text-[13.5px] text-[var(--m-mint-muted)] max-md:text-[12.5px]">
+          {phone ? "left to pay" : `left to pay by ${shortDate(m.end)}`}
+        </span>
+      </div>
+      <div className="flex flex-col gap-1.5 max-md:gap-1">
+        <div
+          role="img"
+          aria-label={`${pct.toFixed(0)}% of ${m.month}'s bills paid`}
+          className="flex h-3.5 gap-[3px] max-md:h-3"
+        >
+          <span className="h-full rounded-[6px] bg-[var(--m-done)]" style={{ width: `${pct}%`, minWidth: pct > 0 ? 4 : 0 }} />
+          <span className="h-full flex-1 rounded-[6px] border border-[var(--m-mint-line)] bg-[var(--m-mint-tile)]" />
+        </div>
+        <span className="text-xs tabular-nums text-[var(--m-mint-muted)]">
+          <PrivacyAmount value={m.paidTotal} currency={currency} /> paid
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {tiles.map((tile) => (
+          <div key={tile.label} className="flex min-w-0 flex-col gap-0.5 rounded-xl bg-[var(--m-mint-tile)] px-3 py-2.5 max-md:px-2 max-md:py-1.5">
+            <span className="truncate text-[12.5px] text-[var(--m-mint-muted)] max-md:text-[11.5px]">{tile.label}</span>
+            <span data-m-num="tile" className="truncate text-[17px] font-medium tabular-nums max-md:text-[15px]">
+              {tile.value}
+              {phone && tile.sub ? <span className="ml-1 text-[11.5px] font-normal text-[var(--m-mint-muted)]" data-m-unit>{tile.sub}</span> : null}
             </span>
+            {!phone ? <span className="text-xs text-[var(--m-mint-muted)]">{tile.sub ?? "\u00a0"}</span> : null}
           </div>
-          <div className="bg-muted mt-1.5 h-1.5 overflow-hidden rounded-full">
-            <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: PAID_GREEN }} />
-          </div>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] p-3">
-        <div className="text-muted-foreground flex items-baseline justify-between text-[11px] font-medium">
-          <span>Paid in {m.month}</span>
-          <span className="text-foreground tabular-nums">
-            <PrivacyAmount value={m.paidTotal} currency={currency} />
-          </span>
-        </div>
-        {m.paid.length ? m.paid.map((b, i) => line(b, i, false)) : <p className="text-muted-foreground py-1 text-xs">Nothing yet.</p>}
-        <div className="text-muted-foreground mt-2 flex items-baseline justify-between border-t pt-2 text-[11px] font-medium">
-          <span>Left to pay by {shortDate(m.end)}</span>
-          <span className="text-foreground tabular-nums">
-            <PrivacyAmount value={m.leftTotal} currency={currency} />
-          </span>
-        </div>
-        {m.left.length ? m.left.map((b, i) => line(b, i, true)) : <p className="text-muted-foreground py-1 text-xs">All paid for {m.month}.</p>}
-        <p className="text-muted-foreground mt-2 border-t pt-2 text-[11px] leading-snug">
-          Your part of a shared bill. Still to pay is the usual amount; a bill paid from your mortgage escrow is in the
-          mortgage payment.
-        </p>
-      </PopoverContent>
-    </Popover>
+        ))}
+      </div>
+    </section>
   );
 }
 
-function Section({ title, blurb, aside, children }: { title: string; blurb?: string; aside?: ReactNode; children: ReactNode }) {
+/** A list in its own Meadow card: the title, a short line about it and its monthly total inside the card. */
+function Section({
+  title,
+  blurb,
+  aside,
+  note,
+  children,
+}: {
+  title: string;
+  blurb?: string;
+  aside?: ReactNode;
+  note?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <div>
-      <div className="flex items-baseline justify-between gap-3 pb-2">
-        <div className="flex items-baseline gap-2">
-          <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-          {blurb ? <span className="text-muted-foreground/60 hidden text-xs sm:inline">{blurb}</span> : null}
+    <section
+      data-m="card"
+      aria-label={title}
+      className="min-w-0 rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-[18px] pb-2 pt-3.5 max-md:px-3 max-md:pb-1 max-md:pt-2.5"
+    >
+      <div className="flex items-baseline justify-between gap-3 pb-1.5">
+        <div className="flex min-w-0 items-baseline gap-2.5">
+          <h2 className="text-sm font-medium">{title}</h2>
+          {blurb ? <span className="hidden truncate text-[12.5px] text-[var(--m-muted)] sm:inline">{blurb}</span> : null}
         </div>
-        {aside ? <span className="text-muted-foreground text-xs tabular-nums">{aside}</span> : null}
+        {aside ? <span className="shrink-0 whitespace-nowrap text-[13px] tabular-nums text-[var(--m-muted)] [&>span:first-child]:font-medium [&>span:first-child]:text-[var(--m-ink)]">{aside}</span> : null}
       </div>
-      <div className="border-border/40 bg-card/70 divide-y rounded-xl border backdrop-blur-xl">{children}</div>
-    </div>
+      <div className="flex flex-col">{children}</div>
+      {note ? (
+        <p className="mb-1.5 mt-1 flex gap-2 rounded-[14px] bg-[var(--m-sand)] px-2.5 py-2 text-xs leading-snug text-[var(--m-ink-2)]">
+          <Icons.Home className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--m-muted)]" aria-hidden />
+          <span>{note}</span>
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -469,6 +549,7 @@ function StreamRow({
   act: (label: string, fn: () => Promise<SubscriptionsView>, done?: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
+  const phone = useIsMobileViewport();
   const st = statusLabel(s);
   const category = useStreamCategory(s.categoryId);
   const { data } = useSubscriptions();
@@ -483,7 +564,13 @@ function StreamRow({
 
   return (
     // A click anywhere on the row opens it; the menu is the keyboard's way in (no button inside a button).
-    <div onClick={openEdit} className={cn("hover:bg-muted/40 cursor-pointer px-4 py-3 transition-colors", s.status === "stopped" && "opacity-70")}>
+    <div
+      onClick={openEdit}
+      className={cn(
+        "-mx-2 cursor-pointer rounded-xl border-t border-[var(--m-line-soft)] px-2 py-2.5 transition-colors first:border-t-0 hover:bg-[var(--m-tile)] max-md:py-2",
+        s.status === "stopped" && "opacity-70",
+      )}
+    >
       <div className="flex items-center gap-3">
         <StreamLogo s={s} className="h-9 w-9 text-sm" />
         <div className="min-w-0 flex-1">
@@ -502,7 +589,7 @@ function StreamRow({
                 title={s.remindBefore ? `Reminder ${s.remindBefore} day${s.remindBefore === 1 ? "" : "s"} before each charge` : `Reminder on ${day(s.reminder!)}`}
                 className="inline-flex"
               >
-                <Icons.Bell className="h-3.5 w-3.5 shrink-0" style={{ color: "#d97706" }} aria-label="Reminder on" />
+                <Icons.Bell className="h-3.5 w-3.5 shrink-0 text-[var(--m-warn-line)]" aria-label="Reminder on" />
               </span>
             ) : null}
             {/* Tracked by Owly (owner, 10-01: "add a badge showing an item is being tracked by owly"): Owly's own
@@ -510,8 +597,7 @@ function StreamRow({
             {s.shared ? (
               <span
                 title={s.sharedOn ? `Shared in Owly as ${s.shared.service}: only your part counts here` : `Shared in Owly as ${s.shared.service}`}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                style={{ backgroundColor: "rgba(242, 168, 60, 0.14)", color: OWLY_AMBER }}
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--m-info-soft)] px-2 py-0.5 text-[10.5px] text-[var(--m-info-ink)]"
               >
                 <OwlyMark className="h-3 w-3" />
                 Owly
@@ -520,7 +606,7 @@ function StreamRow({
             {s.escrow ? (
               <span
                 title={s.escrow.mortgageName ? `Paid from your ${s.escrow.mortgageName} mortgage escrow` : "Paid from your mortgage escrow"}
-                className="bg-muted text-muted-foreground shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                className="shrink-0 rounded-full bg-[var(--m-tile)] px-2 py-0.5 text-[10.5px] text-[var(--m-ink-2)]"
               >
                 In mortgage
               </span>
@@ -529,8 +615,8 @@ function StreamRow({
                 The old small check ("Looks right" ticked) is gone: two checks side by side read the same. */}
             {st.label === "Active" ? (
               // The green is fixed: the dark theme turns emerald utilities white, and this one must stay green.
-              <span title="Active" aria-label="Active" className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "#16a34a" }}>
-                <Icons.Check className="h-2.5 w-2.5 text-white" strokeWidth={3.5} />
+              <span title="Active" aria-label="Active" className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--m-done)]">
+                <Icons.Check className="h-2.5 w-2.5 text-[var(--m-on-done)]" strokeWidth={3.5} />
               </span>
             ) : s.status === "stopped" ? (
               // Stopped: a grey pause, the same badge as Active (owner, 10-01: "stopped just show a grey pause icon").
@@ -539,9 +625,17 @@ function StreamRow({
                 <span className="bg-background h-[7px] w-[2px] rounded-[1px]" />
               </span>
             ) : (
-              <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium", TONE[st.tone])}>{st.label}</span>
+              <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10.5px]", TONE[st.tone])}>{st.label}</span>
             )}
           </div>
+          {phone ? (
+            <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs leading-snug">
+              {category ? <StreamCategory categoryId={s.categoryId} iconOnly className="shrink-0" /> : null}
+              <span className="truncate">
+                {EVERY_SHORT[s.every]} · {phoneDue(dueLabel(s))}
+              </span>
+            </div>
+          ) : (
           <div className="text-muted-foreground text-xs leading-snug">
             {/* Its category, the app's own icon and colour (owner, 10-02). */}
             {category ? (
@@ -566,10 +660,11 @@ function StreamRow({
                 ? ` · ${s.count} charge${s.count === 1 ? "" : "s"}`
                 : " · not charged yet"}
           </div>
+          )}
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-sm tabular-nums">
-            {s.variable && !s.sharedOn ? <span className="text-muted-foreground">about </span> : null}
+          <div className="text-sm font-medium tabular-nums">
+            {s.variable && !s.sharedOn ? <span className="text-muted-foreground font-normal">about </span> : null}
             <PrivacyAmount value={s.sharedOn && s.shared?.latest ? s.shared.latest.mine : s.usual} currency={currency} />
           </div>
           {s.sharedOn && s.shared?.latest ? (
