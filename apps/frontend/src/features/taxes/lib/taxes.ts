@@ -194,12 +194,24 @@ export function useTaxes(year: number | null) {
   });
 }
 
-/** Puts a fresh view where the page reads it: under its own year, and as "now" when it is this year's. */
+/**
+ * Puts a fresh view where the page reads it: under its own year, and as "now" when it is this year's.
+ * The other years are read again when next shown: a payment moved to another tax year, or an account
+ * marked not mine, changes them too.
+ */
 export function useSetTaxes() {
   const qc = useQueryClient();
   return (view: TaxesView) => {
+    const current = view.year === Number(view.today.slice(0, 4));
     qc.setQueryData(taxesKey(view.year), view);
-    if (view.year === Number(view.today.slice(0, 4))) qc.setQueryData(taxesKey(null), view);
+    if (current) qc.setQueryData(taxesKey(null), view);
+    void qc.invalidateQueries({
+      predicate: (q) =>
+        q.queryKey[0] === TAXES_KEY[0] &&
+        q.queryKey[1] === TAXES_KEY[1] &&
+        q.queryKey[2] !== view.year &&
+        !(current && q.queryKey[2] === "now"),
+    });
   };
 }
 
