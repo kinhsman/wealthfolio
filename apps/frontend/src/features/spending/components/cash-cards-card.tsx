@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { useAccounts } from "@/hooks/use-accounts";
+import { useIsMobileViewport } from "@/hooks/use-platform";
 import { accountLogoUrl } from "@/lib/account-logo";
 import { cn } from "@/lib/utils";
 import { Icons, PrivacyAmount, Skeleton, useBalancePrivacy } from "@wealthfolio/ui";
@@ -37,6 +38,7 @@ export function CashCardsCard({
   const cash = useFreeCash();
   const cards = useCreditCards();
   const { accounts } = useAccounts({ filterActive: false });
+  const isMobile = useIsMobileViewport();
   const fc = cash.data;
   const cc = cards.data;
   const hasCash = !!fc && fc.accounts.length > 0;
@@ -148,7 +150,11 @@ export function CashCardsCard({
               >
                 <FoldedCards
                   cards={cc.cards}
-                  keep={Math.max(3, hasCash && fc ? fc.accounts.length : 0)}
+                  keep={
+                    // Desktop: one-line rows, so four cards end level with Cash; a fifth folds. Phone:
+                    // two-line rows, as many as the Cash list has accounts, at least 3 (owner, 10-02).
+                    isMobile ? Math.max(3, hasCash && fc ? fc.accounts.length : 0) : 4
+                  }
                   render={(c) => {
                     const account = accounts?.find((a) => a.id === c.wfAccountId);
                     return (
@@ -325,8 +331,8 @@ function Legend({
   return <div className="flex min-w-0 flex-col">{body}</div>;
 }
 
-// money-hub patch: the Cards list shows as many cards as the Cash list has accounts (at least 3) so the
-// two columns end level, and folds the rest behind a Show more row (owner, 10-02). A card that needs a
+// money-hub patch: the Cards list shows the first `keep` cards (four on desktop; on a phone as many as the
+// Cash list has accounts, at least 3) and folds the rest behind a Show more row (owner, 10-02). A card that needs a
 // sign-in or is heavily used always stays in view, so a warning never hides behind the fold.
 function FoldedCards({
   cards,
