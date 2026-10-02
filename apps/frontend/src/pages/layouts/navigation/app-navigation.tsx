@@ -63,6 +63,14 @@ function buildStaticNavigation(t: TFunction): NavigationProps {
         label: t("common:nav.label_goals"),
       },
       {
+        // money-hub patch: Taxes (features/taxes), a page of the owner's own; plain words, no translation key.
+        icon: <Icons.Invoice className="size-6" />,
+        title: "Taxes",
+        href: "/taxes",
+        keywords: ["tax", "taxes", "irs", "1099", "w-2", "gift", "forms", "papers"],
+        label: "The tax year: what is taxed, paid, due and still to come in",
+      },
+      {
         icon: <Icons.Sparkles className="size-6" />,
         title: t("common:assistant"),
         href: "/assistant",

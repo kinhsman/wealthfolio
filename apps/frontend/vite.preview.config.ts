@@ -26,6 +26,7 @@ export default defineConfig({
         subscriptions: path.resolve(__dirname, "preview/subscriptions.html"),
         "credit-cards": path.resolve(__dirname, "preview/credit-cards.html"),
         "free-cash": path.resolve(__dirname, "preview/free-cash.html"),
+        taxes: path.resolve(__dirname, "preview/taxes.html"),
       },
     },
   },

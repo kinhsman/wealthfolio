@@ -27,6 +27,7 @@ import {
 } from "@/features/spending/lib/subscriptions";
 import { RETURN_ALERT_LABELS, RETURNS_KEY, returnsApi, useReturns, type ReturnAlertKind } from "@/features/spending/lib/returns";
 import { BILL_DAYS, FREE_CASH_ALERT_LABELS, FREE_CASH_KEY, freeCashApi, useFreeCash, type FreeCashAlertKind } from "@/features/spending/lib/free-cash";
+import { TAX_ALERT_LABELS, taxesApi, taxesKey, useTaxes, type TaxAlertKind } from "@/features/taxes/lib/taxes";
 import { SettingsHeader } from "../settings-header";
 
 const BASE = "/api/money-hub/alerts";
@@ -292,6 +293,7 @@ export default function AlertsSettingsPage() {
   const { data: subs } = useSubscriptions();
   const { data: returns } = useReturns();
   const { data: freeCash } = useFreeCash();
+  const { data: taxes } = useTaxes(null);
   const runGroup = async <V,>(what: string, key: readonly unknown[], fn: () => Promise<V>, ok?: (v: V) => string) => {
     setBusy(what);
     setNote(null);
@@ -600,6 +602,21 @@ export default function AlertsSettingsPage() {
                 />
                 </>
               }
+            />
+          ) : null}
+          {taxes ? (
+            <GroupAlerts<TaxAlertKind>
+              icon={<Icons.FileText className="text-muted-foreground size-4 shrink-0" />}
+              title="Taxes"
+              to="/taxes"
+              text="The tax year's dates, and papers that have not come in"
+              on={taxes.alerts.on !== false}
+              kinds={taxes.alerts}
+              labels={TAX_ALERT_LABELS}
+              busyKey="taxes"
+              busy={busy}
+              onSwitch={(patch) => runGroup("taxes-set", taxesKey(null), () => taxesApi.setAlerts(patch))}
+              onTest={(k) => runGroup(`taxes-test-${k}`, taxesKey(null), () => taxesApi.testAlert(k), (v) => sentTo(v.went, v.sample))}
             />
           ) : null}
           <div className="px-4 py-3">
