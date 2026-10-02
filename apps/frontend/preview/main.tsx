@@ -112,6 +112,14 @@ if (view === "pending" || view === "rows") {
   ]);
 }
 
+/** A category of the owner's by name, as a list row carries it (a child without an icon takes its parent's). */
+function realCategory(name: string): TransactionRowVM["category"] {
+  const cats = (taxonomyFixture as { categories: { id: string; name: string; color: string | null; icon: string | null; parentId: string | null }[] }).categories;
+  const c = cats.find((x) => x.name === name) ?? cats[0];
+  const parent = c.parentId ? cats.find((x) => x.id === c.parentId) : undefined;
+  return { assignmentId: "a", taxonomyId: "spending_categories", id: c.id, name: c.name, color: c.color ?? parent?.color ?? null, icon: c.icon ?? parent?.icon ?? null, parentName: parent?.name ?? null };
+}
+
 /** Three Spending list rows (a tip, a gas hold, an unchanged one) and the pending box, desktop and phone. */
 function RowsPreview() {
   const noop = () => {};
@@ -123,7 +131,8 @@ function RowsPreview() {
         id: c.activityId ?? `act-${id}`, accountId: c.accountId, activityType: "WITHDRAWAL", activityDate: `${c.postedDate}T17:00:00Z`,
         amount: String(c.posted), currency: "USD", notes: c.name, cashFlowBucket: "spending", netAmount: String(-(c.posted ?? 0)),
       } as unknown as TransactionRowVM["activity"],
-      category: { assignmentId: "a", taxonomyId: "t", id: "c", name: id === "p-shell" ? "Gas" : id === "p-pho" ? "Restaurants" : "Groceries", color: "#e07a5f", parentName: null },
+      // The owner's real categories, with their icons and colours (preview/taxonomy.fixture.json).
+      category: realCategory(id === "p-shell" ? "Gas & Fuel" : id === "p-pho" ? "Food" : "Groceries"),
       splitCount: 0,
       needsReview: false,
     };

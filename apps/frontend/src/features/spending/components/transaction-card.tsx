@@ -26,6 +26,7 @@ import { ReturnBadge } from "./return-badge";
 import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
+import { CategoryMark } from "./category-chips";
 
 interface TransactionCardProps {
   row: TransactionRowVM;
@@ -224,13 +225,8 @@ function TransactionCardImpl({
                   >
                     {row.category ? (
                       <>
-                        {row.category.color && (
-                          <span
-                            className="h-2 w-2 shrink-0 rounded-full"
-                            style={{ backgroundColor: row.category.color }}
-                            aria-hidden="true"
-                          />
-                        )}
+                        {/* money-hub patch: the category's icon in its colour, not a dot (owner, 10-02). */}
+                        <CategoryMark icon={row.category.icon} color={row.category.color} size="sm" />
                         <span className="truncate">{row.category.name}</span>
                       </>
                     ) : (

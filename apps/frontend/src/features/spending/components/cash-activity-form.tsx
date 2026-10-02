@@ -65,6 +65,7 @@ import { AdvancedOptionsSection } from "@/pages/activity/components/forms/fields
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
 import { QuickEventPopover } from "./quick-event-popover";
+import { CategoryMark } from "./category-chips";
 import { saveNote, useNotes } from "../lib/notes";
 import type { CashFlowBucket } from "../types/cash-activity";
 import {
@@ -216,15 +217,15 @@ export function CashActivityForm({
   const savings = useTaxonomy(SAVINGS_TAXONOMY);
 
   const allCategoriesById = useMemo(() => {
-    const map = new Map<string, { name: string; color: string | null; parentId: string | null }>();
+    const map = new Map<string, { name: string; color: string | null; icon: string | null; parentId: string | null }>();
     (spending.data?.categories ?? []).forEach((c) =>
-      map.set(c.id, { name: c.name, color: c.color, parentId: c.parentId ?? null }),
+      map.set(c.id, { name: c.name, color: c.color, icon: c.icon ?? null, parentId: c.parentId ?? null }),
     );
     (income.data?.categories ?? []).forEach((c) =>
-      map.set(c.id, { name: c.name, color: c.color, parentId: c.parentId ?? null }),
+      map.set(c.id, { name: c.name, color: c.color, icon: c.icon ?? null, parentId: c.parentId ?? null }),
     );
     (savings.data?.categories ?? []).forEach((c) =>
-      map.set(c.id, { name: c.name, color: c.color, parentId: c.parentId ?? null }),
+      map.set(c.id, { name: c.name, color: c.color, icon: c.icon ?? null, parentId: c.parentId ?? null }),
     );
     return map;
   }, [spending.data?.categories, income.data?.categories, savings.data?.categories]);
@@ -775,13 +776,11 @@ export function CashActivityForm({
                                     >
                                       {currentCat ? (
                                         <span className="flex min-w-0 items-center gap-2">
-                                          {currentCat.color && (
-                                            <span
-                                              className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                              style={{ backgroundColor: currentCat.color }}
-                                              aria-hidden="true"
-                                            />
-                                          )}
+                                          {/* money-hub patch: its icon in its colour (owner, 10-02). */}
+                                          <CategoryMark
+                                            icon={currentCat.icon ?? currentParent?.icon}
+                                            color={currentCat.color ?? currentParent?.color}
+                                          />
                                           <span className="truncate">
                                             {currentParent ? `${currentParent.name} / ` : ""}
                                             {currentCat.name}

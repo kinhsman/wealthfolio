@@ -31,7 +31,7 @@ import {
 } from "../../lib/category-drilldown";
 import { descendantCategoryIds } from "../../lib/category-rollup";
 import { getActivitySpendingAmount } from "../../lib/constants";
-import { CategoryIcon } from "../category-chips";
+import { CategoryIcon, CategoryMark } from "../category-chips";
 
 interface CategoryTransactionsSheetProps {
   open: boolean;
@@ -182,6 +182,7 @@ export function CategoryTransactionsSheet({
         name:
           row.id === DIRECT_ROW_ID ? t("spending:categorySheet.direct") : (meta?.name ?? row.id),
         color: meta?.color ?? "var(--muted-foreground)",
+        icon: meta?.icon ?? null,
       };
     });
   }, [category, categoryMeta, drilldown.mix, isTopLevel, t]);
@@ -326,10 +327,8 @@ export function CategoryTransactionsSheet({
                   subBreakdown.map((row) => (
                     <div key={row.id} className="flex items-center gap-3 text-[12px]">
                       <span className="flex min-w-0 flex-1 items-center gap-2">
-                        <span
-                          className="block h-2 w-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: row.color }}
-                        />
+                        {/* money-hub patch: its icon in its colour, not a dot (owner, 10-02). */}
+                        <CategoryMark icon={row.icon} color={row.color} size="sm" />
                         <span className="text-foreground/90 truncate font-medium">{row.name}</span>
                       </span>
                       <div className="bg-foreground/5 h-1.5 w-32 overflow-hidden rounded-full sm:w-44">

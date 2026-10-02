@@ -18,6 +18,8 @@ import {
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import type { TaxonomyCategory } from "@/lib/types";
 
+import { CategoryMark } from "./category-chips";
+
 const SPENDING_TAXONOMY = "spending_categories";
 const INCOME_TAXONOMY = "income_sources";
 const SAVINGS_TAXONOMY = "savings_categories";
@@ -139,12 +141,8 @@ export function QuickCategorizePopover({
                         onSelect={() => handleSelect(opt)}
                         className="flex items-start gap-2"
                       >
-                        <span
-                          className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{
-                            backgroundColor: opt.category.color ?? "var(--muted-foreground)",
-                          }}
-                        />
+                        {/* money-hub patch: each category's icon in its colour (owner, 10-02). */}
+                        <CategoryMark icon={opt.category.icon} color={opt.category.color} />
                         <span className="min-w-0 flex-1 break-words">{label}</span>
                         {isSelected && (
                           <Icons.Check className="text-muted-foreground mt-0.5 h-3.5 w-3.5 shrink-0" />

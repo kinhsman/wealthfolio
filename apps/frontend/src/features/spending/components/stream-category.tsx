@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { cn } from "@/lib/utils";
 
-import { CategoryIcon, type CategoryMeta } from "./category-chips";
+import { CategoryMark, type CategoryMeta } from "./category-chips";
 
 const SPENDING_TAXONOMY = "spending_categories";
 
@@ -36,9 +36,7 @@ export function StreamCategory({
   if (!c) return null;
   return (
     <span title={c.name} className={cn("inline-flex min-w-0 items-center gap-1 align-[-2px]", className)}>
-      <span style={{ color: c.color ?? undefined }} className={cn("inline-flex shrink-0", !c.color && "text-muted-foreground")}>
-        <CategoryIcon icon={c.icon} fallback={c.name} className="h-3.5 w-3.5" />
-      </span>
+      <CategoryMark icon={c.icon} color={c.color} size="sm" />
       {iconOnly ? <span className="sr-only">{c.name}</span> : <span className="truncate">{c.name}</span>}
     </span>
   );

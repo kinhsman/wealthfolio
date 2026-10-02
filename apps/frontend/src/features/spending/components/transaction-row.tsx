@@ -38,6 +38,7 @@ import { PendingChangeTag } from "./pending-change-tag";
 import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
 import { canLinkCharge, linkCharge } from "../lib/track-charge";
 import { ReturnBadge } from "./return-badge";
+import { CategoryMark } from "./category-chips";
 
 interface TransactionRowProps {
   row: TransactionRowVM;
@@ -252,13 +253,8 @@ function TransactionRowImpl({
               >
                 {row.category ? (
                   <>
-                    {row.category.color && (
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: row.category.color }}
-                        aria-hidden="true"
-                      />
-                    )}
+                    {/* money-hub patch: the category's icon in its colour, not a dot (owner, 10-02). */}
+                    <CategoryMark icon={row.category.icon} color={row.category.color} />
                     <span className="truncate text-sm">{row.category.name}</span>
                   </>
                 ) : (

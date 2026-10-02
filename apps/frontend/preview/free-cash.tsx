@@ -19,6 +19,8 @@ import { BudgetLineChartCard } from "../src/features/spending/components/budget-
 import { forecastParts } from "../src/features/spending/lib/budget-forecast";
 import { FreeCashCard } from "../src/features/spending/components/free-cash-card";
 import { SubscriptionsCard } from "../src/features/spending/components/subscriptions-card";
+import { CategoryRankedBar } from "../src/features/spending/components/spending-tab-content";
+import { DashboardCard } from "../src/components/dashboard-card";
 import { CREDIT_CARDS_KEY, type CreditCardsView } from "../src/features/spending/lib/credit-cards";
 import { FREE_CASH_KEY, type FreeCashView } from "../src/features/spending/lib/free-cash";
 import {
@@ -228,8 +230,46 @@ function SubsRowPreview() {
   );
 }
 
+/** Where it went, list view, in Meadow, with the owner's own categories (icons and colours from the real
+ *  taxonomy) and the amounts from their 10-02 screenshot; Wants' split is a sample (?view=where). */
+function WhereItWentPreview() {
+  const cat = (id: string, amount: number) => {
+    const c = (taxonomyFixture as { categories: { id: string; name: string; color: string | null; icon: string | null }[] }).categories.find((x) => x.id === id)!;
+    return { id, name: c.name, color: c.color, icon: c.icon, amount };
+  };
+  const needs = [cat("cat_housing", 3000.95), cat("cat_fees", 562.31), cat("cat_groceries", 353.31), cat("cat_bills", 280.78), cat("cat_transport", 116.38), cat("cat_health", 54.56)];
+  const wants = [cat("cat_food", 912.4), cat("cat_shopping", 604.12), cat("cat_entertainment", 301.77), cat("cat_travel", 176.0), cat("cat_personal", 50.0)];
+  const other = [cat("cat_other_expense", 46.16)];
+  const rows = [...needs, ...wants, ...other].sort((a, b) => b.amount - a.amount);
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  const group = (id: string, name: string, color: string, cats: { id: string }[]) =>
+    ({ group: { id, name, color }, categories: cats.map((c) => ({ categoryId: c.id })) }) as unknown as import("../src/features/spending/types/budget").BudgetGroupRow;
+  return (
+    <div className="bg-background min-h-screen">
+      <div className="meadow flex min-h-screen flex-col gap-3.5 px-3 pb-8 pt-2 md:px-6 lg:px-8">
+        <div className="grid gap-3.5 lg:grid-cols-3">
+          <div className="min-w-0 lg:col-span-2">
+            <DashboardCard title="Where it went">
+              <CategoryRankedBar
+                rows={rows}
+                total={total}
+                currency="USD"
+                themeColor={FOREST_THEME.deep}
+                groupRows={[group("needs", "Needs", "#4F6B92", needs), group("wants", "Wants", "#8E7CB3", wants), group("other", "Other", "#9C998E", other)]}
+                hasNoIncludedAccounts={false}
+                activityHrefFor={() => "#"}
+              />
+            </DashboardCard>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Shell() {
   if (view === "budget") return <BudgetPreview />;
+  if (view === "where") return <WhereItWentPreview />;
   if (view === "subs-row") return <SubsRowPreview />;
   if (view === "alerts") {
     return (

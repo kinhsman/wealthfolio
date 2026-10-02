@@ -76,6 +76,7 @@ import { forecastParts } from "../lib/budget-forecast";
 import { ReturnsCard } from "./returns-card";
 import { SpendingByPeriodCard } from "./spending-by-period-card";
 import { SpendingPeriodSelector } from "./spending-period-toggle";
+import { CategoryMark } from "./category-chips";
 
 const SPENDING_TAXONOMY = "spending_categories";
 type SpendingDashboardPeriod = "MTD" | "LAST_MONTH" | "3M" | "6M" | "YTD" | "1Y";
@@ -1584,7 +1585,8 @@ const CategoryTreemapNodeMono: FC<CategoryTreemapNodeMonoProps> = ({
   );
 };
 
-function CategoryRankedBar({
+// Exported for the preview harness (preview/free-cash.tsx ?view=where).
+export function CategoryRankedBar({
   rows,
   total,
   currency,
@@ -1765,7 +1767,8 @@ function CategoryRankedBar({
               to={activityHrefFor(r.id)}
               className="flex min-h-11 items-center gap-2.5 rounded-xl bg-[var(--m-tile)] px-3 py-1 transition-opacity hover:opacity-80"
             >
-              <span className="block h-6 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: color }} />
+              {/* money-hub patch: the category's icon in its colour, not a bar (owner, 10-02). */}
+              <CategoryMark icon={r.icon} color={color} size="lg" />
               <span className="text-foreground min-w-0 flex-1 truncate text-[13px]">{r.name}</span>
               <span className="text-muted-foreground w-[52px] text-right text-xs tabular-nums">
                 {numberFormatting.formatPercent(share / 100, { digits: 1 })}
@@ -1880,7 +1883,8 @@ function GroupedCategoryBlock({
                 {isUncategorized ? (
                   <Icons.AlertCircle className="h-3 w-3 shrink-0 text-[var(--m-warn)]" />
                 ) : (
-                  <span className="block h-2 w-2 shrink-0 rounded-sm" style={{ backgroundColor: dotColor }} />
+                  // money-hub patch: the category's icon in its colour, not a dot (owner, 10-02: "where is the icons").
+                  <CategoryMark icon={cat.icon} color={dotColor} />
                 )}
                 <span className="text-foreground min-w-0 flex-1 truncate text-[12.5px]">
                   {cat.name}

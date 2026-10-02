@@ -46,6 +46,8 @@ export interface TransactionRowVM {
     id: string;
     name: string;
     color: string | null;
+    /** money-hub patch: its icon (Settings, Categories), drawn beside the name. */
+    icon: string | null;
     parentName: string | null;
   } | null;
   splitCount: number;
@@ -162,6 +164,7 @@ export function toRowVM(
             id: cat.id,
             name: cat.name,
             color: cat.color ?? null,
+            icon: cat.icon ?? parent?.icon ?? null,
             parentName: parent?.name ?? null,
           }
         : null,
