@@ -19,6 +19,7 @@ import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { usePlatform } from "@/hooks/use-platform";
 import { useSettingsContext } from "@/lib/settings-provider";
 import { useNavigationMode } from "@/pages/layouts/navigation/navigation-mode-context";
+import { DashboardSkinPicker } from "@/features/spending/components/dashboard-skin-picker";
 
 interface AppearanceFormValues {
   theme: "light" | "dark" | "system";
@@ -111,6 +112,17 @@ export function AppearanceForm() {
             </FormItem>
           )}
         />
+
+        {/* money-hub patch: the Spending dashboard's theme for each mode (owner, 10-02). */}
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <p className="text-base font-medium">Spending dashboard theme</p>
+            <p className="text-muted-foreground text-sm">
+              Each mode keeps its own look. The theme above decides which mode is showing.
+            </p>
+          </div>
+          <DashboardSkinPicker />
+        </div>
 
         {!isMobile && (
           <div className="space-y-3">

@@ -24,6 +24,7 @@ import {
 } from "../lib/credit-cards";
 import { shortDate, useFreeCash } from "../lib/free-cash";
 import { MerchantLogo } from "./merchant-logo";
+import { PhoneFold } from "./phone-fold";
 
 export function CashCardsCard({
   currency = "USD",
@@ -47,27 +48,47 @@ export function CashCardsCard({
 
   if (!cash.isLoading && !cards.isLoading && !hasCash && !hasCards && !cash.isError) return null;
 
+  const chooseAccounts = (
+    <Link
+      to="/settings/accounts"
+      className="shrink-0 text-[12.5px] underline underline-offset-4 hover:no-underline max-md:flex max-md:min-h-8 max-md:items-center max-md:self-start"
+    >
+      Choose accounts
+    </Link>
+  );
+  // money-hub patch: on a phone the head is one line of keywords, "Cash & cards 4:17 PM" and the verdict
+  // chip; Choose accounts moves in with the lists it chooses (approved phone design, 10-02).
   const head = (
-    <div className="flex items-baseline justify-between gap-3">
+    <div className="flex items-baseline justify-between gap-3 max-md:min-h-[26px] max-md:items-center">
       <div className="flex min-w-0 items-baseline gap-2">
         <h2 className="text-sm font-medium">Cash &amp; cards</h2>
         {asOf ? (
-          <span className="text-[12.5px] text-[var(--m-mint-muted)]">as of {asOf}</span>
+          <span className="text-[12.5px] text-[var(--m-mint-muted)]">
+            {isMobile ? asOf : `as of ${asOf}`}
+          </span>
         ) : null}
       </div>
-      <Link
-        to="/settings/accounts"
-        className="shrink-0 text-[12.5px] underline underline-offset-4 hover:no-underline"
-      >
-        Choose accounts
-      </Link>
+      {!isMobile ? (
+        chooseAccounts
+      ) : hasCash && fc && !cash.isLoading && !cards.isLoading ? (
+        <Verdict short={fc.short} />
+      ) : null}
     </div>
   );
+  const accountsCount = hasCash && fc ? fc.accounts.length : 0;
+  const cardsCount = hasCards && cc ? cc.totals.count : 0;
+  const foldLabel = [
+    accountsCount ? `${accountsCount} ${accountsCount === 1 ? "account" : "accounts"}` : null,
+    cardsCount ? `${cardsCount} ${cardsCount === 1 ? "card" : "cards"}` : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <section
+      data-m="hero"
       className={cn(
-        "flex flex-col gap-3 rounded-[20px] bg-[var(--m-mint)] px-5 py-4 text-[var(--m-mint-ink)]",
+        "flex flex-col gap-3 rounded-[20px] bg-[var(--m-mint)] px-5 py-4 text-[var(--m-mint-ink)] max-md:gap-1.5 max-md:px-3 max-md:pb-0 max-md:pt-2.5",
         className,
       )}
     >
@@ -83,97 +104,134 @@ export function CashCardsCard({
           The money app helper did not answer.
         </p>
       ) : (
-        <div className="flex flex-wrap items-stretch gap-[18px]">
-          <div className="flex min-w-0 flex-[1.3_1_360px] flex-col gap-2.5">
+        <div className="flex flex-wrap items-stretch gap-[18px] max-md:gap-1.5">
+          <div className="flex min-w-0 flex-[1.3_1_360px] flex-col gap-2.5 max-md:gap-1.5">
             {hasCash && fc ? (
-              <Summary view={fc} currency={currency} onShowBills={onShowBills} />
+              <Summary view={fc} currency={currency} onShowBills={onShowBills} phone={isMobile} />
             ) : (
               <p className="text-[13px] text-[var(--m-mint-muted)]">
                 No account counts as free cash yet. Switch one on in Settings, Accounts.
               </p>
             )}
           </div>
-          <div className="grid min-w-0 flex-[1.7_1_520px] content-start gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))]">
-            {hasCash && fc ? (
-              <List
-                title={`Cash · ${fc.accounts.length} ${fc.accounts.length === 1 ? "account" : "accounts"}`}
-              >
-                {fc.accounts.map((a) => {
-                  const account = accounts?.find((x) => x.id === a.id);
-                  const logo = accountLogoUrl(account);
-                  return (
-                    <div
-                      key={a.id}
-                      className="flex items-center gap-2.5 rounded-xl bg-[var(--m-mint-tile)] px-2.5 py-2"
-                    >
-                      <Logo url={logo} name={account?.name ?? a.name} />
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13.5px]">{account?.name ?? a.name}</div>
-                        {!a.known ? (
-                          <div className="text-[11.5px] text-[var(--m-mint-muted)]">
-                            no balance yet
-                          </div>
-                        ) : a.pending !== 0 ? (
-                          <div className="text-[11.5px] text-[var(--m-mint-muted)]">
-                            {a.pending < 0 ? "- " : "+ "}
-                            <PrivacyAmount value={Math.abs(a.pending)} currency={currency} />{" "}
-                            pending
-                          </div>
-                        ) : null}
-                      </div>
-                      <span className="shrink-0 text-[13.5px] font-medium">
-                        <PrivacyAmount value={a.cash} currency={currency} />
-                      </span>
-                    </div>
-                  );
-                })}
-              </List>
-            ) : null}
-            {hasCards && cc ? (
-              <List
-                title={
-                  cc.totals.usedPct != null ? (
-                    <>
-                      Cards ·{" "}
-                      <span
-                        className={
-                          cc.totals.usedPct >= HIGH_USE ? "text-[var(--m-warn)]" : undefined
-                        }
-                      >
-                        {pctLabel(cc.totals.usedPct)} of limits used
-                      </span>
-                    </>
-                  ) : (
-                    `Cards · ${cc.totals.count}`
-                  )
-                }
-              >
-                <FoldedCards
-                  cards={cc.cards}
-                  keep={
-                    // Desktop: one-line rows, so four cards end level with Cash; a fifth folds. Phone:
-                    // two-line rows, as many as the Cash list has accounts, at least 3 (owner, 10-02).
-                    isMobile ? Math.max(3, hasCash && fc ? fc.accounts.length : 0) : 4
+          <PhoneFold
+            id="cash-cards"
+            hero
+            closedLabel={foldLabel || "Accounts and cards"}
+            openLabel="Hide accounts and cards"
+          >
+            <div className="grid min-w-0 flex-[1.7_1_520px] content-start gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr))] max-md:gap-2 max-md:pb-1.5">
+              {hasCash && fc ? (
+                <List
+                  title={
+                    isMobile ? (
+                      // The cash total lives here on a phone (the bar's end labels are gone there).
+                      <>
+                        Cash · <PrivacyAmount value={fc.totals.cash} currency={currency} />
+                      </>
+                    ) : (
+                      `Cash · ${fc.accounts.length} ${fc.accounts.length === 1 ? "account" : "accounts"}`
+                    )
                   }
-                  render={(c) => {
-                    const account = accounts?.find((a) => a.id === c.wfAccountId);
+                >
+                  {fc.accounts.map((a) => {
+                    const account = accounts?.find((x) => x.id === a.id);
+                    const logo = accountLogoUrl(account);
                     return (
-                      <CardRow
-                        key={c.id}
-                        c={c}
-                        name={cardName(c, account?.name)}
-                        logo={accountLogoUrl(account) ?? c.bankLogo}
-                        currency={currency}
-                      />
+                      <div
+                        key={a.id}
+                        className="flex items-center gap-2.5 rounded-xl bg-[var(--m-mint-tile)] px-2.5 py-2"
+                      >
+                        <Logo url={logo} name={account?.name ?? a.name} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13.5px]">{account?.name ?? a.name}</div>
+                          {!a.known ? (
+                            <div className="text-[11.5px] text-[var(--m-mint-muted)]">
+                              no balance yet
+                            </div>
+                          ) : a.pending !== 0 ? (
+                            <div className="text-[11.5px] text-[var(--m-mint-muted)]">
+                              {a.pending < 0 ? "- " : "+ "}
+                              <PrivacyAmount value={Math.abs(a.pending)} currency={currency} />{" "}
+                              pending
+                            </div>
+                          ) : null}
+                        </div>
+                        <span className="shrink-0 text-[13.5px] font-medium">
+                          <PrivacyAmount value={a.cash} currency={currency} />
+                        </span>
+                      </div>
                     );
-                  }}
-                />
-              </List>
-            ) : null}
-          </div>
+                  })}
+                </List>
+              ) : null}
+              {hasCards && cc ? (
+                <List
+                  title={
+                    cc.totals.usedPct != null ? (
+                      <>
+                        Cards ·{" "}
+                        <span
+                          className={
+                            cc.totals.usedPct >= HIGH_USE ? "text-[var(--m-warn)]" : undefined
+                          }
+                        >
+                          {pctLabel(cc.totals.usedPct)} of limits used
+                        </span>
+                      </>
+                    ) : (
+                      `Cards · ${cc.totals.count}`
+                    )
+                  }
+                >
+                  <FoldedCards
+                    cards={cc.cards}
+                    keep={
+                      // Desktop: one-line rows, so four cards end level with Cash; a fifth folds. Phone:
+                      // two-line rows, as many as the Cash list has accounts, at least 3 (owner, 10-02).
+                      isMobile ? Math.max(3, hasCash && fc ? fc.accounts.length : 0) : 4
+                    }
+                    render={(c) => {
+                      const account = accounts?.find((a) => a.id === c.wfAccountId);
+                      return (
+                        <CardRow
+                          key={c.id}
+                          c={c}
+                          name={cardName(c, account?.name)}
+                          logo={accountLogoUrl(account) ?? c.bankLogo}
+                          currency={currency}
+                        />
+                      );
+                    }}
+                  />
+                </List>
+              ) : null}
+              {isMobile ? chooseAccounts : null}
+            </div>
+          </PhoneFold>
         </div>
       )}
     </section>
+  );
+}
+
+function Verdict({ short }: { short: boolean }) {
+  return short ? (
+    <span
+      data-m="warn-chip"
+      className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--m-warn-soft)] px-3 py-1 text-[12.5px] text-[var(--m-bad)] max-md:px-2.5 max-md:py-0.5 max-md:text-xs"
+    >
+      <Icons.AlertTriangle className="h-3.5 w-3.5" />
+      Short
+    </span>
+  ) : (
+    <span
+      data-m="fill"
+      className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--m-forest)] px-3 py-1 text-[12.5px] text-[var(--m-on-forest)] max-md:px-2.5 max-md:py-0.5 max-md:text-xs"
+    >
+      <Icons.Check className="h-3.5 w-3.5" />
+      Covered
+    </span>
   );
 }
 
@@ -181,10 +239,13 @@ function Summary({
   view,
   currency,
   onShowBills,
+  phone = false,
 }: {
   view: NonNullable<ReturnType<typeof useFreeCash>["data"]>;
   currency: string;
   onShowBills?: () => void;
+  /** Keywords only: "$6,555.43 free cash", a thin bar, the three parts in one row (approved phone design). */
+  phone?: boolean;
 }) {
   const t = view.totals;
   const promised = t.cards + t.bills + t.cushion;
@@ -195,9 +256,66 @@ function Summary({
   const parts = [
     { key: "cards", value: t.cards, color: "var(--m-forest)" },
     { key: "bills", value: t.bills, color: "var(--m-bills)" },
-    { key: "cushion", value: t.cushion, color: "var(--m-cat-other)" },
+    { key: "cushion", value: t.cushion, color: "var(--m-cushion, var(--m-cat-other))" },
     ...(view.short ? [] : [{ key: "free", value: t.left, color: "var(--m-forest-soft)" }]),
   ].filter((p) => p.value > 0);
+
+  if (phone)
+    return (
+      <>
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+          <span
+            data-m-num="hero"
+            className={cn(
+              "text-[38px] font-medium leading-none tracking-[-0.03em]",
+              view.short && "text-[var(--m-bad)]",
+            )}
+          >
+            <PrivacyAmount value={Math.abs(t.left)} currency={currency} />
+          </span>
+          <span className="flex items-center gap-1.5 text-[13.5px] text-[var(--m-mint-muted)]">
+            {view.short ? null : (
+              <span className="h-2 w-2 rounded-[2px] bg-[var(--m-forest-soft)]" aria-hidden />
+            )}
+            {view.short ? "short" : "free cash"}
+          </span>
+        </div>
+        <div
+          role="img"
+          aria-label="Your cash split into card balance, bills, cushion and free cash"
+          className="mt-0.5 flex h-2.5 gap-[3px]"
+        >
+          {parts.map((p) => (
+            <div
+              key={p.key}
+              className="h-2.5 min-w-1 rounded-[5px]"
+              style={{ flex: `${Math.max(p.value, 0)} 1 0%`, background: p.color }}
+            />
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <Legend color="var(--m-forest)" label="Cards" value={t.cards} currency={currency} phone />
+          <Legend
+            color="var(--m-bills)"
+            label={`Bills ${shortDate(view.bills.until)}`}
+            value={t.bills}
+            currency={currency}
+            onClick={onShowBills}
+            phone
+          />
+          {t.cushion > 0 ? (
+            <Legend
+              color="var(--m-cushion, var(--m-cat-other))"
+              label="Cushion"
+              value={t.cushion}
+              currency={currency}
+              to="/settings/alerts"
+              phone
+            />
+          ) : null}
+        </div>
+      </>
+    );
 
   return (
     <>
@@ -210,6 +328,7 @@ function Summary({
             {view.short ? "Short by" : "Free cash"}
           </span>
           <span
+            data-m-num="hero"
             className={cn(
               "text-[38px] font-medium leading-[1.1] tracking-[-0.03em]",
               view.short && "text-[var(--m-bad)]",
@@ -223,17 +342,7 @@ function Summary({
             {view.short ? "" : " are paid"}
           </span>
         </div>
-        {view.short ? (
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--m-warn-soft)] px-3 py-1 text-[12.5px] text-[var(--m-bad)]">
-            <Icons.AlertTriangle className="h-3.5 w-3.5" />
-            Short
-          </span>
-        ) : (
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--m-forest)] px-3 py-1 text-[12.5px] text-[var(--m-on-forest)]">
-            <Icons.Check className="h-3.5 w-3.5" />
-            Covered
-          </span>
-        )}
+        <Verdict short={view.short} />
       </div>
 
       <div className="flex justify-between gap-3 text-xs text-[var(--m-mint-muted)]">
@@ -269,7 +378,7 @@ function Summary({
         />
         {t.cushion > 0 ? (
           <Legend
-            color="var(--m-cat-other)"
+            color="var(--m-cushion, var(--m-cat-other))"
             label="Your cushion"
             value={t.cushion}
             currency={currency}
@@ -288,6 +397,7 @@ function Legend({
   currency,
   onClick,
   to,
+  phone = false,
 }: {
   color: string;
   label: string;
@@ -295,19 +405,23 @@ function Legend({
   currency: string;
   onClick?: () => void;
   to?: string;
+  /** One word over the amount, no indent, so three fit across a phone. */
+  phone?: boolean;
 }) {
   const body = (
     <>
       <span className="flex min-w-0 items-center gap-1.5 text-xs text-[var(--m-mint-muted)]">
         <span
-          className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+          className={cn("shrink-0", phone ? "h-2 w-2 rounded-[2px]" : "h-2.5 w-2.5 rounded-[3px]")}
           style={{ background: color }}
           aria-hidden
         />
         <span className="min-w-0 truncate">{label}</span>
-        {onClick ? <Icons.ArrowRight className="h-3 w-3 shrink-0" aria-hidden /> : null}
+        {onClick && !phone ? <Icons.ArrowRight className="h-3 w-3 shrink-0" aria-hidden /> : null}
       </span>
-      <span className="pl-4 text-[15px] font-medium">
+      <span
+        className={phone ? "whitespace-nowrap text-sm font-medium" : "pl-4 text-[15px] font-medium"}
+      >
         <PrivacyAmount value={value} currency={currency} />
       </span>
     </>

@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { billMonth, ymd, type BillMonth } from "../lib/bill-calendar";
 import { shortDate, type Stream } from "../lib/subscriptions";
 import { StreamLogo } from "./stream-logo";
+import { PhoneFold } from "./phone-fold";
 
 // Meadow's colours on the dashboard (globals.css, `.meadow`); outside it (the Subscriptions & Bills page)
 // the page's own green and track, which read in Day and Night alike.
@@ -97,6 +98,15 @@ export function BillMonthPanel({
         </div>
       )}
 
+      {/* money-hub patch: on a phone the days fold behind "October calendar" (approved phone design: the
+          answer, paid and left to pay, stays in view). */}
+      <PhoneFold
+        id="bill-calendar"
+        bleed={false}
+        closedLabel={`${m.label.split(" ")[0]} calendar`}
+        openLabel="Hide calendar"
+        className="-mx-3 -mb-2 w-[calc(100%+1.5rem)] px-3"
+      >
       <div>
         <div className="text-muted-foreground grid grid-cols-7 pb-1 text-center text-[10.5px]">
           {WEEK.map((d, i) => (
@@ -137,6 +147,7 @@ export function BillMonthPanel({
         {offset === 0 ? <span className="underline decoration-2 underline-offset-[3px]">Today</span> : null}
         <span className="ml-auto">Tap a day</span>
       </div>
+      </PhoneFold>
     </div>
   );
 }

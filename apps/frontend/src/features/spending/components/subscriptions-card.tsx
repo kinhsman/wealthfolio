@@ -39,9 +39,9 @@ export function SubscriptionsCard({ currency = "USD", fill = false }: { currency
         note("No repeating charges found yet. One shows up once it has come back a few months in a row.")
       ) : (
         <>
-          <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2 px-4 pb-3 pt-3 md:px-5">
+          <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2 px-4 pb-3 pt-3 max-md:px-3 max-md:pb-2 max-md:pt-2 md:px-5">
             <div className="min-w-0">
-              <div className="text-2xl font-medium tabular-nums">
+              <div data-m-num="card" className="text-2xl font-medium tabular-nums">
                 <PrivacyAmount value={data.totals.monthly} currency={currency} />
               </div>
               <div className="text-muted-foreground whitespace-nowrap text-xs">
@@ -60,10 +60,10 @@ export function SubscriptionsCard({ currency = "USD", fill = false }: { currency
           <BillMonthPanel
             items={data.items}
             currency={currency}
-            className="border-border/60 border-t px-4 py-3 md:px-5"
+            className="border-border/60 border-t px-4 py-3 max-md:px-3 max-md:py-2 md:px-5"
           />
           {next.length > 0 ? (
-            <div id="next-due" className="border-border/60 scroll-mt-4 border-t px-4 py-3 md:px-5">
+            <div id="next-due" className="border-border/60 scroll-mt-4 border-t px-4 py-3 max-md:px-3 max-md:py-2 md:px-5">
               <div className="text-muted-foreground text-xs">Next due</div>
               {next.map((s) => (
                 <Link

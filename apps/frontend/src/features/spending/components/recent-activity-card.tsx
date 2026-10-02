@@ -21,6 +21,7 @@ import { useNotes } from "../lib/notes";
 import { merchantFor, useMerchants } from "../lib/merchants";
 import { MerchantLogo } from "./merchant-logo";
 import { usePendingTransactions, type PendingTransaction } from "./pending-transactions";
+import { PhoneFold } from "./phone-fold";
 
 const SPENDING_TAXONOMY = "spending_categories";
 
@@ -166,9 +167,12 @@ export function RecentActivityCard({
           {t("spending:dashboard.noRecentActivity")}
         </div>
       ) : (
-        <div className="grid gap-x-7 px-4 pb-2 md:px-5 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
-        {grouped.map(([dateKey, items]) => (
-          <div key={dateKey} className="min-w-0 py-2">
+        <div className="grid gap-x-7 px-4 pb-2 max-md:px-3 max-md:pb-0 md:px-5 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
+        {(() => {
+        // money-hub patch: on a phone the latest day shows and the others fold behind a Show more row;
+        // each row is two lines there, the name over its category (approved phone design, 10-02).
+        const renderDay = ([dateKey, items]: (typeof grouped)[number]) => (
+          <div key={dateKey} className="min-w-0 py-2 max-md:py-1">
             <div className="text-muted-foreground border-border/60 border-b pb-1 text-xs">
               {dayLabel(dateKey)}
             </div>
@@ -179,11 +183,13 @@ export function RecentActivityCard({
                 const merchant = merchantFor(name, merchants, accountById?.get(p.accountId), p.amount < 0 ? "WITHDRAWAL" : "DEPOSIT");
                 return (
                   <div key={p.id} className="flex items-center gap-2.5 py-1.5 opacity-70" title="Not posted by the bank yet. Editable once it posts.">
-                    {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} className="h-6 w-6" /> : null}
-                    <div className="text-foreground/90 min-w-0 flex-1 truncate text-xs font-medium">{name}</div>
-                    <span className="text-muted-foreground shrink-0 rounded-full border border-dashed px-1.5 py-px text-[10px] font-medium uppercase tracking-wide">
-                      Pending
-                    </span>
+                    {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} className="h-6 w-6 max-md:h-7 max-md:w-7" /> : null}
+                    <div className="min-w-0 flex-1 md:flex md:items-center md:gap-2.5">
+                      <div className="text-foreground/90 min-w-0 truncate text-xs font-medium md:flex-1 max-md:text-[13px]">{name}</div>
+                      <span className="text-muted-foreground inline-block shrink-0 rounded-full border border-dashed px-1.5 py-px text-[10px] font-medium uppercase tracking-wide max-md:mt-0.5">
+                        Pending
+                      </span>
+                    </div>
                     <div className={cn("shrink-0 text-xs font-semibold tabular-nums", p.amount < 0 ? "text-foreground" : "text-success")}>
                       {p.amount < 0 ? "−" : "+"}
                       <PrivacyAmount value={Math.abs(p.amount)} currency={p.currency} />
@@ -223,21 +229,25 @@ export function RecentActivityCard({
                   className="hover:bg-muted/40 flex items-center gap-2.5 rounded-md py-1.5 transition-colors"
                 >
                   {/* money-hub patch: the owner's merchant logo (lib/merchants.ts). */}
-                  {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} className="h-6 w-6" /> : null}
-                  <div className="min-w-0 flex-1">
-                    <div className="text-foreground/90 truncate text-xs font-medium">
+                  {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} className="h-6 w-6 max-md:h-7 max-md:w-7" /> : null}
+                  <div className="min-w-0 flex-1 md:flex md:items-center md:gap-2.5">
+                    <div className="text-foreground/90 min-w-0 truncate text-xs font-medium md:flex-1 max-md:text-[13px]">
                       {payee || (
                         <span className="text-muted-foreground italic">
                           {t("spending:dashboard.noPayee")}
                         </span>
                       )}
                     </div>
+                    {badge ? (
+                      <div className="shrink-0 max-md:mt-0.5 max-md:flex">
+                        <CategoryBadge name={badge.name} color={badge.color} icon={badge.icon} />
+                      </div>
+                    ) : needsReview ? (
+                      <div className="shrink-0 max-md:mt-0.5 max-md:flex">
+                        <ReviewPill label={t("spending:dashboard.uncategorized")} />
+                      </div>
+                    ) : null}
                   </div>
-                  {badge ? (
-                    <CategoryBadge name={badge.name} color={badge.color} icon={badge.icon} />
-                  ) : needsReview ? (
-                    <ReviewPill label={t("spending:dashboard.uncategorized")} />
-                  ) : null}
                   <div
                     className={cn(
                       "shrink-0 text-xs font-semibold tabular-nums",
@@ -251,7 +261,23 @@ export function RecentActivityCard({
               );
             })}
           </div>
-        ))}
+        );
+        const [first, ...rest] = grouped;
+        return (
+          <>
+            {renderDay(first)}
+            {rest.length > 0 ? (
+              <PhoneFold
+                id="activity"
+                closedLabel={`Show ${rest.length} more ${rest.length === 1 ? "day" : "days"}`}
+                openLabel="Show less"
+              >
+                {rest.map(renderDay)}
+              </PhoneFold>
+            ) : null}
+          </>
+        );
+        })()}
         </div>
       )}
     </DashboardCard>

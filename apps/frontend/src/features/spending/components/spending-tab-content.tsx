@@ -77,6 +77,8 @@ import { ReturnsCard } from "./returns-card";
 import { SpendingByPeriodCard } from "./spending-by-period-card";
 import { SpendingPeriodSelector } from "./spending-period-toggle";
 import { CategoryMark } from "./category-chips";
+import { PhoneFold } from "./phone-fold";
+import { useDashboardSkins } from "../lib/dashboard-skin";
 
 const SPENDING_TAXONOMY = "spending_categories";
 type SpendingDashboardPeriod = "MTD" | "LAST_MONTH" | "3M" | "6M" | "YTD" | "1Y";
@@ -323,6 +325,8 @@ function barKeyToRange(
 }
 
 export default function SpendingTabContent() {
+  // money-hub patch: the dashboard's theme for each mode, Meadow or Bronze Titanium (Settings, Appearance).
+  const skins = useDashboardSkins();
   const dateFormatting = useDateFormatting();
   const formatting = useAmountFormatting();
   const { t } = useTranslation();
@@ -894,7 +898,7 @@ export default function SpendingTabContent() {
             state={{
               aiPrompt: t("spending:tabContent.aiCategorizePrompt"),
             }}
-            className="mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[var(--m-forest)] px-3 text-xs text-[var(--m-on-forest)] hover:opacity-90"
+            data-m="fill" className="mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[var(--m-forest)] px-3 text-xs text-[var(--m-on-forest)] hover:opacity-90"
           >
             <Icons.Sparkles className="h-3 w-3" />
             {t("spending:tabContent.askAiCategorize")}
@@ -964,7 +968,11 @@ export default function SpendingTabContent() {
   // went, Returns, Dig deeper, Events, Worth a look; the chart and Recent activity sit under More. Every
   // two-card row splits two thirds / one third so the columns line up; each figure shows in one place.
   return (
-    <div className="meadow flex min-h-screen flex-col gap-3.5 px-3 pb-[var(--mobile-nav-total-offset)] pt-2 md:px-6 md:pb-8 lg:px-8">
+    <div
+      className="meadow flex min-h-screen flex-col gap-3.5 px-3 pb-[var(--mobile-nav-total-offset)] pt-2 max-md:gap-2 md:px-6 md:pb-8 lg:px-8"
+      data-light-skin={skins.light}
+      data-dark-skin={skins.dark}
+    >
       {dataErrored && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300">
           <span>
@@ -997,7 +1005,10 @@ export default function SpendingTabContent() {
 
       <CashCardsCard currency={currency} onShowBills={showBills} />
 
-      <section className="border-border flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-[20px] border bg-[var(--m-surface)] px-[18px] py-3.5">
+      <section
+        data-m="card"
+        className="border-border flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-[20px] border bg-[var(--m-surface)] px-[18px] py-3.5 max-md:gap-y-2 max-md:px-3 max-md:py-2.5"
+      >
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-muted-foreground text-[12.5px]">
             {t("spending:tabContent.spentLabel")}
@@ -1020,7 +1031,7 @@ export default function SpendingTabContent() {
             {isLoading ? (
               <Skeleton className="h-8 w-40" />
             ) : (
-              <span className="text-[30px] font-medium leading-tight tracking-[-0.03em] tabular-nums">
+              <span data-m-num="big" className="text-[30px] font-medium leading-tight tracking-[-0.03em] tabular-nums">
                 <PrivacyAmount value={totalSpending} currency={currency} />
               </span>
             )}
@@ -1040,23 +1051,23 @@ export default function SpendingTabContent() {
         <div className="grid min-w-0 flex-[0_1_400px] grid-cols-3 gap-1.5">
           <Link
             to={dashboardInsightHref.cashflow}
-            className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 hover:opacity-90"
+            className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 hover:opacity-90 max-md:px-2.5 max-md:py-1.5"
           >
             <span className="text-muted-foreground text-xs">{t("spending:cashFlow.income")}</span>
-            <span className="truncate text-[17px] font-medium text-[var(--m-forest)]">
+            <span data-m-num="tile" className="truncate text-[17px] font-medium text-[var(--m-forest)]">
               +{compact(income)}
             </span>
           </Link>
           <Link
             to={dashboardInsightHref.cashflow}
-            className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 hover:opacity-90"
+            className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 hover:opacity-90 max-md:px-2.5 max-md:py-1.5"
           >
             <span className="text-muted-foreground text-xs">{t("spending:cashFlow.saving")}</span>
-            <span className="truncate text-[17px] font-medium">{compact(totalSaved)}</span>
+            <span data-m-num="tile" className="truncate text-[17px] font-medium">{compact(totalSaved)}</span>
           </Link>
-          <div className="flex min-w-0 flex-col rounded-xl bg-[var(--m-forest)] px-3 py-2 text-[var(--m-on-forest)]">
+          <div data-m="fill" className="flex min-w-0 flex-col rounded-xl bg-[var(--m-forest)] px-3 py-2 text-[var(--m-on-forest)] max-md:px-2.5 max-md:py-1.5">
             <span className="text-xs">{t("spending:cashFlow.net")}</span>
-            <span className="truncate text-[17px] font-medium">
+            <span data-m-num="tile" className="truncate text-[17px] font-medium">
               {net >= 0 ? "+" : "\u2212"}
               {compact(Math.abs(net))}
             </span>
@@ -1064,7 +1075,7 @@ export default function SpendingTabContent() {
         </div>
       </section>
 
-      <div className="grid gap-3.5 lg:grid-cols-3">
+      <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
         <div className="min-w-0 lg:col-span-2">
           <BudgetLineChartCard
             monthKey={budgetMonthKey}
@@ -1098,7 +1109,7 @@ export default function SpendingTabContent() {
         </div>
       </div>
 
-      <div className="grid gap-3.5 lg:grid-cols-3">
+      <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
         <div className="min-w-0 lg:col-span-2">
           <DashboardCard
             title={t("spending:tabContent.whereItWent")}
@@ -1146,20 +1157,21 @@ export default function SpendingTabContent() {
             )}
           </DashboardCard>
         </div>
-        <div className="flex min-w-0 flex-col gap-3.5">
+        <div className="flex min-w-0 flex-col gap-3.5 max-md:gap-2">
           {/* money-hub patch: returns still waiting for their refund (lib/returns.ts); nothing while none is. */}
           <ReturnsCard currency={currency} />
           <nav
             aria-label={t("spending:tabContent.digDeeper")}
-            className="border-border flex flex-col rounded-[20px] border bg-[var(--m-surface)] p-1.5"
+            data-m="card"
+            className="border-border flex flex-col rounded-[20px] border bg-[var(--m-surface)] p-1.5 max-md:p-1"
           >
             {INSIGHT_STAGES.map((s) => (
               <Link
                 key={s.stage}
                 to={dashboardInsightHref[s.stage]}
-                className="hover:bg-muted/40 group flex items-center gap-3 rounded-[14px] px-3 py-2.5 transition-colors"
+                className="hover:bg-muted/40 group flex items-center gap-3 rounded-[14px] px-3 py-2.5 transition-colors max-md:gap-2.5 max-md:px-2 max-md:py-1.5"
               >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--m-mint)] text-[var(--m-forest)]">
+                <span data-m="icon-tile" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--m-mint)] text-[var(--m-forest)]">
                   <s.Icon className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -1177,7 +1189,7 @@ export default function SpendingTabContent() {
         </div>
       </div>
 
-      <div className="grid gap-3.5 lg:grid-cols-3">
+      <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
         <div className={cn("min-w-0", insights.length > 0 ? "lg:col-span-2" : "lg:col-span-3")}>
           <EventsCard
             activities={activities}
@@ -1193,7 +1205,8 @@ export default function SpendingTabContent() {
         {insights.length > 0 ? (
           <section
             aria-label={t("spending:tabContent.worthALook")}
-            className="min-w-0 rounded-[20px] border border-[var(--m-warn-panel-line)] bg-[var(--m-warn-panel)] px-[18px] py-4"
+            data-m="notice"
+            className="min-w-0 rounded-[20px] border border-[var(--m-warn-panel-line)] bg-[var(--m-warn-panel)] px-[18px] py-4 max-md:px-3 max-md:py-2.5"
           >
             <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 whitespace-nowrap">
               <Icons.AlertCircle className="h-4 w-4 shrink-0 text-[var(--m-warn)]" />
@@ -1731,54 +1744,74 @@ export function CategoryRankedBar({
     // from the backend (mockup convention), and the synthetic "Other" bucket
     // naturally lands last because it's only created on demand.
     const orderedBuckets = Array.from(buckets.values()).filter((b) => b.total > 0);
+    // money-hub patch: on a phone the first four show and the rest fold (approved phone design, 10-02).
+    const renderBucket = (bucket: (typeof orderedBuckets)[number]) => (
+      <GroupedCategoryBlock
+        key={bucket.id}
+        bucket={bucket}
+        total={total}
+        currency={currency}
+        themeColor={themeColor}
+        activityHrefFor={activityHrefFor}
+      />
+    );
 
     return (
       <div>
         {StackedBar}
-        <div className="mt-3 space-y-1.5">
-          {orderedBuckets.map((bucket) => (
-            <GroupedCategoryBlock
-              key={bucket.id}
-              bucket={bucket}
-              total={total}
-              currency={currency}
-              themeColor={themeColor}
-              activityHrefFor={activityHrefFor}
-            />
-          ))}
+        <div className="mt-3 space-y-1.5 max-md:mt-2">
+          {orderedBuckets.slice(0, 4).map(renderBucket)}
+          {orderedBuckets.length > 4 ? (
+            <PhoneFold
+              id="where-it-went"
+              closedLabel={`Show ${orderedBuckets.length - 4} more`}
+              openLabel="Show less"
+              className="!mt-2.5 -mb-2.5"
+            >
+              {orderedBuckets.slice(4).map(renderBucket)}
+            </PhoneFold>
+          ) : null}
         </div>
       </div>
     );
   }
 
   // ── Flat layout (no budget groups configured). money-hub patch: Meadow tiles, two across when wide.
+  const renderRow = (r: (typeof top)[number]) => {
+    const share = (r.amount / total) * 100;
+    const color = r.color ?? themeColor;
+    return (
+      <Link
+        key={r.id}
+        to={activityHrefFor(r.id)}
+        className="flex min-h-11 items-center gap-2.5 rounded-xl bg-[var(--m-tile)] px-3 py-1 transition-opacity hover:opacity-80"
+      >
+        {/* money-hub patch: the category's icon in its colour, not a bar (owner, 10-02). */}
+        <CategoryMark icon={r.icon} color={color} size="lg" />
+        <span className="text-foreground min-w-0 flex-1 truncate text-[13px]">{r.name}</span>
+        <span className="text-muted-foreground w-[52px] text-right text-xs tabular-nums">
+          {numberFormatting.formatPercent(share / 100, { digits: 1 })}
+        </span>
+        <span className="text-foreground w-[92px] text-right text-[13px] font-medium tabular-nums">
+          <PrivacyAmount value={r.amount} currency={currency} />
+        </span>
+      </Link>
+    );
+  };
   const uncategorizedShare = total > 0 ? (uncategorizedAmount / total) * 100 : 0;
   return (
     <div className="flex flex-col gap-3">
       {StackedBar}
 
       <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr))]">
-        {top.map((r) => {
-          const share = (r.amount / total) * 100;
-          const color = r.color ?? themeColor;
-          return (
-            <Link
-              key={r.id}
-              to={activityHrefFor(r.id)}
-              className="flex min-h-11 items-center gap-2.5 rounded-xl bg-[var(--m-tile)] px-3 py-1 transition-opacity hover:opacity-80"
-            >
-              {/* money-hub patch: the category's icon in its colour, not a bar (owner, 10-02). */}
-              <CategoryMark icon={r.icon} color={color} size="lg" />
-              <span className="text-foreground min-w-0 flex-1 truncate text-[13px]">{r.name}</span>
-              <span className="text-muted-foreground w-[52px] text-right text-xs tabular-nums">
-                {numberFormatting.formatPercent(share / 100, { digits: 1 })}
-              </span>
-              <span className="text-foreground w-[92px] text-right text-[13px] font-medium tabular-nums">
-                <PrivacyAmount value={r.amount} currency={currency} />
-              </span>
-            </Link>
-          );
-        })}
+        {top.slice(0, 4).map(renderRow)}
+        <PhoneFold
+          id="where-it-went"
+          closedLabel={`Show ${Math.max(0, top.length - 4) + (uncategorizedAmount > 0.01 ? 1 : 0)} more`}
+          openLabel="Show less"
+          className={top.length > 4 || uncategorizedAmount > 0.01 ? "mt-1" : "hidden"}
+        >
+        {top.slice(4).map(renderRow)}
         {uncategorizedAmount > 0.01 && (
           <Link
             to={activityHrefFor("__uncategorized__")}
@@ -1796,6 +1829,7 @@ export function CategoryRankedBar({
             </span>
           </Link>
         )}
+        </PhoneFold>
       </div>
       {restAmount > 0 && (
         <div className="text-muted-foreground text-xs">

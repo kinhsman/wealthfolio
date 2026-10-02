@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
+import { usePersistentState } from "@/hooks/use-persistent-state";
+import { useIsMobileViewport } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
 import { Icons, Skeleton, useAmountFormatting, useDateFormatting } from "@wealthfolio/ui";
 
@@ -57,6 +59,11 @@ export function SpendingByPeriodCard({
   const dates = useDateFormatting();
   const { isBalanceHidden } = useBalancePrivacy();
   const unit = UNIT[granularity];
+  // money-hub patch: on a phone this card (under More) folds to its title and its one-line verdict; the
+  // title row opens the chart (approved phone design, 10-02). Remembered on the device.
+  const isMobile = useIsMobileViewport();
+  const [phoneOpen, setPhoneOpen] = usePersistentState<boolean>("dashboard-fold-by-day", false);
+  const showChart = !isMobile || phoneOpen;
 
   const money = (v: number) =>
     isBalanceHidden ? "••••" : formatting.formatRoundedAmount(v, currency);
@@ -89,6 +96,25 @@ export function SpendingByPeriodCard({
     return barData.some((b) => b.future) ? last?.key : undefined;
   }, [barData]);
 
+  // Two cut bars close together would print their amounts over each other ("$2.6K$853" on a phone):
+  // the second goes up a line.
+  const capRow = useMemo(() => {
+    const rows = new Map<string, number>();
+    if (!chart) return rows;
+    const near = isMobile ? 5 : 2;
+    let lastIdx = -99;
+    let lastRow = 1;
+    barData.forEach((b, i) => {
+      if (b.future || b.value <= chart.top) return;
+      const row = i - lastIdx < near && lastRow === 0 ? 1 : 0;
+      rows.set(b.key, row);
+      lastIdx = i;
+      lastRow = row;
+    });
+    return rows;
+  }, [barData, chart, isMobile]);
+  const twoCapRows = [...capRow.values()].some((r) => r === 1);
+
   // Up to six labels under the bars; for days, one a week starting on the first.
   const labelEvery = granularity === "day" ? 7 : Math.max(1, Math.ceil(barData.length / 6));
   const hasFuture = barData.some((b) => b.future);
@@ -113,16 +139,49 @@ export function SpendingByPeriodCard({
   })();
 
   return (
-    <section className="border-border flex min-w-0 flex-col gap-2.5 rounded-[20px] border bg-[var(--m-surface)] px-[18px] py-4">
-      <div className="flex items-baseline gap-2">
-        <h2 className="text-foreground text-sm font-medium">Spending by {unit.one}</h2>
-        {rangeLabel ? (
-          <span className="text-muted-foreground text-[12.5px]">{rangeLabel}</span>
-        ) : null}
-      </div>
+    <section
+      data-m="card"
+      className="border-border flex min-w-0 flex-col gap-2.5 rounded-[20px] border bg-[var(--m-surface)] px-[18px] py-4 max-md:gap-1.5 max-md:px-3 max-md:py-1"
+    >
+      {isMobile ? (
+        <button
+          type="button"
+          onClick={() => setPhoneOpen(!phoneOpen)}
+          aria-expanded={phoneOpen}
+          data-m-foldhead
+          className="-mx-3 flex min-h-10 w-[calc(100%+1.5rem)] max-w-none items-center justify-between gap-2.5 px-3 text-left"
+        >
+          <span className="flex min-w-0 items-baseline gap-2">
+            <h2 className="text-foreground text-sm font-medium">Spending by {unit.one}</h2>
+            {rangeLabel ? (
+              <span className="text-muted-foreground truncate text-[12.5px]">{rangeLabel}</span>
+            ) : null}
+          </span>
+          <span
+            aria-hidden
+            data-m-chev
+            className="text-secondary-foreground flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-[var(--m-tile)]"
+          >
+            {phoneOpen ? (
+              <Icons.ChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <Icons.ChevronDown className="h-3.5 w-3.5" />
+            )}
+          </span>
+        </button>
+      ) : (
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-foreground text-sm font-medium">Spending by {unit.one}</h2>
+          {rangeLabel ? (
+            <span className="text-muted-foreground text-[12.5px]">{rangeLabel}</span>
+          ) : null}
+        </div>
+      )}
 
       {isLoading ? (
         <Skeleton className="h-[190px] w-full rounded-lg" />
+      ) : !chart && !showChart ? (
+        <p className="text-muted-foreground pb-2 text-[12.5px]">No spending in this period</p>
       ) : !chart ? (
         <div className="flex h-[150px] flex-col items-center justify-center">
           <Icons.CreditCard className="text-muted-foreground/30 mb-2 h-10 w-10" />
@@ -130,113 +189,139 @@ export function SpendingByPeriodCard({
         </div>
       ) : (
         <>
-          {verdict ? <p className="text-foreground text-[13.5px]">{verdict}</p> : null}
-          <div className="relative ml-11 mt-5 h-[150px]">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i}>
-                <div
-                  className={cn(
-                    "absolute inset-x-0 border-t",
-                    i === 0 ? "border-[var(--m-line)]" : "border-[var(--m-line-soft)]",
-                  )}
-                  style={{ bottom: `${(i / 3) * 100}%` }}
-                />
-                <span
-                  className="text-muted-foreground absolute -left-11 w-[38px] text-right text-[11px]"
-                  style={{ bottom: `calc(${(i / 3) * 100}% - 7px)` }}
-                >
-                  {isBalanceHidden ? "" : formatting.formatCompactAmount(chart.step * i, currency)}
-                </span>
-              </div>
-            ))}
-            <div className="absolute inset-0 flex items-end gap-[3px] sm:gap-[5px]">
-              {barData.map((b) => {
-                const capped = !b.future && b.value > chart.top;
-                const h = b.future
-                  ? 2
-                  : Math.max(
-                      b.value > 0 ? 1.5 : 0,
-                      (Math.min(b.value, chart.top) / chart.top) * 100,
-                    );
-                const clickable = !b.future && b.value > 0;
-                return (
-                  <button
-                    key={b.key}
-                    type="button"
-                    disabled={!clickable}
-                    onClick={() => clickable && onOpen(b)}
-                    title={b.future ? nameOf(b) : `${nameOf(b)}: ${money(b.value)}`}
-                    aria-label={b.future ? nameOf(b) : `${nameOf(b)}: ${money(b.value)}`}
-                    className="group relative flex h-full min-w-0 flex-1 items-end justify-center disabled:cursor-default"
-                  >
-                    <span
-                      className={cn(
-                        "block w-[72%] max-w-[22px] rounded-t-[5px] transition-opacity",
-                        clickable && "group-hover:opacity-80",
-                      )}
-                      style={{
-                        height: `${h}%`,
-                        background: b.future
-                          ? "var(--m-line)"
-                          : b.key === todayKey
-                            ? "var(--m-forest-today)"
-                            : "var(--m-forest)",
-                      }}
-                    />
-                    {capped ? (
-                      <>
-                        <span className="text-foreground absolute -top-[18px] left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px]">
-                          {isBalanceHidden ? "" : formatting.formatCompactAmount(b.value, currency)}
-                        </span>
-                        <span className="absolute inset-x-[8%] top-3 h-1 -skew-y-[16deg] bg-[var(--m-surface)]" />
-                      </>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-            {avgValue > 0 && avgValue < chart.top ? (
+          {verdict ? (
+            <p className="text-foreground text-[13.5px] max-md:-mt-1 max-md:pb-2 max-md:text-[12.5px] max-md:text-[var(--m-ink-2)]">
+              {verdict}
+            </p>
+          ) : null}
+          {showChart ? (
+            <>
               <div
-                className="pointer-events-none absolute inset-x-0 border-t-[1.5px] border-dashed border-[var(--m-muted)]"
-                style={{ bottom: `${(avgValue / chart.top) * 100}%` }}
-              />
-            ) : null}
-          </div>
-          <div className="ml-11 flex gap-[3px] sm:gap-[5px]">
-            {barData.map((b, i) => (
-              <span
-                key={b.key}
                 className={cn(
-                  "min-w-0 flex-1 overflow-visible whitespace-nowrap text-center text-[11px]",
-                  b.key === todayKey ? "text-foreground" : "text-muted-foreground",
+                  "relative ml-11 h-[150px] max-md:h-[132px]",
+                  twoCapRows ? "mt-9" : "mt-5",
                 )}
               >
-                {i % labelEvery === 0
-                  ? granularity === "day"
-                    ? dates.formatCalendarDate(b.key, { month: "short", day: "numeric" })
-                    : b.label
-                  : ""}
-              </span>
-            ))}
-          </div>
-          <div className="text-secondary-foreground flex flex-wrap gap-x-[18px] gap-y-1 text-xs">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--m-forest)]" />
-              Spent that {unit.one}
-            </span>
-            {hasFuture ? (
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--m-line)]" />
-                {unit.many.charAt(0).toUpperCase() + unit.many.slice(1)} still to come
-              </span>
-            ) : null}
-            {avgValue > 0 ? (
-              <span className="flex items-center gap-1.5">
-                <span className="w-4 border-t-[1.5px] border-dashed border-[var(--m-muted)]" />
-                {avgLabel.charAt(0).toUpperCase() + avgLabel.slice(1)}, {money(avgValue)}
-              </span>
-            ) : null}
-          </div>
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i}>
+                    <div
+                      className={cn(
+                        "absolute inset-x-0 border-t",
+                        i === 0 ? "border-[var(--m-line)]" : "border-[var(--m-line-soft)]",
+                      )}
+                      style={{ bottom: `${(i / 3) * 100}%` }}
+                    />
+                    <span
+                      className="text-muted-foreground absolute -left-11 w-[38px] text-right text-[11px]"
+                      style={{ bottom: `calc(${(i / 3) * 100}% - 7px)` }}
+                    >
+                      {isBalanceHidden
+                        ? ""
+                        : formatting.formatCompactAmount(chart.step * i, currency)}
+                    </span>
+                  </div>
+                ))}
+                <div className="absolute inset-0 flex items-end gap-[3px] sm:gap-[5px]">
+                  {barData.map((b) => {
+                    const capped = !b.future && b.value > chart.top;
+                    const h = b.future
+                      ? 2
+                      : Math.max(
+                          b.value > 0 ? 1.5 : 0,
+                          (Math.min(b.value, chart.top) / chart.top) * 100,
+                        );
+                    const clickable = !b.future && b.value > 0;
+                    return (
+                      <button
+                        key={b.key}
+                        type="button"
+                        disabled={!clickable}
+                        onClick={() => clickable && onOpen(b)}
+                        title={b.future ? nameOf(b) : `${nameOf(b)}: ${money(b.value)}`}
+                        aria-label={b.future ? nameOf(b) : `${nameOf(b)}: ${money(b.value)}`}
+                        className="group relative flex h-full min-w-0 flex-1 items-end justify-center disabled:cursor-default"
+                      >
+                        <span
+                          className={cn(
+                            "block w-[72%] max-w-[22px] rounded-t-[5px] transition-opacity",
+                            clickable && "group-hover:opacity-80",
+                          )}
+                          style={{
+                            height: `${h}%`,
+                            background: b.future
+                              ? "var(--m-line)"
+                              : b.key === todayKey
+                                ? "var(--m-forest-today)"
+                                : "var(--m-forest)",
+                          }}
+                        />
+                        {capped ? (
+                          <>
+                            <span
+                              className={cn(
+                                "text-foreground absolute left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px]",
+                                capRow.get(b.key) === 1 ? "-top-[33px]" : "-top-[18px]",
+                              )}
+                            >
+                              {isBalanceHidden
+                                ? ""
+                                : formatting.formatCompactAmount(b.value, currency)}
+                            </span>
+                            <span className="absolute inset-x-[8%] top-3 h-1 -skew-y-[16deg] bg-[var(--m-surface)]" />
+                          </>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+                {avgValue > 0 && avgValue < chart.top ? (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 border-t-[1.5px] border-dashed border-[var(--m-muted)]"
+                    style={{ bottom: `${(avgValue / chart.top) * 100}%` }}
+                  />
+                ) : null}
+              </div>
+              <div className="ml-11 flex h-[15px] gap-[3px] sm:gap-[5px]">
+                {barData.map((b, i) => (
+                  // A label near the right end is anchored to its bar's right edge, so it never runs past
+                  // the card ("Sep 29" did on a phone).
+                  <span key={b.key} className="relative min-w-0 flex-1">
+                    <span
+                      className={cn(
+                        "absolute top-0 whitespace-nowrap text-[11px]",
+                        i >= barData.length - 3 ? "right-0" : "left-1/2 -translate-x-1/2",
+                        b.key === todayKey ? "text-foreground" : "text-muted-foreground",
+                      )}
+                    >
+                      {i % labelEvery === 0
+                        ? granularity === "day"
+                          ? dates.formatCalendarDate(b.key, { month: "short", day: "numeric" })
+                          : b.label
+                        : ""}
+                    </span>
+                  </span>
+                ))}
+              </div>
+              <div className="text-secondary-foreground flex flex-wrap gap-x-[18px] gap-y-1 text-xs max-md:pb-2.5">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--m-forest)]" />
+                  Spent that {unit.one}
+                </span>
+                {hasFuture ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--m-line)]" />
+                    {unit.many.charAt(0).toUpperCase() + unit.many.slice(1)} still to come
+                  </span>
+                ) : null}
+                {avgValue > 0 ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-4 border-t-[1.5px] border-dashed border-[var(--m-muted)]" />
+                    {avgLabel.charAt(0).toUpperCase() + avgLabel.slice(1)}, {money(avgValue)}
+                  </span>
+                ) : null}
+              </div>
+            </>
+          ) : null}
         </>
       )}
     </section>
