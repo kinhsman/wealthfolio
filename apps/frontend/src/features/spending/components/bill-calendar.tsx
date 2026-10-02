@@ -24,6 +24,12 @@ const WEEK = ["S", "M", "T", "W", "T", "F", "S"];
 const TODAY = "font-medium underline decoration-2 underline-offset-[3px]";
 /** How far the arrows go, back and ahead. */
 const BACK = 12;
+/** Each day is its own tile, its logos inside it under its number (owner, 10-02: a logo between two rows
+ *  read as either day). A bill day's tile is a shade stronger. Mixed from the text colour so it reads in
+ *  Meadow, Bronze and the plain pages, light and dark. */
+const DAY_TILE = "flex h-11 flex-col items-center gap-0.5 rounded-md pt-1";
+const EMPTY_BG = "color-mix(in srgb, var(--foreground) 3.5%, transparent)";
+const BILL_BG = "color-mix(in srgb, var(--foreground) 8%, transparent)";
 const AHEAD = 12;
 
 /** `totals` false: this month's paid and left to pay are shown elsewhere (the page's own month card);
@@ -113,7 +119,7 @@ export function BillMonthPanel({
             <span key={i}>{d}</span>
           ))}
         </div>
-        <div className="grid grid-cols-7">
+        <div className="grid grid-cols-7 gap-1">
           {Array.from({ length: m.firstWeekday }, (_, i) => (
             <span key={`pad-${i}`} />
           ))}
@@ -172,6 +178,12 @@ function ArrowButton({ label, disabled, onClick, children }: { label: string; di
   );
 }
 
+function DayNumber({ day, today }: { day: number; today: boolean }) {
+  return (
+    <span className={cn("flex h-4 items-center text-[11px] leading-none tabular-nums", today && TODAY)}>{day}</span>
+  );
+}
+
 function Day({
   date,
   day,
@@ -191,8 +203,8 @@ function Day({
   const past = date < today;
   if (!bills.length) {
     return (
-      <span className={cn("flex h-10 items-start justify-center pt-0.5 text-[11.5px] tabular-nums", past && "text-muted-foreground/60")}>
-        <span className={cn("flex h-6 w-6 items-center justify-center rounded-full", isToday && TODAY)}>{day}</span>
+      <span className={cn(DAY_TILE, past && "text-muted-foreground/60")} style={{ background: EMPTY_BG }}>
+        <DayNumber day={day} today={isToday} />
       </span>
     );
   }
@@ -204,9 +216,10 @@ function Day({
         <button
           type="button"
           aria-label={`${shortDate(date)}: ${bills.map((b) => b.name).join(", ")}`}
-          className="hover:bg-muted/60 flex h-10 flex-col items-center justify-center gap-0.5 rounded-lg pt-0.5 transition-colors"
+          className={cn(DAY_TILE, "hover:brightness-95 dark:hover:brightness-125 transition-[filter]")}
+          style={{ background: BILL_BG }}
         >
-          <span className={cn("flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none tabular-nums", isToday && TODAY)}>{day}</span>
+          <DayNumber day={day} today={isToday} />
           <span className="flex -space-x-1.5">
             {bills.slice(0, 2).map((b, i) => {
               const s = byKey.get(b.key);
