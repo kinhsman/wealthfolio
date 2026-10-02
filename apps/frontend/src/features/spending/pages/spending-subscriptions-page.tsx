@@ -1,7 +1,7 @@
 // money-hub patch: Subscriptions & bills (lib/subscriptions.ts): every charge that repeats, in two
 // groups, with its status and next due date; the owner ticks, hides, moves, adds by hand, sets a
-// cancel reminder and picks which alerts go out.
-import { useState, type ReactNode } from "react";
+// cancel reminder and picks which alerts go out. On top: this month's paid so far and still to pay.
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -25,6 +25,9 @@ import {
   Page,
   PageContent,
   PageHeader,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   PrivacyAmount,
   Select,
   SelectContent,
@@ -39,12 +42,14 @@ import { cn } from "@/lib/utils";
 
 import { CompanyButton, CompanyPicker } from "../components/company-picker";
 import { StreamLogo } from "../components/stream-logo";
+import { dueInMonth, paidInMonth, type BillDue } from "../lib/budget-forecast";
 import { ruleOfferStore } from "../lib/rule-offer";
 import {
   EVERY_LABELS,
   SUBSCRIPTIONS_KEY,
   dueLabel,
   rentalSettingsHref,
+  shortDate,
   statusLabel,
   subscriptionsApi,
   transactionsHref,
@@ -175,7 +180,10 @@ export default function SpendingSubscriptionsPage() {
           <p className="text-destructive text-sm">{errorText(error)}</p>
         ) : !data ? null : (
           <>
-            <div className="grid grid-cols-3 gap-2.5">
+            {/* This month's paid and still to pay first (owner, 10-02: "track how many was paid and the left to
+                paid"), then the totals; all of them tighter (same day: "reduce the padding and spacing"). */}
+            <div className="grid grid-cols-3 gap-2 lg:grid-cols-5">
+              <ThisMonth items={items} currency={currency} className="col-span-3 lg:col-span-2" />
               <Tile label="A month" value={<PrivacyAmount value={data.totals.monthly} currency={currency} />} />
               <Tile label="A year" value={<PrivacyAmount value={data.totals.yearly} currency={currency} />} />
               <Tile label="Repeating" value={<span>{live.length}</span>} sub={stopped.length ? `${stopped.length} stopped` : undefined} />
@@ -310,11 +318,125 @@ export default function SpendingSubscriptionsPage() {
 
 function Tile({ label, value, sub }: { label: string; value: ReactNode; sub?: string }) {
   return (
-    <div className="border-border/40 bg-card/70 rounded-xl border p-3 backdrop-blur-xl md:p-4">
-      <div className="text-muted-foreground/70 text-[10px] font-semibold uppercase tracking-wide">{label}</div>
-      <div className="mt-1 whitespace-nowrap text-base font-semibold tabular-nums sm:text-xl md:text-2xl">{value}</div>
-      {sub ? <div className="text-muted-foreground text-xs">{sub}</div> : null}
+    <div className="border-border/40 bg-card/70 min-w-0 rounded-xl border px-2.5 py-2 backdrop-blur-xl md:px-3">
+      <div className="text-muted-foreground/70 truncate text-[10px] font-semibold uppercase tracking-wide">{label}</div>
+      <div className="whitespace-nowrap text-[15px] font-semibold tabular-nums sm:text-lg">{value}</div>
+      {sub ? <div className="text-muted-foreground text-[11px] leading-tight">{sub}</div> : null}
     </div>
+  );
+}
+
+/** The paid part of the bar: green, fixed (the dark theme turns emerald utilities white). */
+const PAID_GREEN = "#16a34a";
+
+const ymd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const sumOf = (xs: BillDue[]) => Math.round(xs.reduce((a, b) => a + b.amount, 0) * 100) / 100;
+
+/**
+ * This month so far: what the subscriptions and bills charged (your part of a shared one) and what is
+ * still to come by the month's end, at the usual amount. Counted like the Monthly budget card's "bills
+ * still due" (lib/budget-forecast.ts): bills paid inside the mortgage are in its payment, a stopped one
+ * is never still due, one late from last month comes now. A tap lists both.
+ */
+function ThisMonth({ items, currency, className }: { items: Stream[]; currency: string; className?: string }) {
+  const m = useMemo(() => {
+    const now = new Date();
+    const start = ymd(new Date(now.getFullYear(), now.getMonth(), 1));
+    const end = ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    const paid = items.flatMap((s) => paidInMonth(s, start, end)).sort((a, b) => a.date.localeCompare(b.date));
+    const left = items.flatMap((s) => dueInMonth(s, start, end)).sort((a, b) => a.date.localeCompare(b.date) || b.amount - a.amount);
+    const paidKeys = new Set(paid.map((b) => b.key));
+    const all = new Set([...paidKeys, ...left.map((b) => b.key)]);
+    return {
+      month: now.toLocaleDateString(undefined, { month: "long" }),
+      today: ymd(now),
+      end,
+      paid,
+      left,
+      paidTotal: sumOf(paid),
+      leftTotal: sumOf(left),
+      paidCount: paidKeys.size,
+      count: all.size,
+    };
+  }, [items]);
+  const byKey = useMemo(() => new Map(items.map((s) => [s.key, s])), [items]);
+  const whole = Math.max(0, m.paidTotal) + m.leftTotal;
+  const pct = whole > 0 ? Math.min(100, (Math.max(0, m.paidTotal) / whole) * 100) : 0;
+
+  const line = (b: BillDue, i: number, still: boolean) => {
+    const s = byKey.get(b.key);
+    // Not charged on its day yet (often still pending at the bank): said like the row says it.
+    const was = still && (b.late || b.date < m.today) ? (b.late ?? b.date) : null;
+    return (
+      <div key={`${b.key}-${b.date}-${i}`} className="flex items-center gap-2 py-1">
+        {s ? <StreamLogo s={s} className="h-5 w-5 text-[9px]" /> : null}
+        <span className="min-w-0 flex-1 truncate text-xs">{b.name}</span>
+        <span className="text-muted-foreground shrink-0 text-[11px]">{was ? `Was due ${shortDate(was)}` : shortDate(b.date)}</span>
+        <span className="w-20 shrink-0 text-right text-xs tabular-nums">
+          <PrivacyAmount value={b.amount} currency={currency} />
+        </span>
+      </div>
+    );
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "border-border/40 bg-card/70 hover:bg-muted/40 min-w-0 rounded-xl border px-2.5 py-2 text-left backdrop-blur-xl transition-colors md:px-3",
+            className,
+          )}
+          aria-label={`${m.month}: what was paid and what is left to pay`}
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-muted-foreground/70 truncate text-[10px] font-semibold uppercase tracking-wide">{m.month}</span>
+            <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
+              {m.paidCount} of {m.count} paid
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-3 whitespace-nowrap">
+            <span className="min-w-0 truncate">
+              <span className="text-[15px] font-semibold tabular-nums sm:text-lg">
+                <PrivacyAmount value={m.paidTotal} currency={currency} />
+              </span>
+              <span className="text-muted-foreground text-[11px]"> paid</span>
+            </span>
+            <span className="min-w-0 truncate text-right">
+              <span className="text-[15px] font-semibold tabular-nums sm:text-lg">
+                <PrivacyAmount value={m.leftTotal} currency={currency} />
+              </span>
+              <span className="text-muted-foreground text-[11px]"> left to pay</span>
+            </span>
+          </div>
+          <div className="bg-muted mt-1.5 h-1.5 overflow-hidden rounded-full">
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: PAID_GREEN }} />
+          </div>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(22rem,calc(100vw-2rem))] p-3">
+        <div className="text-muted-foreground flex items-baseline justify-between text-[11px] font-medium">
+          <span>Paid in {m.month}</span>
+          <span className="text-foreground tabular-nums">
+            <PrivacyAmount value={m.paidTotal} currency={currency} />
+          </span>
+        </div>
+        {m.paid.length ? m.paid.map((b, i) => line(b, i, false)) : <p className="text-muted-foreground py-1 text-xs">Nothing yet.</p>}
+        <div className="text-muted-foreground mt-2 flex items-baseline justify-between border-t pt-2 text-[11px] font-medium">
+          <span>Left to pay by {shortDate(m.end)}</span>
+          <span className="text-foreground tabular-nums">
+            <PrivacyAmount value={m.leftTotal} currency={currency} />
+          </span>
+        </div>
+        {m.left.length ? m.left.map((b, i) => line(b, i, true)) : <p className="text-muted-foreground py-1 text-xs">All paid for {m.month}.</p>}
+        <p className="text-muted-foreground mt-2 border-t pt-2 text-[11px] leading-snug">
+          Your part of a shared bill. Still to pay is the usual amount; a bill paid from your mortgage escrow is in the
+          mortgage payment.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   addMonthsISO,
   againstBudget,
+  dueInMonth,
   forecastParts,
   oneOffLine,
   paceWithFixed,
+  paidInMonth,
   withoutCharges,
 } from "./budget-forecast";
 import type { Stream } from "./subscriptions";
@@ -151,13 +153,22 @@ describe("budget forecast, bills apart", () => {
       ],
       { ...OCT, monthEnd: "2026-11-01", historyOutflow: 0 },
     );
-    expect(parts.billsLeft.map((b) => `${b.name} ${b.date}`)).toEqual([
+    // Late from September: once, from the month's first day (it used to be moved to Oct 28).
+    expect(parts.billsLeft.map((b) => `${b.name} ${b.date}${b.late ? ` was ${b.late}` : ""}`)).toEqual([
       "Weekly-ish 2026-10-01",
+      "Late 2026-10-01 was 2026-09-28",
       "Late this month 2026-10-02",
-      "Late 2026-10-28",
       "Weekly-ish 2026-11-01",
     ]);
     expect(parts.everydayDaily).toBe(0);
+  });
+
+  it("a yearly bill late from last month still comes this month, once", () => {
+    const parts = forecastParts([stream("Yearly", { every: "year", next: "2026-09-28", usual: 80 })], {
+      ...OCT,
+      historyOutflow: 0,
+    });
+    expect(parts.billsLeft.map((b) => `${b.name} ${b.date} ${b.amount}`)).toEqual(["Yearly 2026-10-01 80"]);
   });
 
   it("never below zero when the bills are more than what Spending counted", () => {
@@ -264,5 +275,56 @@ describe("everyday rate leaves one-off big days out", () => {
       Infinity,
       0,
     ]);
+  });
+});
+
+describe("paid and left to pay this month (Subscriptions & Bills page)", () => {
+  const OCT1 = ["2026-10-01", "2026-10-31"] as const;
+  it("paid: this month's charges, a credit back counts against them", () => {
+    const s = stream("Prime", {
+      charges: [
+        { id: "a", date: "2026-09-19", amount: 139 },
+        { id: "b", date: "2026-10-03", amount: 139 },
+        { id: "c", date: "2026-10-09", amount: -20.71, extra: true, credit: true },
+      ],
+    });
+    expect(paidInMonth(s, ...OCT1).map((b) => b.amount)).toEqual([139, -20.71]);
+  });
+
+  it("shared in Owly: your part as it was split, the whole charge when it was not", () => {
+    const s = stream("T-Mobile", {
+      sharedOn: true,
+      usual: 95.18,
+      billUsual: 608.1,
+      charges: [
+        { id: "t1", date: "2026-10-02", amount: 427.18 },
+        { id: "t2", date: "2026-10-20", amount: 123.77 },
+      ],
+      shared: {
+        service: "T-Mobile",
+        count: 2,
+        latest: null,
+        myUsual: 95.18,
+        plan: [
+          { id: "t1", date: "2026-10-02", amount: 427.18, friends: 332, mine: 95.18, people: [], ok: true, tooMuch: false },
+          { id: "t2", date: "2026-10-20", amount: 123.77, friends: 218, mine: -94.23, people: [], ok: false, tooMuch: true },
+        ],
+      },
+    });
+    expect(paidInMonth(s, ...OCT1).map((b) => b.amount)).toEqual([95.18, 123.77]);
+  });
+
+  it("hidden and escrow ones count nowhere; a stopped one is never still due", () => {
+    const charges = [{ id: "x", date: "2026-10-05", amount: 50 }];
+    expect(paidInMonth(stream("Hidden", { hidden: true, charges }), ...OCT1)).toEqual([]);
+    expect(paidInMonth(stream("Escrow", { escrow: {} as Stream["escrow"], charges }), ...OCT1)).toEqual([]);
+    expect(dueInMonth(stream("Escrow", { escrow: {} as Stream["escrow"] }), ...OCT1)).toEqual([]);
+    expect(dueInMonth(stream("Stopped", { status: "stopped", next: "2026-10-12" }), ...OCT1)).toEqual([]);
+  });
+
+  it("paid this month moves its next date on: not still due", () => {
+    const s = stream("US Bank", { usual: 2505.76, next: "2026-11-01", charges: [{ id: "m", date: "2026-10-01", amount: 2505.76 }] });
+    expect(paidInMonth(s, ...OCT1).map((b) => b.amount)).toEqual([2505.76]);
+    expect(dueInMonth(s, ...OCT1)).toEqual([]);
   });
 });

@@ -31,6 +31,41 @@ export interface BillDue {
   name: string;
   date: string;
   amount: number;
+  /** Due before the month began and not charged yet (its date then): it comes this month, once, and
+   *  counts from the month's first day. */
+  late?: string;
+}
+
+/**
+ * Its charges still to come between `monthStart` and `monthEnd`, from its next date on, its usual amount
+ * (your part of a shared one). One late from an earlier month comes once, now; a stopped one, a hidden
+ * one and one paid inside the mortgage (escrow) come never.
+ */
+export function dueInMonth(s: Stream, monthStart: string, monthEnd: string): BillDue[] {
+  if (s.hidden || s.escrow || s.status === "stopped" || !s.next || !(s.usual > 0)) return [];
+  if (s.next < monthStart) return [{ key: s.key, name: s.name, date: monthStart, amount: s.usual, late: s.next }];
+  const out: BillDue[] = [];
+  let date = s.next;
+  for (let i = 0; date <= monthEnd && i < 31; i += 1) {
+    out.push({ key: s.key, name: s.name, date, amount: s.usual });
+    date = addMonthsISO(date, MONTHS[s.every] ?? 1);
+  }
+  return out;
+}
+
+/**
+ * Its charges between `monthStart` and `monthEnd` (a credit back counts against them), your part of a
+ * shared one as Owly split it (the whole charge when it was not split). Hidden and escrow: none.
+ */
+export function paidInMonth(s: Stream, monthStart: string, monthEnd: string): BillDue[] {
+  if (s.hidden || s.escrow) return [];
+  const plan = new Map((s.shared?.plan ?? []).map((p) => [p.id, p]));
+  return (s.charges ?? [])
+    .filter((c) => c.date >= monthStart && c.date <= monthEnd)
+    .map((c) => {
+      const p = s.sharedOn ? plan.get(c.id) : undefined;
+      return { key: s.key, name: s.name, date: c.date, amount: p?.ok ? p.mine : c.amount };
+    });
 }
 
 export interface ForecastParts {
@@ -98,14 +133,9 @@ export function forecastParts(
       if (fixed && c.date >= opts.monthStart && c.date <= opts.monthEnd)
         fixedPaid.push({ key: s.key, name: s.name, date: c.date, amount: myPart(s, c.amount) });
     }
-    if (s.status === "stopped" || !s.next || !(s.usual > 0)) continue;
-    // Still due: from its next date (a late one that is still this month counts) to the month's end.
-    let date = s.next;
-    for (let i = 0; date <= opts.monthEnd && i < 31; i += 1) {
-      if (date >= opts.monthStart)
-        (fixed ? fixedDue : billsLeft).push({ key: s.key, name: s.name, date, amount: s.usual });
-      date = addMonthsISO(date, MONTHS[s.every] ?? 1);
-    }
+    // Still due: from its next date to the month's end; a late one comes this month, once (the
+    // Subscriptions & Bills page counts "Left to pay" the same way).
+    (fixed ? fixedDue : billsLeft).push(...dueInMonth(s, opts.monthStart, opts.monthEnd));
   }
   billsLeft.sort((a, b) => a.date.localeCompare(b.date) || b.amount - a.amount);
   const rate = everydayRate(streams, opts, billsInHistory);
