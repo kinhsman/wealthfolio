@@ -383,38 +383,36 @@ function CardRow({
           currency,
           maximumFractionDigits: 0,
         }).format(v);
+  // money-hub patch: a card row is the same two lines as a cash row (name over its usage words, the
+  // amount on the right) so the Cards list is no taller than the Cash list and the Free cash side
+  // (owner, 10-02). The usage bar is a thin line along the row's foot, under the words.
   return (
     <Link
       to={cardTransactionsHref(c)}
-      className="flex items-center gap-2.5 rounded-xl bg-[var(--m-mint-tile)] px-2.5 py-2 hover:opacity-90"
+      className="relative flex items-center gap-2.5 rounded-xl bg-[var(--m-mint-tile)] px-2.5 pb-2.5 pt-2 hover:opacity-90"
     >
       <Logo url={logo} name={c.bank} square />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-[13.5px]">{name}</span>
-          <span className="shrink-0 text-[13.5px] font-medium">
-            <PrivacyAmount value={credit ? -c.owed : c.owed} currency={currency} />
-          </span>
-        </div>
-        {c.limit != null ? (
+      {c.limit != null ? (
+        <div
+          className="absolute bottom-[5px] left-12 right-2.5 flex h-[3px] overflow-hidden rounded-full bg-[var(--m-track)]"
+          aria-hidden
+        >
           <div
-            className="flex h-[5px] overflow-hidden rounded-full bg-[var(--m-track)]"
-            aria-hidden
-          >
+            style={{
+              width: `${owedW}%`,
+              minWidth: c.owed > 0 ? 3 : 0,
+              background: high ? "var(--m-warn-line)" : "var(--m-forest)",
+            }}
+          />
+          {pendingW > 0 ? (
             <div
-              style={{
-                width: `${owedW}%`,
-                minWidth: c.owed > 0 ? 3 : 0,
-                background: high ? "var(--m-warn-line)" : "var(--m-forest)",
-              }}
+              style={{ width: `${pendingW}%`, minWidth: 2, background: "var(--m-forest-soft)" }}
             />
-            {pendingW > 0 ? (
-              <div
-                style={{ width: `${pendingW}%`, minWidth: 2, background: "var(--m-forest-soft)" }}
-              />
-            ) : null}
-          </div>
-        ) : null}
+          ) : null}
+        </div>
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13.5px]">{name}</div>
         <div className="truncate text-[11.5px] text-[var(--m-mint-muted)]">
           {c.needsLogin ? (
             <span className="text-[var(--m-warn)]">Sign in again</span>
@@ -438,6 +436,9 @@ function CardRow({
           ) : null}
         </div>
       </div>
+      <span className="shrink-0 text-[13.5px] font-medium">
+        <PrivacyAmount value={credit ? -c.owed : c.owed} currency={currency} />
+      </span>
     </Link>
   );
 }
