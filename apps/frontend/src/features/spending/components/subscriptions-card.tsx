@@ -35,16 +35,16 @@ export function SubscriptionsCard({ currency = "USD" }: { currency?: string }) {
         note("No repeating charges found yet. One shows up once it has come back a few months in a row.")
       ) : (
         <>
-          <div className="flex items-end justify-between gap-3 px-4 pb-3 pt-3 md:px-5">
-            <div>
-              <div className="text-2xl font-semibold tabular-nums">
+          <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2 px-4 pb-3 pt-3 md:px-5">
+            <div className="min-w-0">
+              <div className="text-2xl font-medium tabular-nums">
                 <PrivacyAmount value={data.totals.monthly} currency={currency} />
               </div>
-              <div className="text-muted-foreground text-xs">
+              <div className="text-muted-foreground whitespace-nowrap text-xs">
                 a month, <PrivacyAmount value={data.totals.yearly} currency={currency} /> a year
               </div>
             </div>
-            <div className="text-muted-foreground space-y-0.5 text-right text-xs tabular-nums">
+            <div className="text-muted-foreground ml-auto space-y-0.5 whitespace-nowrap text-right text-xs tabular-nums">
               <div>
                 Subscriptions <PrivacyAmount value={data.totals.subscriptionsMonthly} currency={currency} />
               </div>
@@ -54,8 +54,8 @@ export function SubscriptionsCard({ currency = "USD" }: { currency?: string }) {
             </div>
           </div>
           {next.length > 0 ? (
-            <div className="border-border/60 border-t px-4 py-3 md:px-5">
-              <div className="text-muted-foreground/70 text-[10px] font-semibold uppercase tracking-wide">Next due</div>
+            <div id="next-due" className="border-border/60 scroll-mt-4 border-t px-4 py-3 md:px-5">
+              <div className="text-muted-foreground text-xs">Next due</div>
               {next.map((s) => (
                 <Link
                   key={s.key}

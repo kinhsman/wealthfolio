@@ -157,9 +157,7 @@ export function RecentActivityCard({
           }
           className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
         >
-          {uncategorizedCount > 0
-            ? t("spending:dashboard.viewAllToTag", { count: uncategorizedCount })
-            : t("spending:dashboard.viewAll")}
+          {t("spending:dashboard.viewAll").replace(/\s*→\s*$/, "")}
         </Link>
       }
     >
@@ -168,12 +166,10 @@ export function RecentActivityCard({
           {t("spending:dashboard.noRecentActivity")}
         </div>
       ) : (
-        grouped.map(([dateKey, items], gi) => (
-          <div
-            key={dateKey}
-            className={cn("px-4 py-3 md:px-5", gi > 0 && "border-border/60 border-t")}
-          >
-            <div className="text-muted-foreground/70 text-[10px] font-semibold uppercase tracking-wide">
+        <div className="grid gap-x-7 px-4 pb-2 md:px-5 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
+        {grouped.map(([dateKey, items]) => (
+          <div key={dateKey} className="min-w-0 py-2">
+            <div className="text-muted-foreground border-border/60 border-b pb-1 text-xs">
               {dayLabel(dateKey)}
             </div>
             {items.map((row) => {
@@ -255,7 +251,8 @@ export function RecentActivityCard({
               );
             })}
           </div>
-        ))
+        ))}
+        </div>
       )}
     </DashboardCard>
   );

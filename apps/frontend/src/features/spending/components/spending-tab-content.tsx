@@ -1,16 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FC } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import {
-  Bar,
-  BarChart,
-  Cell,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  Treemap,
-  XAxis,
-} from "recharts";
+import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
 
 import { DashboardCard } from "@/components/dashboard-card";
 import { useAccounts } from "@/hooks/use-accounts";
@@ -19,7 +10,6 @@ import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { useSettingsContext } from "@/lib/settings-provider";
 import type { DateRange, TaxonomyCategory } from "@/lib/types";
 import { cn, formatDateISO } from "@/lib/utils";
-import Balance from "@/pages/dashboard/balance";
 
 import {
   Icons,
@@ -64,7 +54,7 @@ import {
   shouldPreferDashboardPeriod,
 } from "../lib/period-preferences";
 import type { ReportsPeriod } from "../lib/reports-period";
-import { FOREST_THEME, themeBg, type Palette } from "../lib/theme";
+import { FOREST_THEME, type Palette } from "../lib/theme";
 import {
   addCalendarDays,
   addCalendarMonths,
@@ -77,18 +67,16 @@ import {
   zonedCalendarDateBoundaryToDate,
 } from "../lib/timezone";
 import { BudgetLineChartCard } from "./budget-line-chart-card";
-import { CashFlowStrip } from "./cash-flow-strip";
+import { CashCardsCard } from "./cash-cards-card";
 import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
 import { SubscriptionsCard } from "./subscriptions-card";
 import { useSubscriptions } from "../lib/subscriptions";
 import { forecastParts } from "../lib/budget-forecast";
 import { ReturnsCard } from "./returns-card";
-import { CreditCardsCard } from "./credit-cards-card";
-import { FreeCashCard } from "./free-cash-card";
+import { SpendingByPeriodCard } from "./spending-by-period-card";
 import { SpendingPeriodSelector } from "./spending-period-toggle";
 
-const FUTURE_BAR = "#E5E7EB";
 const SPENDING_TAXONOMY = "spending_categories";
 type SpendingDashboardPeriod = "MTD" | "LAST_MONTH" | "3M" | "6M" | "YTD" | "1Y";
 
@@ -336,7 +324,6 @@ function barKeyToRange(
 export default function SpendingTabContent() {
   const dateFormatting = useDateFormatting();
   const formatting = useAmountFormatting();
-  const numberFormatting = useNumberFormatting();
   const { t } = useTranslation();
   const { isBalanceHidden } = useBalancePrivacy();
   const { settings } = useSettingsContext();
@@ -884,28 +871,6 @@ export default function SpendingTabContent() {
       sub: React.ReactNode;
       action?: React.ReactNode;
     }[] = [];
-    if (priorSpending > 0 && deltaPct > 0.2) {
-      items.push({
-        icon: "!",
-        title: (
-          <>
-            {t("spending:tabContent.spendingAbovePrefix")}{" "}
-            <span className="font-semibold">
-              {t("spending:tabContent.pctAbove", {
-                pct: numberFormatting.formatDecimal(deltaPct * 100, {
-                  maximumFractionDigits: 0,
-                }),
-              })}
-            </span>{" "}
-            {t("spending:tabContent.thePriorPeriod")}
-          </>
-        ),
-        sub: t("spending:tabContent.moreThan", {
-          more: isBalanceHidden ? "••••" : formatting.formatAmount(delta, currency),
-          prior: isBalanceHidden ? "••••" : formatting.formatAmount(priorSpending, currency),
-        }),
-      });
-    }
     const uncategorized = categoryRows.find((c) => c.id === "__uncategorized__");
     if (uncategorized && uncategorized.txCount > 0) {
       const hasNoCategorizationRules =
@@ -928,8 +893,7 @@ export default function SpendingTabContent() {
             state={{
               aiPrompt: t("spending:tabContent.aiCategorizePrompt"),
             }}
-            className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium underline-offset-4 hover:underline"
-            style={{ color: theme.deep }}
+            className="mt-2 inline-flex min-h-8 items-center gap-1.5 rounded-full bg-[var(--m-forest)] px-3 text-xs text-[var(--m-on-forest)] hover:opacity-90"
           >
             <Icons.Sparkles className="h-3 w-3" />
             {t("spending:tabContent.askAiCategorize")}
@@ -956,26 +920,54 @@ export default function SpendingTabContent() {
     }
     return items;
   }, [
-    deltaPct,
-    delta,
-    priorSpending,
     categoryRows,
     currency,
-    isBalanceHidden,
     categorizationRules,
     categorizationRulesLoading,
-    formatting,
-    numberFormatting,
-    theme.deep,
     t,
   ]);
 
+  // money-hub patch: Where it went is spending only (Saving has its own tile in the Spent strip), so its
+  // rows add up to the Spent figure.
+  const spendRows = useMemo(
+    () => categoryRows.filter((r) => r.id !== SAVINGS_ROW_ID),
+    [categoryRows],
+  );
+  const showBills = useCallback(() => {
+    document.getElementById("next-due")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+  const periodWord = selectedIntervalDescription?.startsWith("spending:")
+    ? t(selectedIntervalDescription)
+    : selectedIntervalDescription;
+  // "Sep 1 to 30" for the chart title; "Aug 3 to Sep 30" across months.
+  const chartRangeLabel = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return undefined;
+    const from = formatDateISO(dateRange.from);
+    const to = formatDateISO(dateRange.to);
+    const sameMonth = from.slice(0, 7) === to.slice(0, 7);
+    const sameYear = from.slice(0, 4) === to.slice(0, 4);
+    const opts = sameYear
+      ? ({ month: "short", day: "numeric" } as const)
+      : ({ month: "short", day: "numeric", year: "numeric" } as const);
+    const end = sameMonth
+      ? String(dateRange.to.getDate())
+      : dateFormatting.formatCalendarDate(to, opts);
+    return `${dateFormatting.formatCalendarDate(from, opts)} to ${end}`;
+  }, [dateRange, dateFormatting]);
+  const income = report?.current.income ?? 0;
+  const net = income - totalSpending - totalSaved;
+  const compact = (v: number) => (isBalanceHidden ? "••••" : formatting.formatCompactAmount(v, currency));
+
+  // money-hub patch: the Spending dashboard, Meadow (owner picked design 5 on 10-02). Order is the
+  // owner's ranking: Cash & cards, Spent, money in and out, Monthly budget, Subscriptions & bills, Where it
+  // went, Returns, Dig deeper, Events, Worth a look; the chart and Recent activity sit under More. Every
+  // two-card row splits two thirds / one third so the columns line up; each figure shows in one place.
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="meadow flex min-h-screen flex-col gap-3.5 px-3 pb-[var(--mobile-nav-total-offset)] pt-2 md:px-6 md:pb-8 lg:px-8">
       {dataErrored && (
-        <div className="mx-4 mt-2 flex items-center justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 md:mx-6 lg:mx-8 dark:text-amber-300">
+        <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300">
           <span>
-            <span className="font-semibold">{t("spending:tabContent.loadError")}</span>{" "}
+            <span className="font-medium">{t("spending:tabContent.loadError")}</span>{" "}
             {t("spending:insightsPage.showingZeros")}
           </span>
           <button
@@ -987,372 +979,281 @@ export default function SpendingTabContent() {
           </button>
         </div>
       )}
-      <div className="px-4 pb-6 pt-2 md:px-6 md:pb-2 lg:px-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
-          <div>
-            <div className="text-muted-foreground/80 text-[11px] font-semibold uppercase tracking-[0.12em]">
-              {t("spending:tabContent.spentLabel")}
-              {selectedIntervalDescription
-                ? ` · ${selectedIntervalDescription.startsWith("spending:") ? t(selectedIntervalDescription) : selectedIntervalDescription}`
-                : ""}
-              {excludedCategoryCount > 0 && (
-                <>
-                  {" · "}
-                  <Link
-                    to="/settings/spending/categories"
-                    className="hover:text-foreground hover:underline"
-                  >
-                    {t("spending:tabContent.excludedCategoriesHint", {
-                      count: excludedCategoryCount,
-                    })}
-                  </Link>
-                </>
-              )}
-            </div>
-            <Balance
-              isLoading={isLoading}
-              targetValue={totalSpending}
-              currency={currency}
-              displayCurrency={true}
-            />
-            <div className="text-md flex items-center">
-              {isPriorLoading ? (
-                <Skeleton className="mt-1 h-4 w-56" />
-              ) : priorSpending > 0 ? (
-                <SpendingDeltaLine
-                  delta={delta}
-                  currency={currency}
-                  deltaPct={
-                    displayDeltaPct !== null && Math.abs(displayDeltaPct) <= 5
-                      ? displayDeltaPct
-                      : null
-                  }
-                />
-              ) : null}
-            </div>
+
+      <div className="flex justify-end">
+        <SpendingPeriodSelector
+          className="w-auto max-w-full justify-end"
+          value={selectedPeriod}
+          onValueChange={handleIntervalSelect}
+          customMonth={customMonth}
+          customRange={customRange}
+          maxMonth={maxPickerMonth}
+          onCustomMonthChange={handleCustomMonthSelect}
+          onCustomRangeChange={handleCustomRangeSelect}
+          isLoading={isLoading}
+        />
+      </div>
+
+      <CashCardsCard currency={currency} onShowBills={showBills} />
+
+      <section className="border-border flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-[20px] border bg-[var(--m-surface)] px-[18px] py-3.5">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="text-muted-foreground text-[12.5px]">
+            {t("spending:tabContent.spentLabel")}
+            {periodWord ? ` · ${periodWord.charAt(0).toUpperCase()}${periodWord.slice(1)}` : ""}
+            {excludedCategoryCount > 0 && (
+              <>
+                {" · "}
+                <Link
+                  to="/settings/spending/categories"
+                  className="hover:text-foreground hover:underline"
+                >
+                  {t("spending:tabContent.excludedCategoriesHint", {
+                    count: excludedCategoryCount,
+                  })}
+                </Link>
+              </>
+            )}
+          </span>
+          <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            {isLoading ? (
+              <Skeleton className="h-8 w-40" />
+            ) : (
+              <span className="text-[30px] font-medium leading-tight tracking-[-0.03em] tabular-nums">
+                <PrivacyAmount value={totalSpending} currency={currency} />
+              </span>
+            )}
+            {isPriorLoading ? (
+              <Skeleton className="h-5 w-48" />
+            ) : priorSpending > 0 ? (
+              <SpendingDeltaLine
+                delta={delta}
+                currency={currency}
+                deltaPct={
+                  displayDeltaPct !== null && Math.abs(displayDeltaPct) <= 5 ? displayDeltaPct : null
+                }
+              />
+            ) : null}
+          </span>
+        </div>
+        <div className="grid min-w-0 flex-[0_1_400px] grid-cols-3 gap-1.5">
+          <Link
+            to={dashboardInsightHref.cashflow}
+            className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 hover:opacity-90"
+          >
+            <span className="text-muted-foreground text-xs">{t("spending:cashFlow.income")}</span>
+            <span className="truncate text-[17px] font-medium text-[var(--m-forest)]">
+              +{compact(income)}
+            </span>
+          </Link>
+          <Link
+            to={dashboardInsightHref.cashflow}
+            className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 hover:opacity-90"
+          >
+            <span className="text-muted-foreground text-xs">{t("spending:cashFlow.saving")}</span>
+            <span className="truncate text-[17px] font-medium">{compact(totalSaved)}</span>
+          </Link>
+          <div className="flex min-w-0 flex-col rounded-xl bg-[var(--m-forest)] px-3 py-2 text-[var(--m-on-forest)]">
+            <span className="text-xs">{t("spending:cashFlow.net")}</span>
+            <span className="truncate text-[17px] font-medium">
+              {net >= 0 ? "+" : "\u2212"}
+              {compact(Math.abs(net))}
+            </span>
           </div>
-          <CashFlowStrip
-            income={report?.current.income ?? 0}
-            spending={report?.current.outflow ?? 0}
-            saving={report?.current.saved ?? 0}
-            currency={currency}
-            isLoading={isLoading}
-            incomeHref={dashboardInsightHref.cashflow}
-            spendingHref={dashboardInsightHref.cashflow}
-            savingHref={dashboardInsightHref.cashflow}
+        </div>
+      </section>
+
+      <div className="grid gap-3.5 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+          <BudgetLineChartCard
+            monthKey={budgetMonthKey}
+            today={todayParts}
+            isCurrentMonth={budgetMonthKey === currentBudgetMonthKey}
+            onPreviousMonth={() => shiftBudgetMonth(-1)}
+            onNextMonth={() => shiftBudgetMonth(1)}
+            canGoNextMonth={budgetMonthKey < currentBudgetMonthKey}
+            activityRange={budgetMonthActivityRange}
+            target={budgetCardBudget?.computed.totals.spendingPlanned ?? 0}
+            spent={monthReport?.current.outflow ?? 0}
+            currency={budgetCardBudget?.computed.currency ?? currency}
+            historicalDailyAvg={historicalDailyAvg}
+            forecastParts={budgetForecastParts}
+            forecastPending={subscriptionsPending || !historyReport || !monthReport}
+            allocations={
+              budgetCardBudget?.computed.groupRows.flatMap((row) => row.categories) ?? []
+            }
+            spendingBreakdown={monthReport?.spendingBreakdown ?? []}
+            categoriesMeta={categoriesMeta}
+            monthByDay={monthReport?.byDay ?? []}
+            historicalByDay={historyReport?.byDay ?? []}
           />
         </div>
+        <div className="min-w-0">
+          {/* money-hub patch: the charges that repeat (lib/subscriptions.ts); Next due is the one list of
+              the bills coming up. */}
+          <SubscriptionsCard currency={currency} />
+        </div>
       </div>
 
-      <div
-        className="flex grow flex-col"
-        style={{
-          backgroundImage: `linear-gradient(to top, ${themeBg(theme, 0.3)}, ${themeBg(theme, 0.15)} 50%, transparent 100%)`,
-        }}
-      >
-        <div className="h-[280px] [&_.recharts-layer]:outline-none [&_.recharts-rectangle]:outline-none [&_.recharts-surface]:outline-none">
-          {isLoading ? (
-            <div className="flex h-full items-center justify-center">
-              <Skeleton className="h-full w-full" />
-            </div>
-          ) : barData.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center">
-              <Icons.CreditCard className="text-muted-foreground/30 mb-3 h-12 w-12" />
-              <p className="text-muted-foreground text-sm">
-                {t("spending:tabContent.noSpendingInPeriod")}
-              </p>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData} margin={{ top: 8, right: 24, left: 16, bottom: 8 }}>
-                <defs>
-                  <linearGradient id="spending-bar" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={theme.deep} stopOpacity={0.95} />
-                    <stop offset="100%" stopColor={theme.mid} stopOpacity={0.7} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="label"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
-                  interval="preserveStartEnd"
-                  minTickGap={granularity === "day" ? 8 : 16}
+      <div className="grid gap-3.5 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+          <DashboardCard
+            title={t("spending:tabContent.whereItWent")}
+            action={
+              <div className="flex items-center gap-3">
+                <SegmentedToggle
+                  ariaLabel={t("spending:tabContent.whereItWentView")}
+                  items={[
+                    { value: "list", label: t("spending:tabContent.listView") },
+                    { value: "map", label: t("spending:tabContent.mapView") },
+                  ]}
+                  value={whereItWentView}
+                  onChange={(v) => setWhereItWentView(v as "list" | "map")}
                 />
-                <Tooltip
-                  cursor={{ fill: "rgba(0,0,0,0.04)" }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const p = payload[0].payload as {
-                      key: string;
-                      label: string;
-                      value: number;
-                      future: boolean;
-                    };
-                    return (
-                      <div className="bg-background rounded-md border px-3 py-2 text-xs shadow-sm">
-                        <div className="text-muted-foreground">{p.key}</div>
-                        <div className="text-foreground font-semibold tabular-nums">
-                          {p.future ? "—" : <PrivacyAmount value={p.value} currency={currency} />}
-                        </div>
-                        {avgValue > 0 && (
-                          <div className="text-muted-foreground/70 mt-1 flex items-center gap-1.5 tabular-nums">
-                            <span
-                              aria-hidden
-                              className="inline-block h-px w-3 border-t border-dashed border-current opacity-60"
-                            />
-                            <span>
-                              {avgLabel} · {formatting.formatCompactAmount(avgValue, currency)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }}
-                />
-                {avgValue > 0 && (
-                  <ReferenceLine
-                    y={avgValue}
-                    stroke="var(--muted-foreground)"
-                    strokeDasharray="3 3"
-                    strokeOpacity={0.4}
-                  />
-                )}
-                <Bar
-                  dataKey="value"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={28}
-                  isAnimationActive={false}
-                  onClick={(data: unknown) => {
-                    const entry = ((data as { payload?: (typeof barData)[number] })?.payload ??
-                      data) as (typeof barData)[number];
-                    if (!entry || entry.future || entry.value <= 0) return;
-                    const bucket = barKeyToRange(entry.key, granularity);
-                    const rangeStart = dateRange?.from
-                      ? formatDateISO(dateRange.from)
-                      : bucket.from;
-                    const rangeEnd = dateRange?.to ? formatDateISO(dateRange.to) : bucket.to;
-                    const from = bucket.from < rangeStart ? rangeStart : bucket.from;
-                    const to = bucket.to > rangeEnd ? rangeEnd : bucket.to;
-                    navigate(`/activities?tab=spending&from=${from}&to=${to}`);
-                  }}
+                <Link
+                  to={dashboardInsightHref.where}
+                  className="text-xs underline underline-offset-4 hover:no-underline"
                 >
-                  {barData.map((entry, i) => (
-                    <Cell
-                      key={`cell-${i}`}
-                      fill={entry.future ? FUTURE_BAR : "url(#spending-bar)"}
-                      opacity={entry.future ? 0.7 : 1}
-                      style={{ cursor: entry.future || entry.value <= 0 ? "default" : "pointer" }}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-          <div className="flex w-full justify-center">
-            <SpendingPeriodSelector
-              className="pointer-events-auto relative z-20 w-full max-w-screen-sm sm:max-w-screen-md md:max-w-2xl lg:max-w-3xl"
-              value={selectedPeriod}
-              onValueChange={handleIntervalSelect}
-              customMonth={customMonth}
-              customRange={customRange}
-              maxMonth={maxPickerMonth}
-              onCustomMonthChange={handleCustomMonthSelect}
-              onCustomRangeChange={handleCustomRangeSelect}
-              isLoading={isLoading}
-            />
-          </div>
+                  {t("spending:dashboard.viewAll").replace(/\s*→\s*$/, "")}
+                </Link>
+              </div>
+            }
+          >
+            {isLoading ? (
+              <Skeleton className="h-[220px] w-full rounded-lg" />
+            ) : whereItWentView === "map" ? (
+              <CategoryTreemapMono
+                rows={spendRows}
+                total={totalSpending}
+                currency={currency}
+                themeColor={theme.deep}
+                hasNoIncludedAccounts={hasNoIncludedAccounts}
+                activityHrefFor={activityHrefFor}
+              />
+            ) : (
+              <CategoryRankedBar
+                rows={spendRows}
+                total={totalSpending}
+                currency={currency}
+                themeColor={theme.deep}
+                groupRows={budget?.computed.groupRows ?? []}
+                hasNoIncludedAccounts={hasNoIncludedAccounts}
+                activityHrefFor={activityHrefFor}
+              />
+            )}
+          </DashboardCard>
         </div>
-
-        <div className="grow px-4 pb-[var(--mobile-nav-total-offset)] pt-24 md:px-6 md:pb-6 md:pt-20 lg:px-10 lg:pb-8 lg:pt-24">
-          <div className="flex flex-col gap-6 lg:grid lg:grid-cols-3 lg:gap-20">
-            <div className="contents lg:col-span-2 lg:block lg:space-y-6">
-              <DashboardCard
-                title={t("spending:tabContent.whereItWent")}
-                className="order-1 overflow-hidden lg:order-none"
-                action={
-                  <div className="flex items-center gap-3">
-                    <SegmentedToggle
-                      ariaLabel={t("spending:tabContent.whereItWentView")}
-                      items={[
-                        { value: "list", label: t("spending:tabContent.listView") },
-                        { value: "map", label: t("spending:tabContent.mapView") },
-                      ]}
-                      value={whereItWentView}
-                      onChange={(v) => setWhereItWentView(v as "list" | "map")}
-                    />
-                    <Link
-                      to={dashboardInsightHref.where}
-                      className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
-                    >
-                      {t("spending:tabContent.viewAll")}
-                    </Link>
-                  </div>
-                }
+        <div className="flex min-w-0 flex-col gap-3.5">
+          {/* money-hub patch: returns still waiting for their refund (lib/returns.ts); nothing while none is. */}
+          <ReturnsCard currency={currency} />
+          <nav
+            aria-label={t("spending:tabContent.digDeeper")}
+            className="border-border flex flex-col rounded-[20px] border bg-[var(--m-surface)] p-1.5"
+          >
+            {INSIGHT_STAGES.map((s) => (
+              <Link
+                key={s.stage}
+                to={dashboardInsightHref[s.stage]}
+                className="hover:bg-muted/40 group flex items-center gap-3 rounded-[14px] px-3 py-2.5 transition-colors"
               >
-                {isLoading ? (
-                  <Skeleton className="h-[260px] w-full rounded-lg" />
-                ) : whereItWentView === "map" ? (
-                  <CategoryTreemapMono
-                    rows={categoryRows}
-                    total={totalSpending + totalSaved}
-                    currency={currency}
-                    themeColor={theme.deep}
-                    hasNoIncludedAccounts={hasNoIncludedAccounts}
-                    activityHrefFor={activityHrefFor}
-                  />
-                ) : (
-                  <CategoryRankedBar
-                    rows={categoryRows}
-                    total={totalSpending + totalSaved}
-                    currency={currency}
-                    themeColor={theme.deep}
-                    groupRows={budget?.computed.groupRows ?? []}
-                    hasNoIncludedAccounts={hasNoIncludedAccounts}
-                    activityHrefFor={activityHrefFor}
-                  />
-                )}
-              </DashboardCard>
-
-              <div className="order-3 lg:order-none">
-                <RecentActivityCard
-                  activities={activities}
-                  accountTypeById={accountTypeById}
-                  accountById={accountById}
-                  categoriesMeta={categoriesMeta}
-                  uncategorizedCount={uncategorizedCount}
-                  pendingRange={{
-                    from: dateRange?.from ? formatDateISO(dateRange.from) : undefined,
-                    to: dateRange?.to ? formatDateISO(dateRange.to) : undefined,
-                  }}
-                />
-              </div>
-
-              {/* money-hub patch: the charges that repeat (lib/subscriptions.ts). */}
-              <div className="order-3 lg:order-none">
-                <SubscriptionsCard currency={currency} />
-              </div>
-
-              {/* money-hub patch: returns still waiting for their refund (lib/returns.ts); nothing while none is. */}
-              <ReturnsCard currency={currency} className="order-3 lg:order-none" />
-
-              <div className="order-6 lg:order-none">
-                <h2 className="pb-2 text-sm font-semibold tracking-tight">
-                  {t("spending:tabContent.digDeeper")}
-                </h2>
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-                  {INSIGHT_STAGES.map((s) => (
-                    <Link
-                      key={s.stage}
-                      to={dashboardInsightHref[s.stage]}
-                      className="border-border/50 bg-background/30 hover:border-border hover:bg-background/60 group flex flex-col gap-3 rounded-lg border p-3.5 transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <s.Icon className="h-4 w-4" style={{ color: theme.deep }} />
-                        <Icons.ArrowRight className="text-muted-foreground/40 group-hover:text-foreground h-3.5 w-3.5 transition-colors" />
-                      </div>
-                      <div>
-                        <div className="text-foreground text-sm font-medium">{t(s.labelKey)}</div>
-                        <div className="text-muted-foreground/80 mt-0.5 text-xs leading-snug">
-                          {t(s.subKey)}
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="contents lg:col-span-1 lg:block lg:space-y-6">
-              <div className="order-2 lg:order-none">
-                <BudgetLineChartCard
-                  monthKey={budgetMonthKey}
-                  today={todayParts}
-                  isCurrentMonth={budgetMonthKey === currentBudgetMonthKey}
-                  onPreviousMonth={() => shiftBudgetMonth(-1)}
-                  onNextMonth={() => shiftBudgetMonth(1)}
-                  canGoNextMonth={budgetMonthKey < currentBudgetMonthKey}
-                  activityRange={budgetMonthActivityRange}
-                  target={budgetCardBudget?.computed.totals.spendingPlanned ?? 0}
-                  spent={monthReport?.current.outflow ?? 0}
-                  currency={budgetCardBudget?.computed.currency ?? currency}
-                  historicalDailyAvg={historicalDailyAvg}
-                  forecastParts={budgetForecastParts}
-                  forecastPending={subscriptionsPending || !historyReport || !monthReport}
-                  allocations={
-                    budgetCardBudget?.computed.groupRows.flatMap((row) => row.categories) ?? []
-                  }
-                  spendingBreakdown={monthReport?.spendingBreakdown ?? []}
-                  categoriesMeta={categoriesMeta}
-                  monthByDay={monthReport?.byDay ?? []}
-                  historicalByDay={historyReport?.byDay ?? []}
-                />
-              </div>
-
-              {/* money-hub patch: what is owed on the credit cards now (lib/credit-cards.ts); nothing without a card. */}
-              <CreditCardsCard currency={currency} color={theme.deep} darkColor={theme.mid} className="order-2 lg:order-none" />
-
-              {/* money-hub patch: the cash that pays the cards, and what is left after them and the bills coming up (lib/free-cash.ts). */}
-              <FreeCashCard currency={currency} className="order-2 lg:order-none" />
-
-              {insights.length > 0 && (
-                <div className="border-border/40 bg-card/70 order-4 rounded-xl border p-4 backdrop-blur-xl md:p-5 lg:order-none">
-                  <div className="mb-2 flex items-center gap-2">
-                    <Icons.AlertCircle className="h-4 w-4 shrink-0" style={{ color: theme.deep }} />
-                    <h3 className="text-foreground text-sm font-semibold">
-                      {t("spending:tabContent.worthALook")}
-                    </h3>
-                    <span className="text-muted-foreground/70 ml-auto text-xs">
-                      {t("spending:tabContent.signalCount", { count: insights.length })}
-                    </span>
-                  </div>
-                  <div className="space-y-2.5">
-                    {insights.map((ins, i) => (
-                      <div key={i} className="flex gap-2 text-xs">
-                        <span
-                          className="w-4 shrink-0 text-base font-bold leading-none"
-                          style={{
-                            color: ins.icon === "!" ? "#C28B47" : theme.deep,
-                          }}
-                        >
-                          {ins.icon}
-                        </span>
-                        <div>
-                          <div className="text-foreground">{ins.title}</div>
-                          <div className="text-muted-foreground/80 mt-0.5">{ins.sub}</div>
-                          {ins.action && <div>{ins.action}</div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <Link
-                    to={dashboardInsightHref.changed}
-                    className="text-muted-foreground hover:text-foreground ml-6 mt-3 inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
-                  >
-                    {t("spending:tabContent.seeTrends")}
-                    <Icons.ChevronRight className="h-3 w-3" />
-                  </Link>
-                </div>
-              )}
-
-              <div className="order-5 lg:order-none">
-                <EventsCard
-                  activities={activities}
-                  accountTypeById={accountTypeById}
-                  categoriesMeta={categoriesMeta}
-                  eventSummaryEndDate={reportReq.endDate}
-                  eventSummaryStartDate={reportReq.startDate}
-                  periodEndDate={dateRange?.to ? formatDateISO(dateRange.to) : reportReq.endDate}
-                  periodStartDate={
-                    dateRange?.from ? formatDateISO(dateRange.from) : reportReq.startDate
-                  }
-                  theme={theme}
-                />
-              </div>
-            </div>
-          </div>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--m-mint)] text-[var(--m-forest)]">
+                  <s.Icon className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="text-foreground block text-[13.5px] font-medium">
+                    {t(s.labelKey)}
+                  </span>
+                  <span className="text-muted-foreground block truncate text-[11.5px]">
+                    {t(s.subKey)}
+                  </span>
+                </span>
+                <Icons.ChevronRight className="text-muted-foreground group-hover:text-foreground h-3.5 w-3.5" />
+              </Link>
+            ))}
+          </nav>
         </div>
       </div>
+
+      <div className="grid gap-3.5 lg:grid-cols-3">
+        <div className={cn("min-w-0", insights.length > 0 ? "lg:col-span-2" : "lg:col-span-3")}>
+          <EventsCard
+            activities={activities}
+            accountTypeById={accountTypeById}
+            categoriesMeta={categoriesMeta}
+            eventSummaryEndDate={reportReq.endDate}
+            eventSummaryStartDate={reportReq.startDate}
+            periodEndDate={dateRange?.to ? formatDateISO(dateRange.to) : reportReq.endDate}
+            periodStartDate={dateRange?.from ? formatDateISO(dateRange.from) : reportReq.startDate}
+            theme={theme}
+          />
+        </div>
+        {insights.length > 0 ? (
+          <section
+            aria-label={t("spending:tabContent.worthALook")}
+            className="min-w-0 rounded-[20px] border border-[var(--m-warn-panel-line)] bg-[var(--m-warn-panel)] px-[18px] py-4"
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 whitespace-nowrap">
+              <Icons.AlertCircle className="h-4 w-4 shrink-0 text-[var(--m-warn)]" />
+              <h3 className="text-foreground text-sm font-medium">
+                {t("spending:tabContent.worthALook")}
+              </h3>
+              <span className="text-muted-foreground text-xs">
+                {t("spending:tabContent.signalCount", { count: insights.length })}
+              </span>
+              <Link
+                to={dashboardInsightHref.changed}
+                className="ml-auto text-xs underline underline-offset-4 hover:no-underline"
+              >
+                {t("spending:tabContent.seeTrends")}
+              </Link>
+            </div>
+            <div className="space-y-2.5">
+              {insights.map((ins, i) => (
+                <div key={i} className="text-[13px]">
+                  <div className="text-foreground">{ins.title}</div>
+                  <div className="text-muted-foreground mt-0.5 text-xs">{ins.sub}</div>
+                  {ins.action && <div>{ins.action}</div>}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+      </div>
+
+      <div className="flex items-center gap-2.5 pt-1">
+        <span className="text-muted-foreground text-xs">More</span>
+        <span className="border-border flex-1 border-t" />
+      </div>
+
+      <SpendingByPeriodCard
+        barData={barData}
+        avgValue={avgValue}
+        avgLabel={avgLabel}
+        granularity={granularity}
+        isLoading={isLoading}
+        currency={currency}
+        rangeLabel={chartRangeLabel}
+        onOpen={(entry) => {
+          const bucket = barKeyToRange(entry.key, granularity);
+          const rangeStart = dateRange?.from ? formatDateISO(dateRange.from) : bucket.from;
+          const rangeEnd = dateRange?.to ? formatDateISO(dateRange.to) : bucket.to;
+          const from = bucket.from < rangeStart ? rangeStart : bucket.from;
+          const to = bucket.to > rangeEnd ? rangeEnd : bucket.to;
+          navigate(`/activities?tab=spending&from=${from}&to=${to}`);
+        }}
+      />
+
+      <RecentActivityCard
+        activities={activities}
+        accountTypeById={accountTypeById}
+        accountById={accountById}
+        categoriesMeta={categoriesMeta}
+        uncategorizedCount={uncategorizedCount}
+        pendingRange={{
+          from: dateRange?.from ? formatDateISO(dateRange.from) : undefined,
+          to: dateRange?.to ? formatDateISO(dateRange.to) : undefined,
+        }}
+      />
     </div>
   );
 }
@@ -1745,21 +1646,20 @@ function CategoryRankedBar({
   const { categoryGroup, hasAnyGroup, uncategorizedAmount, top, restAmount, barSegments } = derived;
 
   const StackedBar = (
-    <div className="bg-foreground/10 relative flex h-3 w-full overflow-hidden rounded-full">
-      {barSegments.map((s, i) => {
+    <div className="flex h-3.5 w-full gap-[3px]">
+      {barSegments.map((s) => {
         const share = (s.amount / total) * 100;
-        const color = s.color ?? themeColor;
+        const color = s.id === "__other__" ? "var(--m-cat-other)" : (s.color ?? themeColor);
         return (
           <div
             key={s.id}
-            className="h-full transition-opacity hover:opacity-80"
+            className="h-full min-w-[3px] rounded-[5px] transition-opacity hover:opacity-80"
+            // Grow by share so the 3px gaps fit inside the card.
             style={{
-              width: `${share}%`,
+              flex: `${share} 1 0`,
               backgroundColor: color,
-              opacity: 0.85 - i * 0.05,
-              borderRight: "1px solid var(--card)",
             }}
-            title={`${s.name} — ${
+            title={`${s.name}: ${
               isBalanceHidden ? "••••" : formatting.formatAmount(s.amount, currency)
             } (${numberFormatting.formatPercent(share / 100, { digits: 1 })})`}
           />
@@ -1815,7 +1715,7 @@ function CategoryRankedBar({
       const b = ensureOther();
       b.categories.push({
         id: "__uncategorized__",
-        name: t("spending:tabContent.uncategorizedReview"),
+        name: t("spending:dashboard.uncategorized"),
         color: null,
         icon: null,
         amount: uncategorizedAmount,
@@ -1831,7 +1731,7 @@ function CategoryRankedBar({
     return (
       <div>
         {StackedBar}
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 space-y-1.5">
           {orderedBuckets.map((bucket) => (
             <GroupedCategoryBlock
               key={bucket.id}
@@ -1847,33 +1747,28 @@ function CategoryRankedBar({
     );
   }
 
-  // ── Flat layout (no budget groups configured) — unchanged. ──────────
+  // ── Flat layout (no budget groups configured). money-hub patch: Meadow tiles, two across when wide.
   const uncategorizedShare = total > 0 ? (uncategorizedAmount / total) * 100 : 0;
   return (
-    <div className="border-border/60 bg-card/40 overflow-hidden rounded-xl border p-4 backdrop-blur-xl md:p-5">
+    <div className="flex flex-col gap-3">
       {StackedBar}
 
-      <div className="mt-3 space-y-1.5">
-        {top.map((r, i) => {
+      <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr))]">
+        {top.map((r) => {
           const share = (r.amount / total) * 100;
           const color = r.color ?? themeColor;
           return (
             <Link
               key={r.id}
               to={activityHrefFor(r.id)}
-              className="hover:bg-muted/40 group flex items-center gap-2.5 rounded-md px-1 py-1 transition-colors"
+              className="flex min-h-11 items-center gap-2.5 rounded-xl bg-[var(--m-tile)] px-3 py-1 transition-opacity hover:opacity-80"
             >
-              <span
-                className="block h-2.5 w-2.5 shrink-0 rounded-sm"
-                style={{ backgroundColor: color, opacity: 0.85 - i * 0.05 }}
-              />
-              <span className="text-foreground/90 min-w-0 flex-1 truncate text-xs font-medium">
-                {r.name}
-              </span>
-              <span className="text-muted-foreground/70 w-12 text-right text-[11px] tabular-nums">
+              <span className="block h-6 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: color }} />
+              <span className="text-foreground min-w-0 flex-1 truncate text-[13px]">{r.name}</span>
+              <span className="text-muted-foreground w-[52px] text-right text-xs tabular-nums">
                 {numberFormatting.formatPercent(share / 100, { digits: 1 })}
               </span>
-              <span className="text-foreground w-24 text-right text-xs font-semibold tabular-nums">
+              <span className="text-foreground w-[92px] text-right text-[13px] font-medium tabular-nums">
                 <PrivacyAmount value={r.amount} currency={currency} />
               </span>
             </Link>
@@ -1882,27 +1777,27 @@ function CategoryRankedBar({
         {uncategorizedAmount > 0.01 && (
           <Link
             to={activityHrefFor("__uncategorized__")}
-            className="border-border/60 hover:bg-muted/40 mt-1 flex items-center gap-2.5 rounded-md border border-dashed px-2 py-1.5 transition-colors"
+            className="flex min-h-11 items-center gap-2.5 rounded-xl border border-dashed border-[var(--m-cat-other)] px-3 py-1 transition-opacity hover:opacity-80"
           >
-            <Icons.AlertCircle className="text-muted-foreground h-3 w-3 shrink-0" />
-            <span className="text-foreground/80 min-w-0 flex-1 text-xs font-medium">
-              {t("spending:tabContent.uncategorizedImprove")}
+            <Icons.AlertCircle className="h-3 w-3 shrink-0 text-[var(--m-warn)]" />
+            <span className="text-foreground min-w-0 flex-1 truncate text-[13px]">
+              {t("spending:dashboard.uncategorized")}
             </span>
-            <span className="text-muted-foreground/70 w-12 text-right text-[11px] tabular-nums">
+            <span className="text-muted-foreground w-[52px] text-right text-xs tabular-nums">
               {numberFormatting.formatPercent(uncategorizedShare / 100, { digits: 1 })}
             </span>
-            <span className="text-foreground w-24 text-right text-xs font-semibold tabular-nums">
+            <span className="text-foreground w-[92px] text-right text-[13px] font-medium tabular-nums">
               <PrivacyAmount value={uncategorizedAmount} currency={currency} />
             </span>
           </Link>
         )}
-        {restAmount > 0 && (
-          <div className="text-muted-foreground/60 px-1 pt-1 text-[10px]">
-            {t("spending:tabContent.plusMore", { count: rows.length - 7 })} ·{" "}
-            <PrivacyAmount value={restAmount} currency={currency} />
-          </div>
-        )}
       </div>
+      {restAmount > 0 && (
+        <div className="text-muted-foreground text-xs">
+          {t("spending:tabContent.plusMore", { count: rows.length - 7 })} ·{" "}
+          <PrivacyAmount value={restAmount} currency={currency} />
+        </div>
+      )}
     </div>
   );
 }
@@ -1948,7 +1843,7 @@ function GroupedCategoryBlock({
         type="button"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
-        className="hover:bg-muted/40 flex w-full items-center gap-2.5 rounded-md px-1 py-1 transition-colors"
+        className="flex min-h-11 w-full items-center gap-2.5 rounded-xl bg-[var(--m-tile)] px-3 py-1 transition-opacity hover:opacity-80"
       >
         <Icons.ChevronRight
           className={cn(
@@ -1956,22 +1851,19 @@ function GroupedCategoryBlock({
             expanded && "rotate-90",
           )}
         />
-        <span
-          className="block h-2.5 w-2.5 shrink-0 rounded-sm"
-          style={{ backgroundColor: accent }}
-        />
-        <span className="text-foreground min-w-0 flex-1 truncate text-left text-xs font-semibold uppercase tracking-wide">
+        <span className="block h-6 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: accent }} />
+        <span className="text-foreground min-w-0 flex-1 truncate text-left text-[13px]">
           {bucket.name}
         </span>
-        <span className="text-muted-foreground/80 w-12 text-right text-[11px] font-medium tabular-nums">
+        <span className="text-muted-foreground w-[52px] text-right text-xs tabular-nums">
           {numberFormatting.formatPercent(share / 100, { digits: 1 })}
         </span>
-        <span className="text-foreground w-24 text-right text-xs font-semibold tabular-nums">
+        <span className="text-foreground w-[92px] text-right text-[13px] font-medium tabular-nums">
           <PrivacyAmount value={bucket.total} currency={currency} />
         </span>
       </button>
       {expanded && (
-        <div className="mt-1 space-y-0.5 pl-6">
+        <div className="mt-1 space-y-0.5 pl-8 pr-3">
           {sortedCats.map((cat) => {
             const catShare = total > 0 ? (cat.amount / total) * 100 : 0;
             const isUncategorized = cat.id === "__uncategorized__";
@@ -1983,22 +1875,18 @@ function GroupedCategoryBlock({
                 to={to}
                 className="hover:bg-muted/40 flex items-center gap-2.5 rounded-md px-1 py-1 transition-colors"
               >
-                <span
-                  className="block h-2 w-2 shrink-0 rounded-sm"
-                  style={{ backgroundColor: dotColor, opacity: 0.85 }}
-                />
-                <span
-                  className={cn(
-                    "min-w-0 flex-1 truncate text-xs font-medium",
-                    isUncategorized ? "text-muted-foreground/90 italic" : "text-foreground/90",
-                  )}
-                >
+                {isUncategorized ? (
+                  <Icons.AlertCircle className="h-3 w-3 shrink-0 text-[var(--m-warn)]" />
+                ) : (
+                  <span className="block h-2 w-2 shrink-0 rounded-sm" style={{ backgroundColor: dotColor }} />
+                )}
+                <span className="text-foreground min-w-0 flex-1 truncate text-[12.5px]">
                   {cat.name}
                 </span>
-                <span className="text-muted-foreground/70 w-12 text-right text-[11px] tabular-nums">
+                <span className="text-muted-foreground w-[52px] text-right text-xs tabular-nums">
                   {numberFormatting.formatPercent(catShare / 100, { digits: 1 })}
                 </span>
-                <span className="text-foreground w-24 text-right text-xs font-medium tabular-nums">
+                <span className="text-foreground w-[92px] text-right text-[12.5px] tabular-nums">
                   <PrivacyAmount value={cat.amount} currency={currency} />
                 </span>
               </Link>
@@ -2017,6 +1905,8 @@ function truncateForBox(text: string, boxWidth: number, fontSize: number): strin
   return text.length > max ? text.slice(0, Math.max(1, max - 1)) + "…" : text;
 }
 
+// money-hub patch: the change from the prior period, as the one chip by Spent (Meadow): amber when
+// spending went up, mint when it went down.
 function SpendingDeltaLine({
   delta,
   currency,
@@ -2028,30 +1918,36 @@ function SpendingDeltaLine({
 }) {
   const { t } = useTranslation();
   const numberFormatting = useNumberFormatting();
+  const formatting = useAmountFormatting();
+  const { isBalanceHidden } = useBalancePrivacy();
   const isFlat = Math.abs(delta) < 1;
-  const direction = delta < 0 ? t("spending:tabContent.down") : t("spending:tabContent.up");
-  const tone = isFlat ? "text-muted-foreground" : delta < 0 ? "text-success" : "text-destructive";
 
   if (isFlat) {
     return (
-      <span className="text-muted-foreground lg:text-md text-sm font-light">
+      <span className="text-muted-foreground rounded-full bg-[var(--m-sand)] px-2.5 py-0.5 text-xs">
         {t("spending:tabContent.aboutSame")}
       </span>
     );
   }
 
+  const up = delta > 0;
   const pctSuffix =
     deltaPct !== null
-      ? ` (${numberFormatting.formatPercent(Math.abs(deltaPct), { digits: 1 })})`
+      ? ` (${numberFormatting.formatPercent(Math.abs(deltaPct), { digits: 0 })})`
       : "";
 
   return (
-    <span className="lg:text-md text-sm font-light">
-      <span className={cn("font-medium", tone)}>
-        {direction} <PrivacyAmount value={Math.abs(delta)} currency={currency} />
-        {pctSuffix}
-      </span>{" "}
-      <span className="text-muted-foreground">{t("spending:tabContent.fromPriorPeriod")}</span>
+    <span
+      className={cn(
+        "flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs",
+        up
+          ? "bg-[var(--m-warn-soft)] text-[var(--m-warn)]"
+          : "bg-[var(--m-mint)] text-[var(--m-forest)]",
+      )}
+    >
+      {up ? <Icons.ArrowUp className="h-3 w-3" /> : <Icons.ArrowDown className="h-3 w-3" />}
+      {isBalanceHidden ? "••••" : formatting.formatRoundedAmount(Math.abs(delta), currency)}
+      {pctSuffix} {t("spending:tabContent.fromPriorPeriod")}
     </span>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -22,7 +22,7 @@ import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import { topCategoryId } from "../lib/category-rollup";
 import type { BudgetCategoryRow } from "../types/budget";
 import type { DayBucket } from "../types/report";
-import { CategoryIcon, type CategoryMetaMap } from "./category-chips";
+import { type CategoryMetaMap } from "./category-chips";
 
 type Status = "ok" | "warn" | "over";
 interface PacePoint {
@@ -54,21 +54,21 @@ const STATUS_ACCENTS: Record<
   }
 > = {
   over: {
-    lineColor: "#B85544",
+    lineColor: "var(--m-bad, #B85544)",
     pillBg: "var(--destructive)",
     accent: "var(--destructive)",
     Icon: Icons.AlertTriangle,
     labelKey: "spending:budgetChart.overBudget",
   },
   warn: {
-    lineColor: "#C28B47",
+    lineColor: "var(--m-warn-line, #C28B47)",
     pillBg: "#C28B47",
-    accent: "#C28B47",
+    accent: "var(--m-warn, #C28B47)",
     Icon: Icons.AlertCircle,
     labelKey: "spending:budgetChart.trendingHigh",
   },
   ok: {
-    lineColor: "hsl(73 84% 27%)",
+    lineColor: "var(--m-forest, hsl(73 84% 27%))",
     pillBg: "hsl(73 84% 27%)",
     accent: "var(--success)",
     Icon: Icons.CheckCircle ?? Icons.AlertCircle,
@@ -117,7 +117,6 @@ export function BudgetLineChartCard({
   monthByDay: DayBucket[];
   historicalByDay: DayBucket[];
 }) {
-  const amountFormatting = useAmountFormatting();
   const dateFormatting = useDateFormatting();
 
   const { t } = useTranslation();
@@ -138,14 +137,12 @@ export function BudgetLineChartCard({
         .formatCalendarDate(
           { year, month, day: 1 },
           { calendar: "gregory", month: "long", year: "numeric" },
-        )
-        .toUpperCase(),
+        ),
       shortLabel: dateFormatting
         .formatCalendarDate(
           { year, month, day: 1 },
           { calendar: "gregory", month: "short", year: "numeric" },
-        )
-        .toUpperCase(),
+        ),
     };
   }, [monthKey, isCurrentMonth, dateFormatting, today]);
   const { dayOfMonth, daysInMonth, daysRemaining, monthLabel } = monthMeta;
@@ -362,7 +359,6 @@ export function BudgetLineChartCard({
   const status: Status =
     planStatus ?? (isOver ? "over" : isCurrentMonth && !aheadOfPace ? "warn" : "ok");
   const a = STATUS_ACCENTS[status];
-  const { Icon } = a;
   const statusLabel = planStatus
     ? planStatus === "over"
       ? "Over budget"
@@ -384,56 +380,38 @@ export function BudgetLineChartCard({
   const endX = cumulative.length ? xForDay(cumulative[cumulative.length - 1].day) : padL;
   const endY = cumulative.length ? yForVal(cumulative[cumulative.length - 1].value) : padT + innerH;
 
-  const gapAbs = Math.abs(gapVsPace);
-  const gapLabel = sums
-    ? `Spent ${amountFormatting.formatCompactAmount(spent, currency)}`
-    : isCurrentMonth
-      ? isOver
-        ? t("spending:budgetChart.overBudgetAmount", {
-            amount: amountFormatting.formatCompactAmount(overBy, currency),
-          })
-        : aheadOfPace
-          ? t("spending:budgetChart.underBudgetAmount", {
-              amount: amountFormatting.formatCompactAmount(gapAbs, currency),
-            })
-          : t("spending:budgetChart.overPaceAmount", {
-              amount: amountFormatting.formatCompactAmount(gapAbs, currency),
-            })
-      : isOver
-        ? t("spending:budgetChart.overBudgetAmount", {
-            amount: amountFormatting.formatCompactAmount(overBy, currency),
-          })
-        : t("spending:budgetChart.leftAmount", {
-            amount: amountFormatting.formatCompactAmount(remaining, currency),
-          });
-
   const pillLeftPctRaw = (endX / chartW) * 100;
-  const pillLeftPct = Math.min(78, Math.max(8, pillLeftPctRaw - 4));
-  // Near the right edge, anchor the badge to the endpoint and grow leftward so
-  // it never overflows the card.
-  const pillFlip = pillLeftPctRaw > 55;
-  const pillTopPx = Math.max(0, endY - 28);
+  const statusChip = (
+    <StatusChip status={status} label={statusLabel} />
+  );
+  const mainHeaderAction = (
+    <BudgetCardHeaderActions
+      monthLabel={monthMeta.shortLabel}
+      monthKey={monthKey}
+      onPreviousMonth={onPreviousMonth}
+      onNextMonth={onNextMonth}
+      canGoNextMonth={canGoNextMonth}
+      status={statusChip}
+      dayLabel={
+        isCurrentMonth
+          ? t("spending:budgetChart.dayOf", { day: dayOfMonth, total: daysInMonth })
+          : t("spending:budgetChart.closed")
+      }
+    />
+  );
 
   return (
     <DashboardCard
       title={t("spending:budgetChart.monthlyBudget")}
       subtitle={monthLabel}
-      action={headerAction}
+      action={mainHeaderAction}
     >
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 shrink-0" style={{ color: a.accent }} />
-        <span className="text-foreground text-sm font-semibold">{statusLabel}</span>
-        <span className="text-muted-foreground/70 ml-auto text-xs tabular-nums">
-          {isCurrentMonth
-            ? t("spending:budgetChart.dayOf", { day: dayOfMonth, total: daysInMonth })
-            : t("spending:budgetChart.closed")}
-        </span>
-      </div>
-
-      <div className="mt-3">
+      <div className="grid gap-x-6 gap-y-3 lg:grid-cols-[1.15fr_1fr]">
+      <div className="flex min-w-0 flex-col">
+      <div>
         {sums && forecastParts ? (
           <>
-            <div className="text-foreground text-2xl font-bold tabular-nums tracking-tight">
+            <div className="text-foreground text-[28px] font-medium leading-tight tabular-nums tracking-tight">
               <PrivacyAmount value={Math.abs(sums.over)} currency={currency} />{" "}
               <span className="text-muted-foreground/70 text-base font-medium">
                 {sums.over > 0 ? "over" : "to spare"} by{" "}
@@ -446,7 +424,10 @@ export function BudgetLineChartCard({
             <div className="text-muted-foreground/80 mt-0.5 text-xs tabular-nums">
               if you keep spending like your usual days
             </div>
-            <div className="mt-1.5 text-xs font-semibold tabular-nums" style={{ color: a.accent }}>
+            <div
+              className="mt-1.5 self-start rounded-full px-2.5 py-1 text-xs tabular-nums"
+              style={{ color: a.accent, background: "var(--m-warn-panel, transparent)" }}
+            >
               {perDay === null ? null : perDay > 0 ? (
                 <>
                   To land on budget: <PrivacyAmount value={perDay} currency={currency} /> a day or
@@ -460,7 +441,7 @@ export function BudgetLineChartCard({
           </>
         ) : isCurrentMonth && willOverspend && forecastDelta > target * 0.05 ? (
           <>
-            <div className="text-foreground text-2xl font-bold tabular-nums tracking-tight">
+            <div className="text-foreground text-[28px] font-medium leading-tight tabular-nums tracking-tight">
               <PrivacyAmount value={forecast} currency={currency} />{" "}
               <span className="text-muted-foreground/70 text-base font-medium">
                 {t("spending:budgetChart.forecastLower")}
@@ -480,7 +461,7 @@ export function BudgetLineChartCard({
           </>
         ) : !isCurrentMonth ? (
           <>
-            <div className="text-foreground text-2xl font-bold tabular-nums tracking-tight">
+            <div className="text-foreground text-[28px] font-medium leading-tight tabular-nums tracking-tight">
               <PrivacyAmount value={spent} currency={currency} />{" "}
               <span className="text-muted-foreground/70 text-base font-medium">
                 {t("spending:budgetChart.spentLower")}
@@ -505,7 +486,7 @@ export function BudgetLineChartCard({
           </>
         ) : (
           <>
-            <div className="text-foreground text-2xl font-bold tabular-nums tracking-tight">
+            <div className="text-foreground text-[28px] font-medium leading-tight tabular-nums tracking-tight">
               <PrivacyAmount value={isOver ? overBy : remaining} currency={currency} />{" "}
               <span className="text-muted-foreground/70 text-base font-medium">
                 {isOver ? t("spending:budgetChart.overLower") : t("spending:budgetChart.leftLower")}
@@ -568,7 +549,7 @@ export function BudgetLineChartCard({
           // SVG uses preserveAspectRatio="none", which would stretch a circle
           // into an ellipse.
           <div
-            className="absolute h-[9px] w-[9px] rounded-full bg-white"
+            className="absolute h-[10px] w-[10px] rounded-full bg-[var(--m-surface,white)]"
             style={{
               left: `${pillLeftPctRaw}%`,
               top: `${endY}px`,
@@ -577,25 +558,17 @@ export function BudgetLineChartCard({
             }}
           />
         )}
-        {cumulative.length > 0 && (
-          <div
-            className="absolute whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums shadow-sm"
-            style={{
-              left: `${pillFlip ? pillLeftPctRaw : pillLeftPct}%`,
-              top: `${pillTopPx}px`,
-              transform: pillFlip ? "translateX(calc(-100% - 6px))" : undefined,
-              backgroundColor: sums ? "#57534e" : a.pillBg,
-              color: "white",
-            }}
-          >
-            {gapLabel}
-          </div>
-        )}
       </div>
-      <div className="text-muted-foreground/70 mt-1 flex justify-between text-[10px] tabular-nums">
+      <div className="text-muted-foreground mt-1 flex justify-between text-[11px] tabular-nums">
         <span>{t("spending:budgetChart.dayN", { day: 1 })}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="border-muted-foreground w-3.5 border-t-[1.5px] border-dashed" aria-hidden />
+          Usual pace
+        </span>
         <span>{t("spending:budgetChart.dayN", { day: daysInMonth })}</span>
       </div>
+      </div>
+      <div className="flex min-w-0 flex-col gap-2">
 
       {isCurrentMonth && haveHistory && forecastParts ? (
         // money-hub patch: what the forecast is made of, the owner's way (lib/budget-forecast.ts): the
@@ -608,62 +581,29 @@ export function BudgetLineChartCard({
           currency={currency}
         />
       ) : null}
-      <div className="border-border mt-4 grid grid-cols-2 gap-3 border-t pt-3 text-xs">
-        <div>
-          <div className="text-muted-foreground/70 text-[11px] uppercase tracking-wide">
-            {isCurrentMonth
-              ? t("spending:budgetChart.spentSoFar")
-              : t("spending:budgetChart.spentUpper")}
-          </div>
-          <div className="text-foreground text-sm font-semibold tabular-nums">
-            <PrivacyAmount value={spent} currency={currency} />
-          </div>
-        </div>
-        {sums ? (
-          // money-hub patch: what is left to spend this month once the fixed bills are paid (one verdict:
-          // no second forecast number down here).
-          <div className="text-right">
-            <div className="text-muted-foreground/70 text-[11px] uppercase tracking-wide">
-              Left to spend
-            </div>
-            <div className="text-foreground text-sm font-semibold tabular-nums">
-              <PrivacyAmount value={sums.room - sums.spentOthers} currency={currency} />
-            </div>
-            <div className="text-muted-foreground/60 text-[10px]">
+      {sums ? (
+        // money-hub patch: what is left to spend this month once the fixed bills are paid (one verdict:
+        // no second forecast number down here).
+        <div className="border-border/60 flex items-center justify-between gap-2 rounded-xl border px-3 py-2">
+          <span className="flex flex-col">
+            <span className="text-muted-foreground text-xs">Left to spend</span>
+            <span className="text-muted-foreground text-[11.5px]">
               {sums.fixed > 0 ? "after fixed bills" : "of the budget"}
-            </div>
-          </div>
-        ) : (
-          <div className="text-right">
-            <div className="text-muted-foreground/70 text-[11px] uppercase tracking-wide">
+            </span>
+          </span>
+          <span className="text-foreground text-lg font-medium tabular-nums">
+            <PrivacyAmount value={sums.room - sums.spentOthers} currency={currency} />
+          </span>
+        </div>
+      ) : (
+        <div className="border-border/60 flex items-center justify-between gap-2 rounded-xl border px-3 py-2">
+          <span className="flex flex-col">
+            <span className="text-muted-foreground text-xs">
               {isCurrentMonth
                 ? t("spending:budgetChart.forecastUpper")
                 : t("spending:budgetChart.result")}
-            </div>
-            {isCurrentMonth ? (
-              <div
-                className={cn(
-                  "text-sm font-semibold tabular-nums",
-                  forecastReliable
-                    ? willOverspend
-                      ? "text-destructive"
-                      : "text-foreground"
-                    : "text-muted-foreground/60",
-                )}
-              >
-                {forecastReliable ? <PrivacyAmount value={forecast} currency={currency} /> : "—"}
-              </div>
-            ) : (
-              <div
-                className={cn(
-                  "text-sm font-semibold tabular-nums",
-                  isOver ? "text-destructive" : "text-foreground",
-                )}
-              >
-                <PrivacyAmount value={isOver ? overBy : remaining} currency={currency} />
-              </div>
-            )}
-            <div className="text-muted-foreground/60 text-[10px]">
+            </span>
+            <span className="text-muted-foreground text-[11.5px]">
               {isCurrentMonth
                 ? forecastReliable
                   ? haveHistory
@@ -673,14 +613,39 @@ export function BudgetLineChartCard({
                 : isOver
                   ? t("spending:budgetChart.overBudgetLower")
                   : t("spending:budgetChart.leftLower")}
-            </div>
-          </div>
-        )}
+            </span>
+          </span>
+          {isCurrentMonth ? (
+            <span
+              className={cn(
+                "text-lg font-medium tabular-nums",
+                forecastReliable
+                  ? willOverspend
+                    ? "text-destructive"
+                    : "text-foreground"
+                  : "text-muted-foreground/60",
+              )}
+            >
+              {forecastReliable ? <PrivacyAmount value={forecast} currency={currency} /> : "-"}
+            </span>
+          ) : (
+            <span
+              className={cn(
+                "text-lg font-medium tabular-nums",
+                isOver ? "text-destructive" : "text-foreground",
+              )}
+            >
+              <PrivacyAmount value={isOver ? overBy : remaining} currency={currency} />
+            </span>
+          )}
+        </div>
+      )}
+      </div>
       </div>
 
-      <div className="border-border mt-5 border-t pt-4">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-muted-foreground/80 text-[11px] font-semibold uppercase tracking-wide">
+      <div className="border-border/60 mt-3 border-t pt-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-foreground text-[12.5px] font-medium">
             {t("spending:budgetChart.byCategory")}
           </span>
           <BudgetManageLink monthKey={monthKey} />
@@ -696,15 +661,7 @@ export function BudgetLineChartCard({
             </Link>
           </div>
         ) : (
-          <div
-            data-no-swipe-drag
-            className="-mx-1 flex min-w-0 touch-pan-x gap-3 !overflow-x-auto overscroll-x-contain px-1 pb-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            style={{
-              maskImage: "linear-gradient(to right, black calc(100% - 32px), transparent 100%)",
-              WebkitMaskImage:
-                "linear-gradient(to right, black calc(100% - 32px), transparent 100%)",
-            }}
-          >
+          <div className="grid gap-x-1 gap-y-2.5 [grid-template-columns:repeat(auto-fill,minmax(96px,1fr))]">
             {rings.map((r) => (
               <BudgetRing key={r.id} ring={r} currency={currency} activityRange={activityRange} />
             ))}
@@ -807,45 +764,60 @@ function clamp(value: number, min: number, max: number): number {
 
 function BudgetCardHeaderActions({
   monthLabel,
-  monthKey,
   onPreviousMonth,
   onNextMonth,
   canGoNextMonth,
+  status,
+  dayLabel,
 }: {
   monthLabel: string;
   monthKey: string;
   onPreviousMonth: () => void;
   onNextMonth: () => void;
   canGoNextMonth: boolean;
+  status?: ReactNode;
+  dayLabel?: string;
 }) {
   const { t } = useTranslation();
+  const arrow =
+    "border-border flex h-8 w-8 items-center justify-center rounded-full border transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-40";
   return (
-    <div className="flex items-center gap-1.5">
-      <div className="bg-muted/60 inline-flex items-center rounded-full p-0.5">
-        <button
-          type="button"
-          onClick={onPreviousMonth}
-          className="hover:bg-background flex h-6 w-6 items-center justify-center rounded-full transition-colors"
-          aria-label={t("spending:budgetChart.previousBudgetMonth")}
-        >
-          <Icons.ChevronLeft className="h-3.5 w-3.5" />
-        </button>
-        <span className="text-foreground min-w-[74px] px-1 text-center text-[11px] font-medium tabular-nums">
-          {monthLabel}
-        </span>
-        <button
-          type="button"
-          onClick={onNextMonth}
-          disabled={!canGoNextMonth}
-          className="hover:bg-background disabled:text-muted-foreground/40 flex h-6 w-6 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed"
-          aria-label={t("spending:budgetChart.nextBudgetMonth")}
-        >
-          <Icons.ChevronRight className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      <BudgetManageLink monthKey={monthKey} />
+    <div className="flex flex-wrap items-center justify-end gap-1.5">
+      {status}
+      {dayLabel ? (
+        <span className="text-muted-foreground px-1 text-xs tabular-nums">{dayLabel}</span>
+      ) : null}
+      <button
+        type="button"
+        onClick={onPreviousMonth}
+        className={arrow}
+        aria-label={`${t("spending:budgetChart.previousBudgetMonth")} (${monthLabel})`}
+      >
+        <Icons.ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={onNextMonth}
+        disabled={!canGoNextMonth}
+        className={arrow}
+        aria-label={t("spending:budgetChart.nextBudgetMonth")}
+      >
+        <Icons.ChevronRight className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
+}
+
+/** money-hub patch: the month's verdict as a chip in the card's header (Meadow: green when on track,
+ *  amber when heading over, red when over). */
+function StatusChip({ status, label }: { status: Status; label: string }) {
+  const tone =
+    status === "ok"
+      ? "bg-[var(--m-mint,#e3f1da)] text-[var(--m-mint-ink,#1d4d1f)]"
+      : status === "warn"
+        ? "bg-[var(--m-warn-soft,#fbe9d2)] text-[var(--m-warn,#7a4300)]"
+        : "bg-[var(--m-warn-soft,#fbe9d2)] text-[var(--m-bad,#a8321f)]";
+  return <span className={cn("rounded-full px-2.5 py-0.5 text-xs", tone)}>{label}</span>;
 }
 
 const BudgetManageLink = ({ monthKey }: { monthKey: string }) => {
@@ -881,12 +853,18 @@ function BudgetRing({
   const { t } = useTranslation();
   const { isBalanceHidden } = useBalancePrivacy();
   const isOver = ring.spent > ring.target;
+  const close = !isOver && ring.pct >= 0.95;
   const remaining = ring.target - ring.spent;
-  const ringColor = isOver ? "var(--destructive)" : ring.pct > 0.85 ? "#C28B47" : "var(--success)";
+  // Meadow: forest while there is room, amber from 95%, red past the budget.
+  const ringColor = isOver
+    ? "var(--m-bad, var(--destructive))"
+    : close
+      ? "var(--m-warn-line, #C28B47)"
+      : "var(--m-forest, var(--success))";
   const displayAmount = Math.abs(isOver ? ring.spent - ring.target : remaining);
 
-  const size = 56;
-  const stroke = 4;
+  const size = 42;
+  const stroke = 5;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const fillPct = Math.min(1, ring.pct);
@@ -897,7 +875,7 @@ function BudgetRing({
       to={`/activities?tab=spending&category=${encodeURIComponent(ring.categoryId)}&from=${
         activityRange.from
       }&to=${activityRange.to}`}
-      className="hover:bg-muted/40 flex w-16 shrink-0 flex-col items-center gap-1 rounded-md px-1 py-1 transition-colors"
+      className="hover:bg-muted/40 flex min-w-0 flex-col items-center gap-0.5 rounded-md px-1 py-1 text-center transition-colors"
       title={`${ring.name}: ${ring.spent.toFixed(2)} / ${ring.target.toFixed(2)}`}
     >
       <div className="relative" style={{ width: size, height: size }}>
@@ -907,8 +885,7 @@ function BudgetRing({
             cy={size / 2}
             r={r}
             fill="none"
-            stroke={ringColor}
-            strokeOpacity={0.22}
+            stroke="var(--m-track, var(--muted))"
             strokeWidth={stroke}
           />
           <circle
@@ -922,22 +899,18 @@ function BudgetRing({
             strokeDasharray={dash}
           />
         </svg>
-        <div
-          className="absolute inset-0 flex items-center justify-center"
-          style={{ color: ring.color ?? ringColor }}
-        >
-          <CategoryIcon icon={ring.icon} fallback={ring.name} className="h-5 w-5" />
+        <div className="text-foreground absolute inset-0 flex items-center justify-center text-[10px] tabular-nums">
+          {Math.round(ring.pct * 100)}%
         </div>
       </div>
-      <div className="text-foreground text-xs font-semibold tabular-nums">
-        {isBalanceHidden ? "••••" : formatting.formatCompactAmount(displayAmount, currency)}
-      </div>
+      <div className="text-foreground w-full truncate text-[11.5px] leading-tight">{ring.name}</div>
       <div
         className={cn(
-          "text-[10px] uppercase tracking-wide",
-          isOver ? "text-destructive" : "text-muted-foreground/70",
+          "text-[11px] tabular-nums",
+          isOver ? "text-destructive" : close ? "text-[var(--m-warn,#7a4300)]" : "text-muted-foreground",
         )}
       >
+        {isBalanceHidden ? "••••" : formatting.formatCompactAmount(displayAmount, currency)}{" "}
         {isOver ? t("spending:budgetChart.overLower") : t("spending:budgetChart.leftLower")}
       </div>
     </Link>
@@ -958,10 +931,9 @@ function ForecastSums({
   daysRemaining: number;
   currency: string;
 }) {
-  const over = sums.over;
   const line = "flex items-baseline justify-between gap-2";
   return (
-    <div className="text-muted-foreground mt-3 space-y-1 text-[11px] tabular-nums leading-snug">
+    <div className="text-muted-foreground space-y-1 rounded-[14px] bg-[var(--m-sand,var(--muted))] px-3 py-2.5 text-[12.5px] tabular-nums leading-snug">
       {sums.fixed > 0 ? (
         <>
           <div className={line}>
@@ -974,19 +946,19 @@ function ForecastSums({
               - <PrivacyAmount value={sums.fixed} currency={currency} />
             </span>
           </div>
-          <div className={`${line} text-foreground/90 font-medium`}>
+          <div className={`${line} text-foreground font-medium`}>
             <span>Left for everything else</span>
             <PrivacyAmount value={sums.room} currency={currency} />
           </div>
         </>
       ) : null}
-      <div className={`${line} text-foreground/90 font-medium`}>
+      <div className={`${line} text-foreground border-border/60 border-t pt-1 font-medium`}>
         <span className="min-w-0 truncate">
           {sums.fixed > 0 ? "Everything else, forecast" : "Forecast"}
         </span>
         <PrivacyAmount value={sums.others} currency={currency} />
       </div>
-      <div className="text-muted-foreground/80">
+      <div className="text-muted-foreground pt-0.5 text-xs">
         Made of <PrivacyAmount value={sums.spentOthers} currency={currency} /> spent so far
         {sums.fixed > 0 ? " besides fixed bills" : ""},{" "}
         <PrivacyAmount value={parts.billsLeftTotal} currency={currency} /> in{" "}
@@ -1001,17 +973,7 @@ function ForecastSums({
             <PrivacyAmount value={parts.everydayCap} currency={currency} />)
           </>
         ) : null}
-        .{" "}
-        {over > 0 ? (
-          <>
-            That is <PrivacyAmount value={over} currency={currency} />{" "}
-            {sums.fixed > 0 ? "more than is left" : "over the budget"}.
-          </>
-        ) : (
-          <>
-            That leaves <PrivacyAmount value={-over} currency={currency} /> to spare.
-          </>
-        )}
+        .
       </div>
     </div>
   );

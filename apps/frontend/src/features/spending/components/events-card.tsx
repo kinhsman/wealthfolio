@@ -133,7 +133,7 @@ export function EventsCard({
   // a server outage looks identical to "user has no events".
   if (eventSummariesErrored) {
     return (
-      <div className="border-border/40 bg-card/70 rounded-xl border p-4 text-center text-xs backdrop-blur-xl md:p-5">
+      <div data-meadow-card className="border-border/40 bg-card/70 rounded-xl border p-4 text-center text-xs backdrop-blur-xl md:p-5">
         <div className="text-muted-foreground">{t("spending:events.loadError")}</div>
         <button
           type="button"
@@ -148,7 +148,7 @@ export function EventsCard({
 
   if (eventSummariesLoading) {
     return (
-      <div className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5">
+      <div data-meadow-card className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5">
         <div className="flex items-center gap-2">
           <Skeleton className="h-4 w-4 rounded-full" />
           <div className="flex-1 space-y-1.5">
@@ -166,7 +166,7 @@ export function EventsCard({
 
   if (!pick) {
     return (
-      <div className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5">
+      <div data-meadow-card className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5">
         <div className="flex items-center gap-2">
           <Icons.Calendar className="h-4 w-4 shrink-0" style={{ color: theme.deep }} />
           <div className="min-w-0 flex-1">
@@ -223,7 +223,7 @@ export function EventsCard({
     const endStr = sameMonth
       ? formatting.formatCalendarDate(formatDateISO(end), { day: "numeric" })
       : formatting.formatCalendarDate(formatDateISO(end), opts);
-    return `${startStr} — ${endStr}`;
+    return `${startStr} to ${endStr}`;
   })();
 
   let subLine: React.ReactNode = null;
@@ -246,7 +246,7 @@ export function EventsCard({
   }
 
   return (
-    <div className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5">
+    <div data-meadow-card className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5">
       <div className="flex items-center gap-2">
         <HeaderIcon className="h-4 w-4 shrink-0" style={{ color: theme.deep }} />
         <div className="min-w-0 flex-1">

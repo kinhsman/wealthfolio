@@ -848,6 +848,14 @@ body.qr-scan-active > .qr-overlay {
     overflow-x: visible;
   }
 
+  /* money-hub patch: the Meadow Spending dashboard sizes its own boxes (min-w-0, wrapping grids), and
+     the rule above clipped what is meant to sit outside a box, like the amount over a capped chart bar.
+     The page frame (.meadow itself) still clips, so nothing can push the page sideways. */
+  .meadow .flex,
+  .meadow .grid {
+    overflow-x: visible;
+  }
+
   .aui-thread-viewport {
     overflow-x: auto;
   }
@@ -1126,4 +1134,145 @@ summary {
   50% {
     opacity: 1;
   }
+}
+
+/* money-hub patch: Meadow, the Spending dashboard's look (owner picked design 5, 10-02; the Meadow design
+   system in Claude Design). Sand page, white cards, forest + lime actions, one mint hero; Night is warm
+   charcoal. Scoped to `.meadow` so the rest of the app keeps Flexoki: the shadcn tokens are re-pointed
+   inside it, so every `text-muted-foreground`, `bg-card`, `border-border` there turns Meadow. The font is
+   not set: the app's own font setting (body.font-mono / sans / serif) carries through. */
+.meadow {
+  --m-page: #f5f0ec;
+  --m-surface: #ffffff;
+  --m-tile: #f8f5f1;
+  --m-sand: #f5f0ec;
+  --m-track: #efe8de;
+  --m-line: #e4dccf;
+  --m-line-soft: #f1ece4;
+  --m-ink: #2b2925;
+  --m-ink-2: #4d473e;
+  --m-muted: #6e675d;
+  --m-forest: #054e04;
+  --m-forest-today: #3d7a2c;
+  --m-on-forest: #cff6ac;
+  --m-forest-soft: #9fd27a;
+  --m-mint: #dcefd3;
+  --m-mint-ink: #12361a;
+  --m-mint-muted: #2c5a33;
+  --m-mint-tile: rgba(255, 255, 255, 0.72);
+  --m-warn: #7a4300;
+  --m-warn-soft: #fbe9d2;
+  --m-warn-line: #b86e00;
+  --m-warn-panel: #fdf3e3;
+  --m-warn-panel-line: #f1dcbb;
+  --m-bad: #a8321f;
+  --m-info-soft: #e6f0f2;
+  --m-info-ink: #4d6a70;
+  --m-cat-other: #c9bfae;
+  --m-bills: #5f9381;
+
+  --background: var(--m-page);
+  --foreground: var(--m-ink);
+  --card: var(--m-surface);
+  --card-foreground: var(--m-ink);
+  --muted: var(--m-track);
+  --muted-foreground: var(--m-muted);
+  --secondary: var(--m-sand);
+  --secondary-foreground: var(--m-ink-2);
+  --accent: var(--m-sand);
+  --accent-foreground: var(--m-ink-2);
+  --border: var(--m-line);
+  --input: var(--m-line);
+  --ring: var(--m-forest);
+  --success: var(--m-forest);
+  --destructive: var(--m-bad);
+  --warning: var(--m-warn);
+  background: var(--m-page);
+  color: var(--m-ink);
+  font-variant-numeric: tabular-nums;
+}
+.dark .meadow {
+  --m-page: #121110;
+  --m-surface: #1b1a18;
+  --m-tile: #211f1d;
+  --m-sand: #24221f;
+  --m-track: #2e2c28;
+  --m-line: #36332e;
+  --m-line-soft: #2a2825;
+  --m-ink: #f2efea;
+  --m-ink-2: #d6d1c8;
+  --m-muted: #a39d93;
+  --m-forest: #cff6ac;
+  --m-forest-today: #e7fad8;
+  --m-on-forest: #0b2a0a;
+  --m-forest-soft: #6f9a55;
+  --m-mint: #1f2721;
+  --m-mint-ink: #f2efea;
+  --m-mint-muted: #b3b8ad;
+  --m-mint-tile: rgba(255, 255, 255, 0.05);
+  --m-warn: #f0b545;
+  --m-warn-soft: #2e2513;
+  --m-warn-line: #f0b545;
+  --m-warn-panel: #221d14;
+  --m-warn-panel-line: #3d3324;
+  --m-bad: #ff7a6e;
+  --m-info-soft: #1a2326;
+  --m-info-ink: #a9c2c7;
+  --m-cat-other: #4d4943;
+  --m-bills: #5e8f80;
+}
+/* Meadow never goes bold: hierarchy comes from size and colour (owner rule). */
+.meadow :is(.font-semibold, .font-bold, .font-extrabold) {
+  font-weight: 500;
+}
+/* The shared dashboard card, Meadow style: one flat white card with the title INSIDE it (the app puts
+   the title above a glass panel), a hairline and 20px corners. */
+.meadow [data-dash-card] {
+  background: var(--m-surface);
+  border: 1px solid var(--m-line);
+  border-radius: 20px;
+  overflow: hidden;
+}
+.meadow [data-dash-card-head] {
+  padding: 14px 18px 4px;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.meadow [data-dash-card-heading] {
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+.meadow [data-dash-card-title] {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.meadow [data-dash-card-sub] {
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: var(--m-muted);
+}
+/* a card that draws its own box (Events) */
+.meadow [data-meadow-card] {
+  background: var(--m-surface);
+  border: 1px solid var(--m-line);
+  border-radius: 20px;
+  padding: 16px 18px;
+  backdrop-filter: none;
+}
+/* the right-hand link or toggle keeps its one line; a subtitle that does not fit drops under the title */
+.meadow [data-dash-card-head] > :not([data-dash-card-heading]) {
+  flex: none;
+  white-space: nowrap;
+}
+.meadow [data-dash-card-body] {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+.meadow [data-dash-card-body][data-padded] {
+  padding: 6px 18px 16px;
 }
