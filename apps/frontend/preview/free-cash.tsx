@@ -40,6 +40,7 @@ import pendingFixture from "./pending.fixture.json";
 import returnsFixture from "./returns.fixture.json";
 import subsFixture from "./subscriptions.fixture.json";
 import budgetHistory from "./budget-history.fixture.json";
+import taxonomyFixture from "./taxonomy.fixture.json";
 
 const params = new URLSearchParams(location.search);
 const view = params.get("view") || "column";
@@ -106,6 +107,7 @@ qc.setQueryData(
 );
 qc.setQueryData(CREDIT_CARDS_KEY, fixture.cards as unknown as CreditCardsView);
 qc.setQueryData(SUBSCRIPTIONS_KEY, subsFixture as unknown as SubscriptionsView);
+qc.setQueryData(QueryKeys.taxonomy("spending_categories"), taxonomyFixture);
 qc.setQueryData(RETURNS_KEY, returnsFixture.view as unknown as ReturnsView);
 qc.setQueryData(PENDING_CHANGES_KEY, pendingFixture.view as unknown as PendingChangesView);
 for (const archived of [true, false])

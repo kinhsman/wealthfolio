@@ -13,9 +13,10 @@ import { billMonth, ymd, type BillMonth } from "../lib/bill-calendar";
 import { shortDate, type Stream } from "../lib/subscriptions";
 import { StreamLogo } from "./stream-logo";
 
-// Meadow's colours (globals.css, `.meadow`), with Day's values for a card shown outside it.
-const FOREST = "var(--m-forest, #054e04)";
-const TRACK = "var(--m-track, #efe8de)";
+// Meadow's colours on the dashboard (globals.css, `.meadow`); outside it (the Subscriptions & Bills page)
+// the page's own green and track, which read in Day and Night alike.
+const FOREST = "var(--m-forest, #16a34a)";
+const TRACK = "var(--m-track, var(--muted))";
 
 const WEEK = ["S", "M", "T", "W", "T", "F", "S"];
 /** Today: its number underlined (a ring read as one more bill day). */
@@ -24,7 +25,19 @@ const TODAY = "font-medium underline decoration-2 underline-offset-[3px]";
 const BACK = 12;
 const AHEAD = 12;
 
-export function BillMonthPanel({ items, currency, className }: { items: Stream[]; currency: string; className?: string }) {
+/** `totals` false: this month's paid and left to pay are shown elsewhere (the page's own month card);
+ *  another month still says its total. */
+export function BillMonthPanel({
+  items,
+  currency,
+  totals = true,
+  className,
+}: {
+  items: Stream[];
+  currency: string;
+  totals?: boolean;
+  className?: string;
+}) {
   const [offset, setOffset] = useState(0);
   const today = ymd(new Date());
   const m = useMemo(() => billMonth(items, today, offset), [items, today, offset]);
@@ -54,7 +67,7 @@ export function BillMonthPanel({ items, currency, className }: { items: Stream[]
         <span className="text-muted-foreground text-xs tabular-nums">{countLine(m, offset)}</span>
       </div>
 
-      {offset === 0 ? (
+      {offset === 0 && !totals ? null : offset === 0 ? (
         <div>
           {/* Each amount with its word under it: the narrow column (1024 wide) cut "left to pay" off. */}
           <div className="flex items-end justify-between gap-3 whitespace-nowrap">

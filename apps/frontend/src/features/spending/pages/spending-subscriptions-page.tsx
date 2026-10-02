@@ -41,6 +41,8 @@ import { useAccounts } from "@/hooks/use-accounts";
 import { cn } from "@/lib/utils";
 
 import { CompanyButton, CompanyPicker } from "../components/company-picker";
+import { BillMonthPanel } from "../components/bill-calendar";
+import { StreamCategory, useStreamCategory } from "../components/stream-category";
 import { StreamLogo } from "../components/stream-logo";
 import { billMonth, ymd } from "../lib/bill-calendar";
 import type { BillDue } from "../lib/budget-forecast";
@@ -190,118 +192,140 @@ export default function SpendingSubscriptionsPage() {
               <Tile label="Repeating" value={<span>{live.length}</span>} sub={stopped.length ? `${stopped.length} stopped` : undefined} />
             </div>
 
-            {items.length === 0 ? (
-              <div className="border-border/40 bg-card/70 rounded-xl border p-6 text-center backdrop-blur-xl">
-                <p className="text-sm">No repeating charges found yet.</p>
-                <p className="text-muted-foreground mt-1 text-xs">
-                  One shows up once it has come back a few months in a row. A yearly one you already know about can be added by hand.
-                </p>
-              </div>
-            ) : null}
+            {/* The month's bills on a calendar beside the lists (owner, 10-02: "add the same calendar to the
+                subscriptions page too"), the dashboard card's own; on a phone, under the boxes above. */}
+            {/* overflow visible: at 1024 and below the app clips every grid (globals.css), which made this
+                one the calendar's scroll box and dropped the sticky calendar 16 px below the lists. */}
+            <div
+              className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem]"
+              style={{ overflowX: "visible" }}
+            >
+              {items.length > 0 ? (
+                <aside className="lg:sticky lg:top-4 lg:order-2">
+                  {/* A heading like the lists' own, so its box starts level with theirs. */}
+                  <div className="flex items-baseline gap-2 pb-2">
+                    <h2 className="text-sm font-semibold tracking-tight">Calendar</h2>
+                    <span className="text-muted-foreground/60 hidden text-xs sm:inline">When each one comes.</span>
+                  </div>
+                  <div className="border-border/40 bg-card/70 rounded-xl border px-3 py-3 backdrop-blur-xl md:px-4">
+                    <BillMonthPanel items={items} currency={currency} totals={false} />
+                  </div>
+                </aside>
+              ) : null}
+              <div className="min-w-0 space-y-6 lg:order-1">
+                {items.length === 0 ? (
+                  <div className="border-border/40 bg-card/70 rounded-xl border p-6 text-center backdrop-blur-xl">
+                    <p className="text-sm">No repeating charges found yet.</p>
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      One shows up once it has come back a few months in a row. A yearly one you already know about can be added by hand.
+                    </p>
+                  </div>
+                ) : null}
 
-            {groups.map((g) => {
-              const rows = live.filter((s) => s.group === g.group);
-              if (!rows.length) return null;
-              // Paid from a mortgage's escrow: shown, but counted once, in the mortgage payment.
-              const inMortgage = rows.filter((s) => s.escrow);
-              const lenders = [...new Set(inMortgage.map((s) => s.escrow?.mortgageName).filter(Boolean))];
-              return (
-                <div key={g.group} className="space-y-2">
-                  <Section title={g.title} blurb={g.blurb} aside={<><PrivacyAmount value={g.monthly} currency={currency} /> a month</>}>
-                    {rows.map((s) => (
+                {groups.map((g) => {
+                  const rows = live.filter((s) => s.group === g.group);
+                  if (!rows.length) return null;
+                  // Paid from a mortgage's escrow: shown, but counted once, in the mortgage payment.
+                  const inMortgage = rows.filter((s) => s.escrow);
+                  const lenders = [...new Set(inMortgage.map((s) => s.escrow?.mortgageName).filter(Boolean))];
+                  return (
+                    <div key={g.group} className="space-y-2">
+                      <Section title={g.title} blurb={g.blurb} aside={<><PrivacyAmount value={g.monthly} currency={currency} /> a month</>}>
+                        {rows.map((s) => (
+                          <StreamRow key={s.key} s={s} {...rowProps} />
+                        ))}
+                      </Section>
+                      {inMortgage.length ? (
+                        <p className="text-muted-foreground text-xs leading-snug">
+                          {inMortgage.map((s) => s.name).join(" and ")} {inMortgage.length === 1 ? "is" : "are"} paid from your{" "}
+                          {lenders.length === 1 ? `${lenders[0]} ` : ""}mortgage escrow, so the totals count{" "}
+                          {inMortgage.length === 1 ? "it" : "them"} once, in the mortgage payment.
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+
+                {stopped.length ? (
+                  <Section title="Stopped" blurb="No charge for two periods. Cancelled, or the card changed.">
+                    {stopped.map((s) => (
                       <StreamRow key={s.key} s={s} {...rowProps} />
                     ))}
                   </Section>
-                  {inMortgage.length ? (
-                    <p className="text-muted-foreground text-xs leading-snug">
-                      {inMortgage.map((s) => s.name).join(" and ")} {inMortgage.length === 1 ? "is" : "are"} paid from your{" "}
-                      {lenders.length === 1 ? `${lenders[0]} ` : ""}mortgage escrow, so the totals count{" "}
-                      {inMortgage.length === 1 ? "it" : "them"} once, in the mortgage payment.
+                ) : null}
+
+                {data.hidden.length ? (
+                  <div>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+                      onClick={() => setShowHidden((v) => !v)}
+                    >
+                      {showHidden ? "Hide" : "Show"} the {data.hidden.length} marked not a subscription
+                    </button>
+                    {showHidden ? (
+                      <div className="bg-card/70 border-border/40 mt-2 divide-y rounded-xl border backdrop-blur-xl">
+                        {data.hidden.map((s) => (
+                          <div key={s.key} className="flex items-center gap-3 px-4 py-2.5">
+                            <StreamLogo s={s} className="h-7 w-7 text-[10px]" />
+                            <span className="min-w-0 flex-1 truncate text-sm">{s.name}</span>
+                            <span className="text-muted-foreground text-xs tabular-nums">
+                              <PrivacyAmount value={s.usual} currency={currency} /> {s.everyLabel}
+                            </span>
+                            <Button variant="outline" size="sm" className="h-7 text-xs" disabled={busy !== null} onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { hidden: false }))}>
+                              Put back
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {data.leftOut?.length ? (
+                  <div>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+                      onClick={() => setShowLeftOut((v) => !v)}
+                    >
+                      {showLeftOut ? "Hide" : "Show"} the {data.leftOut.length} charge{data.leftOut.length === 1 ? "" : "s"} you left out of a subscription that is gone now
+                    </button>
+                    {showLeftOut ? (
+                      <div className="bg-card/70 border-border/40 mt-2 divide-y rounded-xl border backdrop-blur-xl">
+                        {data.leftOut.map((c) => (
+                          <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm">{c.notes || "No description"}</span>
+                              <span className="text-muted-foreground block text-xs">{day(c.date)}</span>
+                            </span>
+                            <span className="text-muted-foreground text-xs tabular-nums">
+                              <PrivacyAmount value={Math.abs(c.amount)} currency={currency} />
+                            </span>
+                            <Button variant="outline" size="sm" className="h-7 text-xs" disabled={busy !== null} onClick={() => act(c.id, () => subscriptionsApi.exclusions(c.key, { include: [c.id] }), "Put back.")}>
+                              Put back
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {/* Which alerts go out, and their tests, live on Settings, Alerts with every other alert (owner, 10-01). */}
+                <div className="text-muted-foreground space-y-1 text-xs">
+                  {data.last ? (
+                    <p>
+                      Last checked {new Date(data.last.at).toLocaleString()}, {data.last.scanned.toLocaleString()} transactions. It checks again every hour.
                     </p>
                   ) : null}
+                  <p>
+                    {data.alerts.on === false ? "Alerts for these are off. " : "Which alerts go out, and where: "}
+                    <Link to="/settings/alerts" className="text-foreground underline-offset-4 hover:underline">
+                      Settings, Alerts
+                    </Link>
+                  </p>
                 </div>
-              );
-            })}
-
-            {stopped.length ? (
-              <Section title="Stopped" blurb="No charge for two periods. Cancelled, or the card changed.">
-                {stopped.map((s) => (
-                  <StreamRow key={s.key} s={s} {...rowProps} />
-                ))}
-              </Section>
-            ) : null}
-
-            {data.hidden.length ? (
-              <div>
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
-                  onClick={() => setShowHidden((v) => !v)}
-                >
-                  {showHidden ? "Hide" : "Show"} the {data.hidden.length} marked not a subscription
-                </button>
-                {showHidden ? (
-                  <div className="bg-card/70 border-border/40 mt-2 divide-y rounded-xl border backdrop-blur-xl">
-                    {data.hidden.map((s) => (
-                      <div key={s.key} className="flex items-center gap-3 px-4 py-2.5">
-                        <StreamLogo s={s} className="h-7 w-7 text-[10px]" />
-                        <span className="min-w-0 flex-1 truncate text-sm">{s.name}</span>
-                        <span className="text-muted-foreground text-xs tabular-nums">
-                          <PrivacyAmount value={s.usual} currency={currency} /> {s.everyLabel}
-                        </span>
-                        <Button variant="outline" size="sm" className="h-7 text-xs" disabled={busy !== null} onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { hidden: false }))}>
-                          Put back
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
               </div>
-            ) : null}
-
-            {data.leftOut?.length ? (
-              <div>
-                <button
-                  type="button"
-                  className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
-                  onClick={() => setShowLeftOut((v) => !v)}
-                >
-                  {showLeftOut ? "Hide" : "Show"} the {data.leftOut.length} charge{data.leftOut.length === 1 ? "" : "s"} you left out of a subscription that is gone now
-                </button>
-                {showLeftOut ? (
-                  <div className="bg-card/70 border-border/40 mt-2 divide-y rounded-xl border backdrop-blur-xl">
-                    {data.leftOut.map((c) => (
-                      <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm">{c.notes || "No description"}</span>
-                          <span className="text-muted-foreground block text-xs">{day(c.date)}</span>
-                        </span>
-                        <span className="text-muted-foreground text-xs tabular-nums">
-                          <PrivacyAmount value={Math.abs(c.amount)} currency={currency} />
-                        </span>
-                        <Button variant="outline" size="sm" className="h-7 text-xs" disabled={busy !== null} onClick={() => act(c.id, () => subscriptionsApi.exclusions(c.key, { include: [c.id] }), "Put back.")}>
-                          Put back
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {/* Which alerts go out, and their tests, live on Settings, Alerts with every other alert (owner, 10-01). */}
-            <div className="text-muted-foreground space-y-1 text-xs">
-              {data.last ? (
-                <p>
-                  Last checked {new Date(data.last.at).toLocaleString()}, {data.last.scanned.toLocaleString()} transactions. It checks again every hour.
-                </p>
-              ) : null}
-              <p>
-                {data.alerts.on === false ? "Alerts for these are off. " : "Which alerts go out, and where: "}
-                <Link to="/settings/alerts" className="text-foreground underline-offset-4 hover:underline">
-                  Settings, Alerts
-                </Link>
-              </p>
             </div>
           </>
         )}
@@ -446,6 +470,7 @@ function StreamRow({
 }) {
   const [editing, setEditing] = useState(false);
   const st = statusLabel(s);
+  const category = useStreamCategory(s.categoryId);
   const { data } = useSubscriptions();
   const manual = s.manualId ? data?.manual.find((m) => m.id === s.manualId) : undefined;
   // One window for every row (owner, 10-01: "why the edit modal look different between each
@@ -518,6 +543,13 @@ function StreamRow({
             )}
           </div>
           <div className="text-muted-foreground text-xs leading-snug">
+            {/* Its category, the app's own icon and colour (owner, 10-02). */}
+            {category ? (
+              <>
+                <StreamCategory categoryId={s.categoryId} className="max-w-[12rem]" />
+                {" · "}
+              </>
+            ) : null}
             {s.escrow?.company ? `${s.escrow.company} · ` : ""}
             {EVERY_LABELS[s.every]}
             {s.everySetByOwner ? " (your choice)" : ""} · {dueLabel(s)}

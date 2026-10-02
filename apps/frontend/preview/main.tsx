@@ -37,6 +37,7 @@ import { EventDialogProvider } from "../src/features/spending/components/event-d
 import { TransactionsFilterBar } from "../src/features/spending/components/transactions-filter-bar";
 import { subscriptionFilterOptions } from "../src/features/spending/lib/subscriptions";
 import returnsFixture from "./returns.fixture.json";
+import taxonomyFixture from "./taxonomy.fixture.json";
 
 const params = new URLSearchParams(location.search);
 const view = params.get("view") || "page";
@@ -83,6 +84,8 @@ const qc = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: Infinity, refetchOnWindowFocus: false, refetchOnMount: false } },
 });
 qc.setQueryData(SUBSCRIPTIONS_KEY, fixture as unknown as SubscriptionsView);
+// The owner's spending categories (icons and colours), for the rows' category (preview/taxonomy.fixture.json).
+qc.setQueryData(QueryKeys.taxonomy("spending_categories"), taxonomyFixture);
 const returnsView = returnsFixture.view as unknown as ReturnsView;
 qc.setQueryData(RETURNS_KEY, view === "returns-empty" ? { ...returnsView, items: [], totals: { waiting: 0, count: 0, late: 0, toConfirm: 0, back: 0, backCount: 0 } } : returnsView);
 // ?view=rows&returns=1: the Returns mark on the sample rows (waiting, late, refunded).

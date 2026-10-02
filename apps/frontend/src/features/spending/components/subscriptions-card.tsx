@@ -8,6 +8,7 @@ import { PrivacyAmount } from "@wealthfolio/ui";
 
 import { dueLabel, transactionsHref, upcoming, useSubscriptions } from "../lib/subscriptions";
 import { BillMonthPanel } from "./bill-calendar";
+import { StreamCategory } from "./stream-category";
 import { StreamLogo } from "./stream-logo";
 
 export function SubscriptionsCard({ currency = "USD", fill = false }: { currency?: string; fill?: boolean }) {
@@ -73,7 +74,11 @@ export function SubscriptionsCard({ currency = "USD", fill = false }: { currency
                   <StreamLogo s={s} className="h-6 w-6 text-[10px]" />
                   <div className="min-w-0 flex-1">
                     <div className="text-foreground/90 truncate text-xs font-medium">{s.name}</div>
-                    <div className="text-muted-foreground truncate text-[11px]">{dueLabel(s)}</div>
+                    <div className="text-muted-foreground flex items-center gap-1 text-[11px]">
+                      {/* Its category's icon, the app's own (owner, 10-02); the name shows on hover. */}
+                      <StreamCategory categoryId={s.categoryId} iconOnly />
+                      <span className="truncate">{dueLabel(s)}</span>
+                    </div>
                   </div>
                   <span className="shrink-0 text-xs tabular-nums">
                     <PrivacyAmount value={s.usual} currency={currency} />
