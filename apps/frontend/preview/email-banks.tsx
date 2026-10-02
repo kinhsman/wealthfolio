@@ -56,7 +56,10 @@ const previewAnswer = {
 };
 window.fetch = (async (input: RequestInfo | URL) => {
   const url = String(input);
-  const body = url.endsWith("/preview") ? previewAnswer : status;
+  const pic = (fill: string, text: string) =>
+    `data:image/svg+xml;base64,${btoa(`<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" fill="#fff"/><text x="64" y="76" font-size="34" font-family="sans-serif" font-weight="700" text-anchor="middle" fill="${fill}">${text}</text></svg>`)}`;
+  const choices = { choices: [{ key: "k1", dataUrl: pic("#1d4ed8", "BANK") }, { key: "k2", dataUrl: pic("#64748b", "~~~") }] };
+  const body = url.endsWith("/preview") ? previewAnswer : url.endsWith("/logo-choices") ? choices : status;
   return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
 }) as typeof fetch;
 

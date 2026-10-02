@@ -24,7 +24,7 @@ interface Template {
   enabled: boolean;
 }
 interface Bank extends Template {
-  id: string; lastCheck?: string; error?: string | null; emails?: number;
+  id: string; hasLogo?: boolean; logoHash?: string; lastCheck?: string; error?: string | null; emails?: number;
   problems?: { id: string; subject: string; date: number; problems: string[] }[];
   imported?: { added: number; updated: number; removed: number } | { error: string };
 }
@@ -47,6 +47,67 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error || `The money app helper said ${res.status}`);
   return data as T;
+}
+
+/** A picture file to the helper (multipart: the logo upload). */
+async function upload<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("logo", file);
+  const res = await fetch(`${BASE}${path}`, { method: "PUT", credentials: "include", body: form });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((data as { error?: string }).error || `The money app helper said ${res.status}`);
+  return data as T;
+}
+const logoSrc = (b: { id: string; logoHash?: string }) => `${BASE}/banks/${b.id}/logo?v=${b.logoHash ?? ""}`;
+
+/** The bank's logo on its account: a picture from its newest email, an upload, or none. Applies at once. */
+function LogoRow({ bank, onSaved }: { bank: Bank; onSaved: (s: Status) => void }) {
+  const [choices, setChoices] = useState<{ key: string; dataUrl: string }[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const act = async (what: string, fn: () => Promise<void>) => {
+    setBusy(what);
+    setError("");
+    try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
+  };
+  const done = (s: Status) => { onSaved(s); setChoices(null); };
+  return (
+    <section className="space-y-2">
+      <div className="text-xs font-semibold">Logo <span className="text-muted-foreground font-normal">· shown on the account</span></div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="bg-muted flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border">
+          {bank.hasLogo ? <img src={logoSrc(bank)} alt="" className="size-full object-contain" /> : <Icons.Building className="text-muted-foreground size-5" />}
+        </span>
+        <button type="button" className={btn} disabled={!!busy}
+          onClick={() => act("load", async () => setChoices((await call<{ choices: { key: string; dataUrl: string }[] }>("GET", `/banks/${bank.id}/logo-choices`)).choices))}>
+          {busy === "load" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Mail className="size-3.5" />} From the email
+        </button>
+        <label className={`${btn} cursor-pointer`}>
+          {busy === "upload" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Upload className="size-3.5" />} Upload
+          <input type="file" accept="image/*" className="hidden" disabled={!!busy}
+            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void act("upload", async () => done(await upload<Status>(`/banks/${bank.id}/logo`, f))); }} />
+        </label>
+        {bank.hasLogo && (
+          <button type="button" className={btn} disabled={!!busy}
+            onClick={() => act("clear", async () => done(await call<Status>("DELETE", `/banks/${bank.id}/logo`)))}>
+            <Icons.Close className="size-3.5" /> No logo
+          </button>
+        )}
+      </div>
+      {choices && (choices.length ? (
+        <div className="flex flex-wrap gap-2">
+          {choices.map((c) => (
+            <button key={c.key} type="button" disabled={!!busy} aria-label="Use this picture"
+              className="hover:border-primary size-16 overflow-hidden rounded-lg border bg-white p-0.5 disabled:opacity-50"
+              onClick={() => act(`pick:${c.key}`, async () => done(await call<Status>("PUT", `/banks/${bank.id}/logo`, { key: c.key })))}>
+              <img src={c.dataUrl} alt="" className="size-full object-contain" />
+            </button>
+          ))}
+        </div>
+      ) : <p className="text-muted-foreground text-[11px]">The newest email has no pictures. Upload one instead.</p>)}
+      {error && <p className="text-destructive text-xs">{error}</p>}
+    </section>
+  );
 }
 
 const FIELD_LABELS: [FieldKey, string, string][] = [
@@ -309,6 +370,10 @@ function Editor({ open, onClose, start, bankId, status, onSaved }: {
             </section>
           )}
 
+          {bankId && status.banks.find((b) => b.id === bankId) && (
+            <LogoRow bank={status.banks.find((b) => b.id === bankId)!} onSaved={onSaved} />
+          )}
+
           {preview && (
             <section className="space-y-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
@@ -441,7 +506,9 @@ export function EmailBanksSection() {
         return (
           <div key={b.id} className="bg-card rounded-xl border">
             <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <span className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg"><Icons.Building className="text-primary size-5" /></span>
+              <span className="bg-muted flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+                {b.hasLogo ? <img src={logoSrc(b)} alt="" className="size-full object-contain" /> : <Icons.Building className="text-primary size-5" />}
+              </span>
               <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
                 <div className="truncate text-sm font-semibold">{b.accountName || b.bankName}</div>
                 <div className="text-muted-foreground truncate text-xs">
