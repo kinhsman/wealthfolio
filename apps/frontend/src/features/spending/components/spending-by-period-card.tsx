@@ -251,8 +251,8 @@ export function SpendingByPeriodCard({
                             background: b.future
                               ? "var(--m-line)"
                               : b.key === todayKey
-                                ? "var(--m-forest-today)"
-                                : "var(--m-forest)",
+                                ? "var(--m-chart-today)"
+                                : "var(--m-chart)",
                           }}
                         />
                         {capped ? (
@@ -304,7 +304,7 @@ export function SpendingByPeriodCard({
               </div>
               <div className="text-secondary-foreground flex flex-wrap gap-x-[18px] gap-y-1 text-xs max-md:pb-2.5">
                 <span className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--m-forest)]" />
+                  <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--m-chart)]" />
                   Spent that {unit.one}
                 </span>
                 {hasFuture ? (

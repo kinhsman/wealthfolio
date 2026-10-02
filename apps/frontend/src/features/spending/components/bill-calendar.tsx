@@ -16,7 +16,7 @@ import { PhoneFold } from "./phone-fold";
 
 // Meadow's colours on the dashboard (globals.css, `.meadow`); outside it (the Subscriptions & Bills page)
 // the page's own green and track, which read in Day and Night alike.
-const FOREST = "var(--m-forest, #16a34a)";
+const FOREST = "var(--m-done, var(--m-forest, #16a34a))";
 const TRACK = "var(--m-track, var(--muted))";
 
 const WEEK = ["S", "M", "T", "W", "T", "F", "S"];

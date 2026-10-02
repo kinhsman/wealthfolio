@@ -1173,6 +1173,21 @@ summary {
   --m-info-ink: #4d6a70;
   --m-cat-other: #c9bfae;
   --m-bills: #5f9381;
+  /* What a colour means on a money screen. Meadow keeps its forest for all of them; Bronze Titanium gives
+     data its own colours (owner, 10-02: money up green, money down red, charts not bronze). */
+  --m-up: var(--m-forest);
+  --m-down: var(--m-bad);
+  --m-chart: var(--m-forest);
+  --m-chart-today: var(--m-forest-today);
+  --m-chart-2: #3b7d8a;
+  --m-chart-3: var(--m-muted);
+  --m-done: var(--m-forest);
+  --m-on-done: var(--m-on-forest);
+  --m-good-soft: var(--m-mint);
+  --m-good-ink: var(--m-mint-ink);
+  --m-seg-cards: var(--m-forest);
+  --m-free: var(--m-forest-soft);
+  --m-tint: 17%;
 
   --background: var(--m-page);
   --foreground: var(--m-ink);
@@ -1187,8 +1202,8 @@ summary {
   --border: var(--m-line);
   --input: var(--m-line);
   --ring: var(--m-forest);
-  --success: var(--m-forest);
-  --destructive: var(--m-bad);
+  --success: var(--m-up);
+  --destructive: var(--m-down);
   --warning: var(--m-warn);
   background: var(--m-page);
   color: var(--m-ink);
@@ -1224,6 +1239,7 @@ summary {
   --m-info-ink: #a9c2c7;
   --m-cat-other: #4d4943;
   --m-bills: #5e8f80;
+  --m-chart-2: #74b2c4;
 }
 /* Meadow never goes bold: hierarchy comes from size and colour (owner rule). */
 .meadow :is(.font-semibold, .font-bold, .font-extrabold) {
@@ -1334,9 +1350,24 @@ summary {
   --m-info-soft: rgba(205, 207, 228, 0.62);
   --m-info-ink: #474a66;
   --m-cat-other: #bfb1a3;
-  --m-bills: #8c7868;
+  --m-bills: #a8457a;
   --m-cushion: #cdbfb1;
-  --m-ring-ok: #b3a69a;
+  --m-ring-ok: #1f7a3a;
+  /* data in its own colours, bronze stays for buttons and the selected tab (owner, 10-02) */
+  --m-up: #1f7a3a;
+  --m-down: #b3261e;
+  --m-bad: #b3261e;
+  --m-chart: #0f7c77;
+  --m-chart-today: #3fa39d;
+  --m-chart-2: #4356b0;
+  --m-chart-3: #a8457a;
+  --m-done: #1f7a3a;
+  --m-on-done: #f2fbf4;
+  --m-good-soft: rgba(31, 122, 58, 0.12);
+  --m-good-ink: #1f7a3a;
+  --m-seg-cards: #4356b0;
+  --m-free: #7fb98e;
+  --m-tint: 18%;
   --bt-glass: rgba(255, 252, 248, 0.55);
   --bt-glass-line: rgba(255, 255, 255, 0.78);
   --bt-sheen: rgba(255, 255, 255, 0.6);
@@ -1404,9 +1435,23 @@ summary {
   --m-info-soft: rgba(46, 47, 65, 0.62);
   --m-info-ink: #bdbed3;
   --m-cat-other: #6d584b;
-  --m-bills: #9a8a7e;
-  --m-cushion: #241d1a;
-  --m-ring-ok: #b8ac9f;
+  --m-bills: #e59ab8;
+  --m-cushion: #4b3a30;
+  --m-ring-ok: #8fd19e;
+  --m-up: #8fd19e;
+  --m-down: #ff8a80;
+  --m-bad: #ff8a80;
+  --m-chart: #5fc8c0;
+  --m-chart-today: #a3e4de;
+  --m-chart-2: #9aa8f0;
+  --m-chart-3: #e59ab8;
+  --m-done: #8fd19e;
+  --m-on-done: #0e2e17;
+  --m-good-soft: rgba(143, 209, 158, 0.14);
+  --m-good-ink: #8fd19e;
+  --m-seg-cards: #9aa8f0;
+  --m-free: #6fb383;
+  --m-tint: 30%;
   --bt-glass: rgba(46, 38, 35, 0.5);
   --bt-glass-line: rgba(237, 226, 214, 0.13);
   --bt-sheen: rgba(255, 240, 222, 0.16);
@@ -1552,6 +1597,25 @@ summary {
   background: linear-gradient(180deg, var(--bt-fill-top), var(--bt-fill-bottom));
   box-shadow: var(--bt-fill-shine);
   color: var(--m-on-forest);
+}
+
+/* A money figure on a fill (the Net tile) is data, not a button: in Bronze it sits on glass and reads green
+   or red by its sign (owner, 10-02). */
+:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
+  [data-m="fill"][data-net] {
+  background: var(--m-sand);
+  box-shadow: inset 0 0 0 1px var(--bt-glass-line);
+  color: var(--m-ink);
+}
+:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
+  [data-net="up"]
+  [data-m-num] {
+  color: var(--m-up);
+}
+:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
+  [data-net="down"]
+  [data-m-num] {
+  color: var(--m-down);
 }
 
 /* money-hub patch: the mouse light (owner, 10-02). lib/spotlight.ts marks the card under the mouse with

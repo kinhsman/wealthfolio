@@ -226,8 +226,7 @@ function Verdict({ short }: { short: boolean }) {
     </span>
   ) : (
     <span
-      data-m="fill"
-      className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--m-forest)] px-3 py-1 text-[12.5px] text-[var(--m-on-forest)] max-md:px-2.5 max-md:py-0.5 max-md:text-xs"
+      className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--m-done)] px-3 py-1 text-[12.5px] text-[var(--m-on-done)] max-md:px-2.5 max-md:py-0.5 max-md:text-xs"
     >
       <Icons.Check className="h-3.5 w-3.5" />
       Covered
@@ -254,10 +253,10 @@ function Summary({
   const whole = view.short ? promised : t.cash;
   const share = (x: number) => (whole > 0 ? Math.max(0, (x / whole) * 100) : 0);
   const parts = [
-    { key: "cards", value: t.cards, color: "var(--m-forest)" },
+    { key: "cards", value: t.cards, color: "var(--m-seg-cards)" },
     { key: "bills", value: t.bills, color: "var(--m-bills)" },
     { key: "cushion", value: t.cushion, color: "var(--m-cushion, var(--m-cat-other))" },
-    ...(view.short ? [] : [{ key: "free", value: t.left, color: "var(--m-forest-soft)" }]),
+    ...(view.short ? [] : [{ key: "free", value: t.left, color: "var(--m-free)" }]),
   ].filter((p) => p.value > 0);
 
   if (phone)
@@ -275,7 +274,7 @@ function Summary({
           </span>
           <span className="flex items-center gap-1.5 text-[13.5px] text-[var(--m-mint-muted)]">
             {view.short ? null : (
-              <span className="h-2 w-2 rounded-[2px] bg-[var(--m-forest-soft)]" aria-hidden />
+              <span className="h-2 w-2 rounded-[2px] bg-[var(--m-free)]" aria-hidden />
             )}
             {view.short ? "short" : "free cash"}
           </span>
@@ -294,7 +293,7 @@ function Summary({
           ))}
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <Legend color="var(--m-forest)" label="Cards" value={t.cards} currency={currency} phone />
+          <Legend color="var(--m-seg-cards)" label="Cards" value={t.cards} currency={currency} phone />
           <Legend
             color="var(--m-bills)"
             label={`Bills ${shortDate(view.bills.until)}`}
@@ -323,7 +322,7 @@ function Summary({
         <div className="flex min-w-0 flex-col">
           <span className="flex items-center gap-1.5 text-[12.5px] text-[var(--m-mint-muted)]">
             {view.short ? null : (
-              <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--m-forest-soft)]" aria-hidden />
+              <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--m-free)]" aria-hidden />
             )}
             {view.short ? "Short by" : "Free cash"}
           </span>
@@ -368,7 +367,7 @@ function Summary({
       </div>
 
       <div className="grid gap-x-3.5 gap-y-2 [grid-template-columns:repeat(auto-fit,minmax(118px,1fr))]">
-        <Legend color="var(--m-forest)" label="Card balance" value={t.cards} currency={currency} />
+        <Legend color="var(--m-seg-cards)" label="Card balance" value={t.cards} currency={currency} />
         <Legend
           color="var(--m-bills)"
           label={`Bills by ${shortDate(view.bills.until)}`}
@@ -604,12 +603,12 @@ function CardRow({
             style={{
               width: `${owedW}%`,
               minWidth: c.owed > 0 ? 3 : 0,
-              background: high ? "var(--m-warn-line)" : "var(--m-forest)",
+              background: high ? "var(--m-warn-line)" : "var(--m-seg-cards)",
             }}
           />
           {pendingW > 0 ? (
             <div
-              style={{ width: `${pendingW}%`, minWidth: 2, background: "var(--m-forest-soft)" }}
+              style={{ width: `${pendingW}%`, minWidth: 2, background: "var(--m-free)" }}
             />
           ) : null}
         </div>

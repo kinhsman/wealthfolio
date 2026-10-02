@@ -1054,7 +1054,7 @@ export default function SpendingTabContent() {
             className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 hover:opacity-90 max-md:px-2.5 max-md:py-1.5"
           >
             <span className="text-muted-foreground text-xs">{t("spending:cashFlow.income")}</span>
-            <span data-m-num="tile" className="truncate text-[17px] font-medium text-[var(--m-forest)]">
+            <span data-m-num="tile" className="truncate text-[17px] font-medium text-[var(--m-up)]">
               +{compact(income)}
             </span>
           </Link>
@@ -1065,7 +1065,7 @@ export default function SpendingTabContent() {
             <span className="text-muted-foreground text-xs">{t("spending:cashFlow.saving")}</span>
             <span data-m-num="tile" className="truncate text-[17px] font-medium">{compact(totalSaved)}</span>
           </Link>
-          <div data-m="fill" className="flex min-w-0 flex-col rounded-xl bg-[var(--m-forest)] px-3 py-2 text-[var(--m-on-forest)] max-md:px-2.5 max-md:py-1.5">
+          <div data-m="fill" data-net={net >= 0 ? "up" : "down"} className="flex min-w-0 flex-col rounded-xl bg-[var(--m-forest)] px-3 py-2 text-[var(--m-on-forest)] max-md:px-2.5 max-md:py-1.5">
             <span className="text-xs">{t("spending:cashFlow.net")}</span>
             <span data-m-num="tile" className="truncate text-[17px] font-medium">
               {net >= 0 ? "+" : "\u2212"}
@@ -1982,7 +1982,7 @@ function SpendingDeltaLine({
         "flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs",
         up
           ? "bg-[var(--m-warn-soft)] text-[var(--m-warn)]"
-          : "bg-[var(--m-mint)] text-[var(--m-forest)]",
+          : "bg-[var(--m-good-soft)] text-[var(--m-up)]",
       )}
     >
       {up ? <Icons.ArrowUp className="h-3 w-3" /> : <Icons.ArrowDown className="h-3 w-3" />}

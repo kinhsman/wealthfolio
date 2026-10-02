@@ -70,7 +70,7 @@ const STATUS_ACCENTS: Record<
     labelKey: "spending:budgetChart.trendingHigh",
   },
   ok: {
-    lineColor: "var(--m-forest, hsl(73 84% 27%))",
+    lineColor: "var(--m-up, var(--m-forest, hsl(73 84% 27%)))",
     pillBg: "hsl(73 84% 27%)",
     accent: "var(--success)",
     Icon: Icons.CheckCircle ?? Icons.AlertCircle,
@@ -916,7 +916,7 @@ function BudgetCardHeaderActions({
 function StatusChip({ status, label }: { status: Status; label: string }) {
   const tone =
     status === "ok"
-      ? "bg-[var(--m-mint,#e3f1da)] text-[var(--m-mint-ink,#1d4d1f)]"
+      ? "bg-[var(--m-good-soft,var(--m-mint,#e3f1da))] text-[var(--m-good-ink,var(--m-mint-ink,#1d4d1f))]"
       : status === "warn"
         ? "bg-[var(--m-warn-soft,#fbe9d2)] text-[var(--m-warn,#7a4300)]"
         : "bg-[var(--m-warn-soft,#fbe9d2)] text-[var(--m-bad,#a8321f)]";
