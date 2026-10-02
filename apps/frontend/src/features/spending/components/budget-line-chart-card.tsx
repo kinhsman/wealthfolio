@@ -95,6 +95,7 @@ export function BudgetLineChartCard({
   categoriesMeta,
   monthByDay,
   historicalByDay,
+  fill = false,
 }: {
   monthKey: string;
   today: BudgetToday;
@@ -116,6 +117,9 @@ export function BudgetLineChartCard({
   categoriesMeta: CategoryMetaMap;
   monthByDay: DayBucket[];
   historicalByDay: DayBucket[];
+  /** money-hub patch (owner, 10-02: "scale the monthly budget to match"): as tall as the Subscriptions &
+   *  Bills card beside it, the chart taking the extra height. */
+  fill?: boolean;
 }) {
   const dateFormatting = useDateFormatting();
 
@@ -405,8 +409,10 @@ export function BudgetLineChartCard({
       title={t("spending:budgetChart.monthlyBudget")}
       subtitle={monthLabel}
       action={mainHeaderAction}
+      fill={fill}
+      className={fill ? "flex flex-col" : undefined}
     >
-      <div className="grid gap-x-6 gap-y-3 lg:grid-cols-[1.15fr_1fr]">
+      <div className={cn("grid gap-x-6 gap-y-3 lg:grid-cols-[1.15fr_1fr]", fill && "flex-1")}>
       <div className="flex min-w-0 flex-col">
       <div>
         {sums && forecastParts ? (
@@ -501,11 +507,11 @@ export function BudgetLineChartCard({
         )}
       </div>
 
-      <div className="relative mt-4 w-full">
+      <div className={cn("relative mt-4 w-full", fill && "min-h-[110px] flex-1")}>
         <svg
           viewBox={`0 0 ${chartW} ${chartH}`}
           preserveAspectRatio="none"
-          className="block h-[110px] w-full"
+          className={fill ? "absolute inset-0 block h-full w-full" : "block h-[110px] w-full"}
         >
           {targetPacePath ? (
             <path
@@ -552,7 +558,7 @@ export function BudgetLineChartCard({
             className="absolute h-[10px] w-[10px] rounded-full bg-[var(--m-surface,white)]"
             style={{
               left: `${pillLeftPctRaw}%`,
-              top: `${endY}px`,
+              top: `${(endY / chartH) * 100}%`,
               transform: "translate(-50%, -50%)",
               border: `2.5px solid ${a.lineColor}`,
             }}
@@ -583,8 +589,9 @@ export function BudgetLineChartCard({
       ) : null}
       {sums ? (
         // money-hub patch: what is left to spend this month once the fixed bills are paid (one verdict:
-        // no second forecast number down here).
-        <div className="border-border/60 flex items-center justify-between gap-2 rounded-xl border px-3 py-2">
+        // no second forecast number down here). Stretched to the card beside it, it sits at the bottom,
+        // level with the chart's day labels.
+        <div className={cn("border-border/60 flex items-center justify-between gap-2 rounded-xl border px-3 py-2", fill && "lg:mt-auto")}>
           <span className="flex flex-col">
             <span className="text-muted-foreground text-xs">Left to spend</span>
             <span className="text-muted-foreground text-[11.5px]">
@@ -596,7 +603,7 @@ export function BudgetLineChartCard({
           </span>
         </div>
       ) : (
-        <div className="border-border/60 flex items-center justify-between gap-2 rounded-xl border px-3 py-2">
+        <div className={cn("border-border/60 flex items-center justify-between gap-2 rounded-xl border px-3 py-2", fill && "lg:mt-auto")}>
           <span className="flex flex-col">
             <span className="text-muted-foreground text-xs">
               {isCurrentMonth

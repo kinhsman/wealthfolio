@@ -41,14 +41,19 @@ export interface BillDue {
  * (your part of a shared one). One late from an earlier month comes once, now; a stopped one, a hidden
  * one and one paid inside the mortgage (escrow) come never.
  */
-export function dueInMonth(s: Stream, monthStart: string, monthEnd: string): BillDue[] {
+export function dueInMonth(s: Stream, monthStart: string, monthEnd: string, opts: { later?: boolean } = {}): BillDue[] {
   if (s.hidden || s.escrow || s.status === "stopped" || !s.next || !(s.usual > 0)) return [];
-  if (s.next < monthStart) return [{ key: s.key, name: s.name, date: monthStart, amount: s.usual, late: s.next }];
-  const out: BillDue[] = [];
+  const every = MONTHS[s.every] ?? 1;
   let date = s.next;
+  if (date < monthStart) {
+    // This month: late, it comes now. A later month (`later`, the bill calendar): where its rhythm lands.
+    if (!opts.later) return [{ key: s.key, name: s.name, date: monthStart, amount: s.usual, late: s.next }];
+    for (let i = 0; date < monthStart && i < 400; i += 1) date = addMonthsISO(s.next, every * (i + 1));
+  }
+  const out: BillDue[] = [];
   for (let i = 0; date <= monthEnd && i < 31; i += 1) {
     out.push({ key: s.key, name: s.name, date, amount: s.usual });
-    date = addMonthsISO(date, MONTHS[s.every] ?? 1);
+    date = addMonthsISO(date, every);
   }
   return out;
 }

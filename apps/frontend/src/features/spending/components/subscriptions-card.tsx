@@ -1,14 +1,16 @@
 // money-hub patch: the Spending dashboard's Subscriptions & bills card (lib/subscriptions.ts): what
-// the repeating charges add up to, and the next few due. "See all" opens the page.
+// the repeating charges add up to, this month's paid and left to pay over a small calendar of the bill
+// days (components/bill-calendar.tsx), and the next few due. "See all" opens the page.
 import { Link } from "react-router-dom";
 
 import { DashboardCard } from "@/components/dashboard-card";
 import { PrivacyAmount } from "@wealthfolio/ui";
 
 import { dueLabel, transactionsHref, upcoming, useSubscriptions } from "../lib/subscriptions";
+import { BillMonthPanel } from "./bill-calendar";
 import { StreamLogo } from "./stream-logo";
 
-export function SubscriptionsCard({ currency = "USD" }: { currency?: string }) {
+export function SubscriptionsCard({ currency = "USD", fill = false }: { currency?: string; fill?: boolean }) {
   const { data, isLoading, isError } = useSubscriptions();
   const next = upcoming(data?.items ?? []);
   const note = (text: string) => <div className="text-muted-foreground px-4 py-6 text-center text-xs md:px-5">{text}</div>;
@@ -18,6 +20,7 @@ export function SubscriptionsCard({ currency = "USD" }: { currency?: string }) {
       title="Subscriptions & Bills"
       subtitle={data && data.totals.count > 0 ? `${data.totals.count} repeating` : undefined}
       padded={false}
+      fill={fill}
       action={
         <Link
           to="/spending/subscriptions"
@@ -53,6 +56,11 @@ export function SubscriptionsCard({ currency = "USD" }: { currency?: string }) {
               </div>
             </div>
           </div>
+          <BillMonthPanel
+            items={data.items}
+            currency={currency}
+            className="border-border/60 border-t px-4 py-3 md:px-5"
+          />
           {next.length > 0 ? (
             <div id="next-due" className="border-border/60 scroll-mt-4 border-t px-4 py-3 md:px-5">
               <div className="text-muted-foreground text-xs">Next due</div>
@@ -60,7 +68,7 @@ export function SubscriptionsCard({ currency = "USD" }: { currency?: string }) {
                 <Link
                   key={s.key}
                   to={s.escrow ? "/spending/subscriptions" : transactionsHref(s)}
-                  className="hover:bg-muted/40 flex items-center gap-2.5 rounded-md py-1.5 transition-colors"
+                  className="hover:bg-muted/40 flex items-center gap-2.5 rounded-md py-1 transition-colors"
                 >
                   <StreamLogo s={s} className="h-6 w-6 text-[10px]" />
                   <div className="min-w-0 flex-1">

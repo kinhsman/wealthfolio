@@ -14,6 +14,8 @@ interface DashboardCardProps {
   elevated?: boolean;
   /** Extra classes for the card body. */
   className?: string;
+  /** money-hub patch: as tall as its grid row, the body taking the rest (cards side by side match). */
+  fill?: boolean;
   children: ReactNode;
 }
 
@@ -30,10 +32,11 @@ export function DashboardCard({
   padded = true,
   elevated = false,
   className,
+  fill = false,
   children,
 }: DashboardCardProps) {
   return (
-    <div className="w-full" data-dash-card>
+    <div className={fill ? "flex h-full w-full flex-col" : "w-full"} data-dash-card>
       <div className="flex items-baseline justify-between pb-2" data-dash-card-head>
         <div className="flex items-baseline gap-2" data-dash-card-heading>
           <h2 className="text-sm font-semibold tracking-tight" data-dash-card-title>
@@ -55,7 +58,7 @@ export function DashboardCard({
       <div
         data-dash-card-body
         data-padded={padded ? "" : undefined}
-        className={`border-border/40 rounded-xl border backdrop-blur-xl ${elevated ? "bg-card/90 shadow-xs" : "bg-card/70"} ${padded ? "p-3 md:p-4" : ""} ${className ?? ""}`}
+        className={`border-border/40 rounded-xl border backdrop-blur-xl ${elevated ? "bg-card/90 shadow-xs" : "bg-card/70"} ${padded ? "p-3 md:p-4" : ""} ${fill ? "flex-1" : ""} ${className ?? ""}`}
       >
         {children}
       </div>

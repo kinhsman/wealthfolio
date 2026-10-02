@@ -42,7 +42,8 @@ import { cn } from "@/lib/utils";
 
 import { CompanyButton, CompanyPicker } from "../components/company-picker";
 import { StreamLogo } from "../components/stream-logo";
-import { dueInMonth, paidInMonth, type BillDue } from "../lib/budget-forecast";
+import { billMonth, ymd } from "../lib/bill-calendar";
+import type { BillDue } from "../lib/budget-forecast";
 import { ruleOfferStore } from "../lib/rule-offer";
 import {
   EVERY_LABELS,
@@ -329,37 +330,14 @@ function Tile({ label, value, sub }: { label: string; value: ReactNode; sub?: st
 /** The paid part of the bar: green, fixed (the dark theme turns emerald utilities white). */
 const PAID_GREEN = "#16a34a";
 
-const ymd = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const sumOf = (xs: BillDue[]) => Math.round(xs.reduce((a, b) => a + b.amount, 0) * 100) / 100;
-
 /**
  * This month so far: what the subscriptions and bills charged (your part of a shared one) and what is
- * still to come by the month's end, at the usual amount. Counted like the Monthly budget card's "bills
- * still due" (lib/budget-forecast.ts): bills paid inside the mortgage are in its payment, a stopped one
- * is never still due, one late from last month comes now. A tap lists both.
+ * still to come by the month's end, at the usual amount (lib/bill-calendar.ts, counted like the Monthly
+ * budget card's "bills still due"). A tap lists both.
  */
 function ThisMonth({ items, currency, className }: { items: Stream[]; currency: string; className?: string }) {
-  const m = useMemo(() => {
-    const now = new Date();
-    const start = ymd(new Date(now.getFullYear(), now.getMonth(), 1));
-    const end = ymd(new Date(now.getFullYear(), now.getMonth() + 1, 0));
-    const paid = items.flatMap((s) => paidInMonth(s, start, end)).sort((a, b) => a.date.localeCompare(b.date));
-    const left = items.flatMap((s) => dueInMonth(s, start, end)).sort((a, b) => a.date.localeCompare(b.date) || b.amount - a.amount);
-    const paidKeys = new Set(paid.map((b) => b.key));
-    const all = new Set([...paidKeys, ...left.map((b) => b.key)]);
-    return {
-      month: now.toLocaleDateString(undefined, { month: "long" }),
-      today: ymd(now),
-      end,
-      paid,
-      left,
-      paidTotal: sumOf(paid),
-      leftTotal: sumOf(left),
-      paidCount: paidKeys.size,
-      count: all.size,
-    };
-  }, [items]);
+  const today = ymd(new Date());
+  const m = useMemo(() => ({ ...billMonth(items, today), month: new Date().toLocaleDateString(undefined, { month: "long" }), today }), [items, today]);
   const byKey = useMemo(() => new Map(items.map((s) => [s.key, s])), [items]);
   const whole = Math.max(0, m.paidTotal) + m.leftTotal;
   const pct = whole > 0 ? Math.min(100, (Math.max(0, m.paidTotal) / whole) * 100) : 0;

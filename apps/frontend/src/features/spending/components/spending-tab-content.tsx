@@ -1086,12 +1086,14 @@ export default function SpendingTabContent() {
             categoriesMeta={categoriesMeta}
             monthByDay={monthReport?.byDay ?? []}
             historicalByDay={historyReport?.byDay ?? []}
+            fill
           />
         </div>
         <div className="min-w-0">
           {/* money-hub patch: the charges that repeat (lib/subscriptions.ts); Next due is the one list of
-              the bills coming up. */}
-          <SubscriptionsCard currency={currency} />
+              the bills coming up. Side by side, the two cards are one height (owner, 10-02: "scale the
+              monthly budget to match"): the budget's chart takes the extra. */}
+          <SubscriptionsCard currency={currency} fill />
         </div>
       </div>
 

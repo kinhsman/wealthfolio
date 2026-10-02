@@ -18,6 +18,7 @@ import { CreditCardsCard } from "../src/features/spending/components/credit-card
 import { BudgetLineChartCard } from "../src/features/spending/components/budget-line-chart-card";
 import { forecastParts } from "../src/features/spending/lib/budget-forecast";
 import { FreeCashCard } from "../src/features/spending/components/free-cash-card";
+import { SubscriptionsCard } from "../src/features/spending/components/subscriptions-card";
 import { CREDIT_CARDS_KEY, type CreditCardsView } from "../src/features/spending/lib/credit-cards";
 import { FREE_CASH_KEY, type FreeCashView } from "../src/features/spending/lib/free-cash";
 import {
@@ -170,8 +171,64 @@ function BudgetPreview() {
   );
 }
 
+/** The Spending dashboard's Monthly budget + Subscriptions & Bills row as the app lays it out, in Meadow,
+ *  on Oct 2 with the owner's real numbers (?view=subs-row; &w=<px> holds the content
+ *  width, as with the sidebar beside it). */
+function SubsRowPreview() {
+  const items = (subsFixture as unknown as SubscriptionsView).items;
+  const hist = budgetHistory as unknown as {
+    outflow: number;
+    byDay: { date: string; income: number; outflow: number }[];
+    month: { outflow: number; byDay: { date: string; income: number; outflow: number }[] };
+  };
+  const parts = forecastParts(items, {
+    monthStart: "2026-10-01",
+    monthEnd: "2026-10-31",
+    histStart: "2026-07-01",
+    histEnd: "2026-09-30",
+    historyOutflow: hist.outflow,
+    historyByDay: hist.byDay,
+    historyDays: 92,
+  });
+  const w = Number(params.get("w") || 0);
+  return (
+    <div className="bg-background min-h-screen" style={w ? { width: w } : undefined}>
+      <div className="meadow flex min-h-screen flex-col gap-3.5 px-3 pb-8 pt-2 md:px-6 lg:px-8">
+        <div className="grid gap-3.5 lg:grid-cols-3">
+          <div className="min-w-0 lg:col-span-2">
+            <BudgetLineChartCard
+              monthKey="2026-10"
+              today={{ year: 2026, month: 10, day: 2 }}
+              isCurrentMonth
+              onPreviousMonth={() => undefined}
+              onNextMonth={() => undefined}
+              canGoNextMonth={false}
+              activityRange={{ from: "2026-10-01", to: "2026-10-02" }}
+              target={4000}
+              spent={hist.month.outflow}
+              currency="USD"
+              historicalDailyAvg={hist.outflow / 92}
+              forecastParts={parts}
+              allocations={[]}
+              spendingBreakdown={[]}
+              categoriesMeta={{}}
+              monthByDay={hist.month.byDay}
+              historicalByDay={hist.byDay}
+              fill
+            />
+          </div>
+          <div className="min-w-0">
+            <SubscriptionsCard currency="USD" fill />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Shell() {
   if (view === "budget") return <BudgetPreview />;
+  if (view === "subs-row") return <SubsRowPreview />;
   if (view === "alerts") {
     return (
       <div className="bg-background text-foreground min-h-screen px-6 py-8">
