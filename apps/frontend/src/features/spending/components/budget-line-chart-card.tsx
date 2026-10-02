@@ -98,6 +98,7 @@ export function BudgetLineChartCard({
   monthByDay,
   historicalByDay,
   fill = false,
+  summary,
 }: {
   monthKey: string;
   today: BudgetToday;
@@ -122,6 +123,10 @@ export function BudgetLineChartCard({
   /** money-hub patch (owner, 10-02: "scale the monthly budget to match"): as tall as the Subscriptions &
    *  Bills card beside it, the chart taking the extra height. */
   fill?: boolean;
+  /** money-hub patch (owner, 10-02: "merge these cards"): the Spent strip as the card's top row. `head` is
+   *  the Spent label and figure, `tiles` Income / Saving / Net; `sameMonth` when that figure is this
+   *  card's month, so the bar under it can split it into fixed bills and everyday spending. */
+  summary?: { head: ReactNode; tiles: ReactNode; sameMonth: boolean };
 }) {
   const dateFormatting = useDateFormatting();
 
@@ -284,6 +289,29 @@ export function BudgetLineChartCard({
           ? (spent / dayOfMonth) * daysInMonth
           : 0
       : 0;
+  const fixedSpent =
+    forecastParts && isCurrentMonth
+      ? Math.min(
+          forecastParts.fixedPaid.reduce((sum, b) => sum + b.amount, 0),
+          Math.max(0, spent),
+        )
+      : 0;
+  const summaryRow = summary ? (
+    <div className="border-border/60 mb-3 grid gap-x-6 gap-y-2.5 border-b pb-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:items-end max-md:mb-2 max-md:gap-y-2 max-md:pb-2">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        {summary.head}
+        {summary.sameMonth && target > 0 ? (
+          <SpentSplitBar
+            fixed={fixedSpent}
+            everyday={Math.max(0, spent - fixedSpent)}
+            target={target}
+            currency={currency}
+          />
+        ) : null}
+      </div>
+      {summary.tiles}
+    </div>
+  ) : null;
   const headerAction = (
     <BudgetCardHeaderActions
       monthLabel={monthMeta.shortLabel}
@@ -300,8 +328,10 @@ export function BudgetLineChartCard({
         title={t("spending:budgetChart.monthlyBudget")}
         subtitle={monthMeta.shortLabel}
         action={headerAction}
-        className="text-center"
+        className={summary ? undefined : "text-center"}
       >
+        {summaryRow}
+        <div className={summary ? "text-center" : undefined}>
         <p className="text-muted-foreground text-sm">{t("spending:budgetChart.noTarget")}</p>
         <Link
           to={`/spending/budget?month=${monthKey}`}
@@ -309,6 +339,7 @@ export function BudgetLineChartCard({
         >
           {t("spending:budgetChart.setBudget")}
         </Link>
+        </div>
       </DashboardCard>
     );
   }
@@ -322,6 +353,7 @@ export function BudgetLineChartCard({
         subtitle={monthLabel}
         action={headerAction}
       >
+        {summaryRow}
         <div className="space-y-3" aria-busy>
           <Skeleton className="h-4 w-32" />
           <Skeleton className="h-8 w-44" />
@@ -407,7 +439,37 @@ export function BudgetLineChartCard({
     />
   );
 
-  const verdictBlock = (
+  const monthDay = `${((m) => m.charAt(0) + m.slice(1).toLowerCase())(
+    monthMeta.shortLabel.split(" ")[0],
+  )} ${daysInMonth}`;
+  // money-hub patch: with the Spent row on top, the forecast verdict and the daily line share one strip
+  // (one big figure per card).
+  const verdictStrip =
+    summary && sums && forecastParts ? (
+      <div
+        className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 rounded-[12px] px-3 py-2 text-[13px] tabular-nums"
+        style={{ color: a.accent, background: "var(--m-warn-panel, transparent)" }}
+      >
+        <span className="font-medium">
+          <PrivacyAmount value={Math.abs(sums.over)} currency={currency} />{" "}
+          {sums.over > 0 ? "over" : "to spare"} by {monthDay}
+        </span>
+        {perDay === null ? null : (
+          <span className="opacity-80">
+            {"\u00b7 "}
+            {perDay > 0 ? (
+              <>
+                stay under <PrivacyAmount value={perDay} currency={currency} /> a day on everyday
+                spending (usually <PrivacyAmount value={forecastParts.everydayDaily} currency={currency} />)
+              </>
+            ) : (
+              <>nothing left for everyday spending this month</>
+            )}
+          </span>
+        )}
+      </div>
+    ) : null;
+  const verdictBlock = verdictStrip ?? (
       <div>
         {sums && forecastParts ? (
           <>
@@ -735,6 +797,7 @@ export function BudgetLineChartCard({
           />
         }
       >
+        {summaryRow}
         <div className="flex flex-col gap-1.5">
           {phoneVerdict ?? verdictBlock}
           {ringsBlock}
@@ -757,9 +820,11 @@ export function BudgetLineChartCard({
       fill={fill}
       className={fill ? "flex flex-col" : undefined}
     >
+      {summaryRow}
+      {verdictStrip ? <div className="mb-1">{verdictStrip}</div> : null}
       <div className={cn("grid gap-x-6 gap-y-3 lg:grid-cols-[1.15fr_1fr]", fill && "flex-1")}>
       <div className="flex min-w-0 flex-col">
-      {verdictBlock}
+      {verdictStrip ? null : verdictBlock}
 
       {chartBlock}
       </div>
@@ -907,6 +972,48 @@ function BudgetCardHeaderActions({
       >
         <Icons.ChevronRight className="h-3.5 w-3.5" />
       </button>
+    </div>
+  );
+}
+
+/** money-hub patch: the month's spending as one bar against the budget, fixed bills and everyday apart. */
+function SpentSplitBar({
+  fixed,
+  everyday,
+  target,
+  currency,
+}: {
+  fixed: number;
+  everyday: number;
+  target: number;
+  currency: string;
+}) {
+  const scale = Math.max(target, fixed + everyday);
+  const pct = (v: number) => `${scale > 0 ? (v / scale) * 100 : 0}%`;
+  const dot = "mr-1 inline-block h-[7px] w-[7px] rounded-[2px] align-middle";
+  return (
+    <div className="mt-1.5 flex flex-col gap-1">
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-[var(--m-sand,var(--muted))]">
+        {fixed > 0 ? (
+          <div className="bg-[var(--m-forest)] opacity-45" style={{ width: pct(fixed) }} />
+        ) : null}
+        <div className="bg-[var(--m-forest)]" style={{ width: pct(everyday) }} />
+      </div>
+      <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] tabular-nums">
+        {fixed > 0 ? (
+          <span>
+            <span className={cn(dot, "bg-[var(--m-forest)] opacity-45")} />
+            Fixed bills <PrivacyAmount value={fixed} currency={currency} />
+          </span>
+        ) : null}
+        <span>
+          <span className={cn(dot, "bg-[var(--m-forest)]")} />
+          {fixed > 0 ? "Everyday" : "Spent"} <PrivacyAmount value={everyday} currency={currency} />
+        </span>
+        <span className="max-md:hidden">
+          of <PrivacyAmount value={target} currency={currency} /> budget
+        </span>
+      </div>
     </div>
   );
 }

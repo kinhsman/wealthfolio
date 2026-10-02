@@ -963,6 +963,80 @@ export default function SpendingTabContent() {
   const net = income - totalSpending - totalSaved;
   const compact = (v: number) => (isBalanceHidden ? "••••" : formatting.formatCompactAmount(v, currency));
 
+  // money-hub patch (owner, 10-02: "merge these cards"): the Spent strip is the Monthly budget card's top
+  // row. Spent follows the page's period; the card's bar splits it only when that period is the card's month.
+  // The Net tile is a money figure, not a button: green or red by its sign in every theme.
+  const spentHead = (
+    <>
+      <span className="text-muted-foreground text-[12.5px]">
+        {t("spending:tabContent.spentLabel")}
+        {periodWord ? ` · ${periodWord.charAt(0).toUpperCase()}${periodWord.slice(1)}` : ""}
+        {excludedCategoryCount > 0 && (
+          <>
+            {" · "}
+            <Link
+              to="/settings/spending/categories"
+              className="hover:text-foreground hover:underline"
+            >
+              {t("spending:tabContent.excludedCategoriesHint", {
+                count: excludedCategoryCount,
+              })}
+            </Link>
+          </>
+        )}
+      </span>
+      <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        {isLoading ? (
+          <Skeleton className="h-8 w-40" />
+        ) : (
+          <span data-m-num="big" className="text-[30px] font-medium leading-tight tracking-[-0.03em] tabular-nums">
+            <PrivacyAmount value={totalSpending} currency={currency} />
+          </span>
+        )}
+        {isPriorLoading ? (
+          <Skeleton className="h-5 w-48" />
+        ) : priorSpending > 0 ? (
+          <SpendingDeltaLine
+            delta={delta}
+            currency={currency}
+            deltaPct={
+              displayDeltaPct !== null && Math.abs(displayDeltaPct) <= 5 ? displayDeltaPct : null
+            }
+          />
+        ) : null}
+      </span>
+    </>
+  );
+  const cashTiles = (
+    <div className="grid min-w-0 grid-cols-3 gap-1.5">
+      <Link
+        to={dashboardInsightHref.cashflow}
+        className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 hover:opacity-90 max-md:px-2.5 max-md:py-1.5"
+      >
+        <span className="text-muted-foreground text-xs">{t("spending:cashFlow.income")}</span>
+        <span data-m-num="tile" className="truncate text-[17px] font-medium text-[var(--m-up)]">
+          +{compact(income)}
+        </span>
+      </Link>
+      <Link
+        to={dashboardInsightHref.cashflow}
+        className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 hover:opacity-90 max-md:px-2.5 max-md:py-1.5"
+      >
+        <span className="text-muted-foreground text-xs">{t("spending:cashFlow.saving")}</span>
+        <span data-m-num="tile" className="truncate text-[17px] font-medium">{compact(totalSaved)}</span>
+      </Link>
+      <div data-net={net >= 0 ? "up" : "down"} className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 max-md:px-2.5 max-md:py-1.5">
+        <span className="text-muted-foreground text-xs">{t("spending:cashFlow.net")}</span>
+        <span data-m-num="tile" className={cn("truncate text-[17px] font-medium", net >= 0 ? "text-[var(--m-up)]" : "text-[var(--m-down)]")}>
+          {net >= 0 ? "+" : "\u2212"}
+          {compact(Math.abs(net))}
+        </span>
+      </div>
+    </div>
+  );
+  const spentMatchesBudgetMonth =
+    reportReq.startDate === monthReportReq.startDate && reportReq.endDate === monthReportReq.endDate;
+
   // money-hub patch: the Spending dashboard, Meadow (owner picked design 5 on 10-02). Order is the
   // owner's ranking: Cash & cards, Spent, money in and out, Monthly budget, Subscriptions & bills, Where it
   // went, Returns, Dig deeper, Events, Worth a look; the chart and Recent activity sit under More. Every
@@ -1005,75 +1079,6 @@ export default function SpendingTabContent() {
 
       <CashCardsCard currency={currency} onShowBills={showBills} />
 
-      <section
-        data-m="card"
-        className="border-border flex flex-wrap items-center justify-between gap-x-6 gap-y-3 rounded-[20px] border bg-[var(--m-surface)] px-[18px] py-3.5 max-md:gap-y-2 max-md:px-3 max-md:py-2.5"
-      >
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-muted-foreground text-[12.5px]">
-            {t("spending:tabContent.spentLabel")}
-            {periodWord ? ` · ${periodWord.charAt(0).toUpperCase()}${periodWord.slice(1)}` : ""}
-            {excludedCategoryCount > 0 && (
-              <>
-                {" · "}
-                <Link
-                  to="/settings/spending/categories"
-                  className="hover:text-foreground hover:underline"
-                >
-                  {t("spending:tabContent.excludedCategoriesHint", {
-                    count: excludedCategoryCount,
-                  })}
-                </Link>
-              </>
-            )}
-          </span>
-          <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            {isLoading ? (
-              <Skeleton className="h-8 w-40" />
-            ) : (
-              <span data-m-num="big" className="text-[30px] font-medium leading-tight tracking-[-0.03em] tabular-nums">
-                <PrivacyAmount value={totalSpending} currency={currency} />
-              </span>
-            )}
-            {isPriorLoading ? (
-              <Skeleton className="h-5 w-48" />
-            ) : priorSpending > 0 ? (
-              <SpendingDeltaLine
-                delta={delta}
-                currency={currency}
-                deltaPct={
-                  displayDeltaPct !== null && Math.abs(displayDeltaPct) <= 5 ? displayDeltaPct : null
-                }
-              />
-            ) : null}
-          </span>
-        </div>
-        <div className="grid min-w-0 flex-[0_1_400px] grid-cols-3 gap-1.5">
-          <Link
-            to={dashboardInsightHref.cashflow}
-            className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 hover:opacity-90 max-md:px-2.5 max-md:py-1.5"
-          >
-            <span className="text-muted-foreground text-xs">{t("spending:cashFlow.income")}</span>
-            <span data-m-num="tile" className="truncate text-[17px] font-medium text-[var(--m-up)]">
-              +{compact(income)}
-            </span>
-          </Link>
-          <Link
-            to={dashboardInsightHref.cashflow}
-            className="flex min-w-0 flex-col rounded-xl bg-[var(--m-sand)] px-3 py-2 hover:opacity-90 max-md:px-2.5 max-md:py-1.5"
-          >
-            <span className="text-muted-foreground text-xs">{t("spending:cashFlow.saving")}</span>
-            <span data-m-num="tile" className="truncate text-[17px] font-medium">{compact(totalSaved)}</span>
-          </Link>
-          <div data-m="fill" data-net={net >= 0 ? "up" : "down"} className="flex min-w-0 flex-col rounded-xl bg-[var(--m-forest)] px-3 py-2 text-[var(--m-on-forest)] max-md:px-2.5 max-md:py-1.5">
-            <span className="text-xs">{t("spending:cashFlow.net")}</span>
-            <span data-m-num="tile" className="truncate text-[17px] font-medium">
-              {net >= 0 ? "+" : "\u2212"}
-              {compact(Math.abs(net))}
-            </span>
-          </div>
-        </div>
-      </section>
 
       <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
         <div className="min-w-0 lg:col-span-2">
@@ -1099,6 +1104,7 @@ export default function SpendingTabContent() {
             monthByDay={monthReport?.byDay ?? []}
             historicalByDay={historyReport?.byDay ?? []}
             fill
+            summary={{ head: spentHead, tiles: cashTiles, sameMonth: spentMatchesBudgetMonth }}
           />
         </div>
         <div className="min-w-0">
