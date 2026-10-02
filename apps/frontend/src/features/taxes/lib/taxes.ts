@@ -6,7 +6,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export type Treatment = "taxed" | "not_taxed" | "not_mine";
-export type TaxAlertKind = "date" | "paper";
+export type TaxAlertKind = "date" | "paper" | "moved" | "safe";
+export type FilingStatus = "single" | "head" | "joint" | "separate";
 
 export interface TaxAccount {
   id: string;
@@ -97,6 +98,78 @@ export interface TaxLook {
   text: string;
 }
 
+/** The owner's answers for the April estimate. */
+export interface TaxSetup {
+  status: FilingStatus | null;
+  /** A pay stub's year-to-date figures. */
+  stub: { date: string; wages: number; federal: number; state: number } | null;
+  /** The owner's own full-year figures, each optional; they win over the stub scaled up. */
+  full: { wages: number | null; federal: number | null; state: number | null } | null;
+  /** Last year's return: its total tax and income, whether it was joint, and the owner's share of the tax. */
+  last: { tax: number; agi: number; joint: boolean; share: number | null } | null;
+  /** The rental's depreciation and other costs for the year. */
+  rentalExtra: number | null;
+  /** Hold the set-aside back in Cash & cards. */
+  hold: boolean;
+  hasRental: boolean;
+  paydays: number;
+  paydaysLeft: number;
+}
+
+/** The April number: what the year's tax comes to, what is paid, what is left, and whether it is penalty-safe. */
+export interface TaxEstimate {
+  status: FilingStatus;
+  income: {
+    wages: number;
+    short: number;
+    long: number;
+    lossUsed: number;
+    lossCarried: number;
+    interest: number;
+    rental: {
+      rent: number;
+      costs: number;
+      extra: number;
+      net: number;
+      used: number;
+      held: number;
+    } | null;
+    total: number;
+  };
+  deduction: { kind: "standard" | "itemized"; amount: number; standard: number };
+  federal: { taxable: number; tax: number; investment: number; total: number; rate: number };
+  state: { tax: number; exemption: number; credit: number };
+  paid: {
+    federalWithheld: number;
+    stateWithheld: number;
+    federalSent: number;
+    stateSent: number;
+    federal: number;
+    state: number;
+  };
+  /** Owed is positive. `total` adds up only what is owed; `back` only what comes back. */
+  balance: { federal: number; state: number; total: number; back: number };
+  safe: {
+    ok: boolean;
+    /** Which test decides: owing under $1,000, 90% of this year's tax, or last year's tax. */
+    by: "small" | "current" | "prior";
+    required: number;
+    paid: number;
+    shortfall: number;
+    perPaycheck: number | null;
+    paychecksLeft: number;
+    lumpBy: string | null;
+    priorKnown: boolean;
+    /** Last year's return was joint and the owner's share is not typed in: the whole tax is used, the safer reading. */
+    priorJointGuess: boolean;
+  };
+  stubDate: string;
+  stubAge: number;
+  dueBy: string | null;
+  /** WheelTradr's numbers were not answering: trading profit is not in the estimate. */
+  tradingMissing: boolean;
+}
+
 export interface TaxesView {
   year: number;
   years: number[];
@@ -131,6 +204,11 @@ export interface TaxesView {
     };
   };
   looks: TaxLook[];
+  /** Null until the owner has given a filing status and a pay stub (see `needs`). */
+  estimate: TaxEstimate | null;
+  /** What the estimate still needs: "table" (the year's figures are not in the app), "status", "stub". */
+  needs: string[];
+  setup: TaxSetup;
   driveFolder: string | null;
   /** Each kind's switch, and `on` for the whole group (Settings, Alerts). */
   alerts: Record<TaxAlertKind, boolean> & { on?: boolean };
@@ -156,6 +234,25 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 const seg = (s: string | number) => encodeURIComponent(String(s));
+
+/** What the setup form sends: amounts as typed (the service checks them), empty = not given. */
+export interface SetupPatch {
+  status?: FilingStatus;
+  stub?: { date: string; wages: string | number; federal: string | number; state: string | number };
+  full?: {
+    wages: string | number | null;
+    federal: string | number | null;
+    state: string | number | null;
+  } | null;
+  last?: {
+    tax: string | number | null;
+    agi: string | number | null;
+    joint: boolean;
+    share: string | number | null;
+  } | null;
+  rentalExtra?: string | number | null;
+  hold?: boolean;
+}
 type Went = { went: { discord: boolean; ntfy: boolean }; sample: string };
 
 export const taxesApi = {
@@ -180,6 +277,8 @@ export const taxesApi = {
     call<TaxesView>("PUT", `/gifts/out/${seg(id)}`, { ...pick, year }),
   setDriveFolder: (year: number, url: string) =>
     call<TaxesView>("PUT", "/drive-folder", { url, year }),
+  /** The April estimate's answers, any of them at a time. */
+  setSetup: (year: number, patch: SetupPatch) => call<TaxesView>("PUT", `/setup/${year}`, patch),
   setAlerts: (alerts: Partial<Record<TaxAlertKind | "on", boolean>>) =>
     call<TaxesView>("PUT", "/alerts", alerts),
   /** A sample of one kind of alert, sent the way the real one goes. */
@@ -235,7 +334,128 @@ export const TAX_ALERT_LABELS: Record<TaxAlertKind, { title: string; text: strin
     title: "Papers still missing",
     text: "Ten days after a form was due to arrive and it is not ticked off.",
   },
+  moved: {
+    title: "The April estimate moved",
+    text: "What to set aside went up or down by $500 or more.",
+  },
+  safe: {
+    title: "Penalty-safe changed",
+    text: "Enough is paid in to stay clear of the underpayment penalty, or not any more.",
+  },
 };
+
+export const STATUS_LABELS: Record<FilingStatus, string> = {
+  single: "Single",
+  head: "Head of household",
+  joint: "Married, filing together",
+  separate: "Married, filing apart",
+};
+
+/** An amount as typed ("$98,000.50") as a plain number string; empty stays empty. */
+export const typedAmount = (v: string): string => v.replace(/[$,\s]/g, "");
+
+/** How to get penalty-safe, in words: more from each paycheck left, or one payment. `short` = keywords, for a phone. */
+export function fixWords(
+  safe: TaxEstimate["safe"],
+  money: (n: number) => string,
+  short = false,
+): string {
+  const by = safe.lumpBy ? ` by ${shortDay(safe.lumpBy)}` : "";
+  if (short)
+    return safe.perPaycheck
+      ? `${money(safe.perPaycheck)} more per paycheck (${safe.paychecksLeft} left), or ${money(safe.shortfall)}${by}`
+      : `${money(safe.shortfall)}${by}`;
+  const lump = `one payment of ${money(safe.shortfall)}${by}`;
+  return safe.perPaycheck
+    ? `${money(safe.perPaycheck)} more from each of the ${safe.paychecksLeft} paychecks left, or ${lump}`
+    : lump;
+}
+
+/** One line of "How it adds up"; a `total` line is a sum the lines above lead to. */
+export interface SumLine {
+  label: string;
+  value: number;
+  hint?: string;
+  total?: boolean;
+}
+
+/** The estimate as the lines of a sum, top to bottom (pure). */
+export function sumLines(e: TaxEstimate, year: number, setup: TaxSetup): SumLine[] {
+  const out: SumLine[] = [];
+  out.push({
+    label: "Pay for the year",
+    value: e.income.wages,
+    hint:
+      setup.full?.wages != null
+        ? "your own full-year figure"
+        : `the ${shortDay(e.stubDate)} stub, carried to ${setup.paydays || "all"} paychecks`,
+  });
+  if (e.income.short)
+    out.push({
+      label: "Trading profit, held under a year",
+      value: e.income.short,
+      hint: "taken so far",
+    });
+  if (e.income.long)
+    out.push({
+      label: "Trading profit, held over a year",
+      value: e.income.long,
+      hint: "taken so far, taxed at lower rates",
+    });
+  if (e.income.lossUsed)
+    out.push({
+      label: "Trading loss",
+      value: -e.income.lossUsed,
+      hint: e.income.lossCarried ? "the limit for one year, the rest carries on" : undefined,
+    });
+  if (e.income.interest)
+    out.push({ label: "Interest and dividends", value: e.income.interest, hint: "so far" });
+  if (e.income.rental) {
+    const r = e.income.rental;
+    out.push({
+      label: "Rental, after its costs",
+      value: r.used,
+      hint:
+        r.held > 0
+          ? "a loss this size cannot be used this year"
+          : r.extra > 0
+            ? "rent less its share of the mortgage, and your depreciation"
+            : "rent less its share of the mortgage, no depreciation typed in",
+    });
+  }
+  out.push({ label: "Income", value: e.income.total, total: true });
+  out.push({
+    label: e.deduction.kind === "itemized" ? "Deduction, itemized" : "Standard deduction",
+    value: -e.deduction.amount,
+    hint: e.deduction.kind === "itemized" ? "home interest, state and property tax" : undefined,
+  });
+  out.push({
+    label: "Federal tax",
+    value: e.federal.total,
+    hint:
+      e.federal.investment > 0
+        ? "with the 3.8% on investment income"
+        : `the next dollar is taxed at ${Math.round(e.federal.rate * 100)}%`,
+    total: true,
+  });
+  out.push({ label: "Illinois tax", value: e.state.tax, total: true });
+  out.push({
+    label: "Taken out of paychecks by Dec 31",
+    value: -(e.paid.federalWithheld + e.paid.stateWithheld),
+  });
+  if (e.paid.federalSent || e.paid.stateSent)
+    out.push({ label: `Sent for ${year}`, value: -(e.paid.federalSent + e.paid.stateSent) });
+  if (e.balance.back > 0 && e.balance.total > 0)
+    out.push({
+      label: "Coming back",
+      value: e.balance.back,
+      hint:
+        e.balance.federal < 0
+          ? "federal, not netted against Illinois"
+          : "Illinois, not netted against federal",
+    });
+  return out;
+}
 
 /** "Jan 15", and with the year when asked ("Jan 15, 2027"). */
 export function shortDay(iso: string, withYear = false): string {

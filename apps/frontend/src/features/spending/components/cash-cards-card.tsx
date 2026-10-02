@@ -247,7 +247,9 @@ function Summary({
   phone?: boolean;
 }) {
   const t = view.totals;
-  const promised = t.cards + t.bills + t.cushion;
+  // money-hub patch: the April tax set-aside (the Taxes page's switch) is one more promised part.
+  const taxes = t.taxes ?? 0;
+  const promised = t.cards + t.bills + t.cushion + taxes;
   // Not short: the bar is your cash, cut into what it already pays and what is free. Short: the bar is
   // what is promised, and the verdict says by how much the cash falls short.
   const whole = view.short ? promised : t.cash;
@@ -255,6 +257,7 @@ function Summary({
   const parts = [
     { key: "cards", value: t.cards, color: "var(--m-seg-cards)" },
     { key: "bills", value: t.bills, color: "var(--m-bills)" },
+    { key: "taxes", value: taxes, color: "var(--m-warn-line)" },
     { key: "cushion", value: t.cushion, color: "var(--m-cushion, var(--m-cat-other))" },
     ...(view.short ? [] : [{ key: "free", value: t.left, color: "var(--m-free)" }]),
   ].filter((p) => p.value > 0);
@@ -292,7 +295,7 @@ function Summary({
             />
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className={cn("grid gap-2", taxes > 0 && t.cushion > 0 ? "grid-cols-2" : "grid-cols-3")}>
           <Legend color="var(--m-seg-cards)" label="Cards" value={t.cards} currency={currency} phone />
           <Legend
             color="var(--m-bills)"
@@ -302,6 +305,9 @@ function Summary({
             onClick={onShowBills}
             phone
           />
+          {taxes > 0 ? (
+            <Legend color="var(--m-warn-line)" label="Taxes" value={taxes} currency={currency} to="/taxes" phone />
+          ) : null}
           {t.cushion > 0 ? (
             <Legend
               color="var(--m-cushion, var(--m-cat-other))"
@@ -337,6 +343,7 @@ function Summary({
           </span>
           <span className="text-[12.5px] text-[var(--m-mint-muted)]">
             {view.short ? "to pay" : "once"} the card balance, the bills
+            {taxes > 0 ? (t.cushion > 0 ? ", the tax set aside" : " and the tax set aside") : ""}
             {t.cushion > 0 ? " and your cushion" : ""}
             {view.short ? "" : " are paid"}
           </span>
@@ -375,6 +382,9 @@ function Summary({
           currency={currency}
           onClick={onShowBills}
         />
+        {taxes > 0 ? (
+          <Legend color="var(--m-warn-line)" label="Tax set aside" value={taxes} currency={currency} to="/taxes" />
+        ) : null}
         {t.cushion > 0 ? (
           <Legend
             color="var(--m-cushion, var(--m-cat-other))"

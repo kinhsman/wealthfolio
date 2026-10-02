@@ -48,7 +48,8 @@ export interface FreeCashView {
     skipped: (FreeCashBill & { why: "pending"; pendingAmount: number })[];
   };
   /** `cushion`: the amount the owner keeps aside on top (Settings, Alerts), 0 until set. */
-  totals: { cash: number; cards: number; bills: number; cushion: number; left: number };
+  /** `taxes`: the April tax set-aside, while the switch on the Taxes page holds it back; 0 otherwise. */
+  totals: { cash: number; cards: number; bills: number; cushion: number; taxes?: number; left: number };
   short: boolean;
   asOf: string | null;
   alerts: { on: boolean } & Record<FreeCashAlertKind, boolean>;

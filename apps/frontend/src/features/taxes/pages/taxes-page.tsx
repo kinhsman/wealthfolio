@@ -1,5 +1,6 @@
 // money-hub patch: Taxes (owner, 2026-10-02: "plan a new feature, taxes management"). One page per tax
-// year in the Spending dashboard's look: how much of the trading profit is taxed, what is worth a look,
+// year in the Spending dashboard's look: how much of the trading profit is taxed, what to set aside for
+// April, what is worth a look,
 // gifts in and out, what was paid, the dates, and the papers. Everything comes from the money-hub
 // service (lib/taxes.ts); the page only shows it and sends the owner's picks back.
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -12,6 +13,7 @@ import { Page, PageContent, PageHeader, Skeleton } from "@wealthfolio/ui";
 import { GiftsCard } from "../components/gifts-card";
 import { DatesCard, LooksCard, PaidCard } from "../components/money-cards";
 import { PapersCard } from "../components/papers-card";
+import { SetAsideCard } from "../components/set-aside-card";
 import { AccountsCard, TaxesHero } from "../components/trading-cards";
 import { taxesApi, taxesKey, type TaxesView } from "../lib/taxes";
 
@@ -63,24 +65,27 @@ export function TaxesBody({ view }: { view: TaxesView }) {
           <Slot order="max-lg:order-1">
             <TaxesHero view={view} />
           </Slot>
-          <Slot order="max-lg:order-3">
+          <Slot order="max-lg:order-4">
             <AccountsCard view={view} />
           </Slot>
-          <Slot order="max-lg:order-4">
+          <Slot order="max-lg:order-5">
             <GiftsCard view={view} />
           </Slot>
         </div>
         <div className="flex min-w-0 flex-col gap-3.5 max-lg:contents">
           <Slot order="max-lg:order-2">
+            <SetAsideCard view={view} />
+          </Slot>
+          <Slot order="max-lg:order-3">
             <LooksCard view={view} />
           </Slot>
-          <Slot order="max-lg:order-5">
+          <Slot order="max-lg:order-6">
             <PaidCard view={view} />
           </Slot>
-          <Slot order="max-lg:order-6">
+          <Slot order="max-lg:order-7">
             <DatesCard view={view} />
           </Slot>
-          <Slot order="max-lg:order-7">
+          <Slot order="max-lg:order-8">
             <PapersCard view={view} />
           </Slot>
         </div>
