@@ -18,8 +18,9 @@ import { WealthfolioConnectProvider } from "@/features/wealthfolio-connect";
 import { SettingsProvider } from "@/lib/settings-provider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@wealthfolio/ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PrivacyProvider } from "./context/privacy-context";
+import { startSpotlight } from "./lib/spotlight";
 import { LoginPage } from "./pages/auth/login-page";
 import { AppRoutes } from "./routes";
 
@@ -36,6 +37,8 @@ function App() {
         },
       }),
   );
+
+  useEffect(() => startSpotlight(), []);
 
   const isWebEnv = isWeb;
 

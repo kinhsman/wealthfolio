@@ -1553,3 +1553,89 @@ summary {
   box-shadow: var(--bt-fill-shine);
   color: var(--m-on-forest);
 }
+
+/* money-hub patch: the mouse light (owner, 10-02). lib/spotlight.ts marks the card under the mouse with
+   data-spot-on="1" and keeps --spot-x / --spot-y on it; here a soft pool of light follows the mouse inside
+   that card and the card's edge lights up near it. The light sits over the content without touching it
+   (no clicks, and soft enough that text keeps its contrast): the plain light theme shades the card like
+   its own hover (a white glow on cream bands into rings), Meadow and Bronze tint it, dark themes add a
+   faint glow. Each theme sets its own colours; a card left behind fades out. */
+:root {
+  --spot-size: 300px;
+  --spot-glow: color-mix(in srgb, var(--foreground) 6%, transparent);
+  --spot-blend: normal;
+  --spot-ring: color-mix(in srgb, var(--foreground) 30%, transparent);
+}
+.dark {
+  --spot-glow: rgba(255, 250, 240, 0.085);
+  --spot-blend: normal;
+  --spot-ring: rgba(255, 250, 240, 0.3);
+}
+.meadow {
+  --spot-glow: var(--m-mint);
+  --spot-blend: multiply;
+  --spot-ring: color-mix(in srgb, var(--m-forest) 45%, transparent);
+}
+.dark .meadow {
+  --spot-glow: color-mix(in srgb, var(--m-forest) 14%, transparent);
+  --spot-blend: normal;
+  --spot-ring: color-mix(in srgb, var(--m-forest) 40%, transparent);
+}
+.light .meadow[data-light-skin="bronze"] {
+  --spot-glow: #f1dcc2;
+  --spot-blend: multiply;
+  --spot-ring: rgba(165, 123, 79, 0.75);
+}
+.dark .meadow[data-dark-skin="bronze"] {
+  --spot-glow: rgba(255, 214, 170, 0.2);
+  --spot-blend: normal;
+  --spot-ring: rgba(232, 210, 178, 0.5);
+}
+@layer components {
+  [data-spot-on] {
+    position: relative;
+  }
+}
+[data-spot-on]::before,
+[data-spot-on]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+[data-spot-on]::after {
+  background: radial-gradient(
+    var(--spot-size) circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    var(--spot-glow),
+    transparent 72%
+  );
+  mix-blend-mode: var(--spot-blend);
+}
+[data-spot-on]::before {
+  padding: 1px;
+  background: radial-gradient(
+    calc(var(--spot-size) * 0.7) circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    var(--spot-ring),
+    transparent 72%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+[data-spot-on="1"]::before,
+[data-spot-on="1"]::after {
+  opacity: 1;
+}
+@starting-style {
+  [data-spot-on="1"]::before,
+  [data-spot-on="1"]::after {
+    opacity: 0;
+  }
+}
