@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 
 import type { Account } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Card, PrivacyAmount, useDateFormatting } from "@wealthfolio/ui";
+import { PrivacyAmount, useDateFormatting } from "@wealthfolio/ui";
 
 import { useMerchantFor } from "../lib/merchants";
 import { MerchantLogo } from "./merchant-logo";
@@ -102,11 +102,8 @@ function PendingItem({
       </div>
     </div>
   );
-  return isMobile ? (
-    <Card className="border-dashed bg-transparent p-2.5">{body}</Card>
-  ) : (
-    <div className="border-border px-3 py-2 [&:not(:first-child)]:border-t">{body}</div>
-  );
+  // Each one a dashed tile, faded: not posted yet (Meadow's pending state).
+  return <div className="rounded-xl border border-dashed border-[var(--m-line,var(--border))] px-2.5 py-2 opacity-90">{body}</div>;
 }
 
 export function PendingTransactions({
@@ -121,38 +118,28 @@ export function PendingTransactions({
   isMobile: boolean;
 }) {
   if (!items.length) return null;
-  const heading = (
-    <div className="text-muted-foreground flex items-baseline gap-2 px-1 text-xs">
-      <span className="text-foreground shrink-0 whitespace-nowrap font-medium">Pending · {items.length}</span>
-      <span className="min-w-0 truncate">Not posted by the bank yet. Editable once it posts.</span>
-      {/* money-hub patch: what each one posts as, beside what it was (lib/pending-changes.ts). */}
-      <Link to="/spending/pending-changes" className="text-foreground ml-auto shrink-0 underline-offset-4 hover:underline">
-        Pending vs posted
-      </Link>
-    </div>
-  );
+  // money-hub patch: its own card in the Activity page's side column (owner, 10-02 canvas design): the
+  // heading and its one line inside, each charge a dashed tile.
   return (
-    <section aria-label="Pending transactions" className="space-y-2">
-      {heading}
-      {isMobile ? (
-        <div className="space-y-2">
-          {items.map((p) => (
-            <PendingItem key={p.id} p={p} account={accountById.get(p.accountId)} showAccount={showAccount} isMobile />
-          ))}
-        </div>
-      ) : (
-        <div className="rounded-md border border-dashed">
-          {items.map((p) => (
-            <PendingItem
-              key={p.id}
-              p={p}
-              account={accountById.get(p.accountId)}
-              showAccount={showAccount}
-              isMobile={false}
-            />
-          ))}
-        </div>
-      )}
+    <section
+      aria-label="Pending transactions"
+      data-m="card"
+      className="flex flex-col gap-2 rounded-[20px] border border-[var(--m-line,var(--border))] bg-[var(--m-surface,var(--card))] px-[18px] py-3.5 max-md:px-3 max-md:py-2.5"
+    >
+      <div className="flex items-baseline gap-2">
+        <h2 className="text-sm font-medium">Pending</h2>
+        <span className="text-muted-foreground text-[13px] tabular-nums">{items.length}</span>
+        {/* money-hub patch: what each one posts as, beside what it was (lib/pending-changes.ts). */}
+        <Link to="/spending/pending-changes" className="ml-auto shrink-0 text-[12.5px] text-[var(--m-forest,var(--foreground))] underline-offset-4 hover:underline">
+          Pending vs posted
+        </Link>
+      </div>
+      <p className="text-muted-foreground -mt-1 text-[12.5px]">Not posted by the bank yet. Editable once it posts.</p>
+      <div className="flex flex-col gap-1.5">
+        {items.map((p) => (
+          <PendingItem key={p.id} p={p} account={accountById.get(p.accountId)} showAccount={showAccount} isMobile={isMobile} />
+        ))}
+      </div>
     </section>
   );
 }

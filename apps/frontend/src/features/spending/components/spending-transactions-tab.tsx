@@ -23,7 +23,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { InfiniteScrollTrigger } from "@/components/infinite-scroll-trigger";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { QueryKeys } from "@/lib/query-keys";
-import { formatDateISO } from "@/lib/utils";
+import { cn, formatDateISO } from "@/lib/utils";
 import type { Account, ActivityDetails, TaxonomyCategory } from "@/lib/types";
 import { useSettingsContext } from "@/lib/settings-provider";
 
@@ -51,6 +51,7 @@ import type { AmountRange } from "./amount-range-filter";
 import { DeleteTransactionsDialog, type DeletePreview } from "./delete-transactions-dialog";
 import { TransactionCard } from "./transaction-card";
 import { PendingTransactions, usePendingTransactions } from "./pending-transactions";
+import { useDashboardSkins } from "../lib/dashboard-skin";
 import { SelectionToolbar } from "./selection-toolbar";
 import { TransactionDayHeader, TransactionDayHeading } from "./transaction-day-header";
 import { TransactionRow } from "./transaction-row";
@@ -228,6 +229,7 @@ function toActivityDetails(row: TransactionRowVM, account?: Account): Partial<Ac
 export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>(
   function SpendingTransactionsTab(_, ref) {
     const { t } = useTranslation();
+    const skins = useDashboardSkins();
     const [searchParams, setSearchParams] = useSearchParams();
     const urlCategoryId = searchParams.get("category");
     const urlSubcategoryId = searchParams.get("subcategory");
@@ -1215,8 +1217,11 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
         : a;
     }, [editingActivity]);
 
+    // money-hub patch: the Spending dashboard's look, Meadow or Bronze per mode (owner, 10-02 canvas
+    // design): the filters across the top, the list in a card in two thirds, Pending in a card beside it.
+    const pendingCard = !isLoading && pendingShown.length > 0;
     return (
-      <div className="space-y-4">
+      <div className="meadow flex flex-col gap-3.5 max-md:gap-2" data-mdash data-light-skin={skins.light} data-dark-skin={skins.dark}>
         <TransactionsFilterBar
           searchInput={searchInput}
           onSearchInputChange={setSearchInput}
@@ -1266,15 +1271,21 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
           />
         )}
 
-        {!isLoading && (
-          <PendingTransactions
-            items={pendingShown}
-            accountById={accountById}
-            showAccount={showAccount || new Set(pendingShown.map((p) => p.accountId)).size > 1}
-            isMobile={isMobile}
-          />
+        <div
+          className={cn("grid items-start gap-3.5 max-md:gap-2", pendingCard && "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]")}
+          style={{ overflowX: "visible" }}
+        >
+        {pendingCard && (
+          <aside className="min-w-0 lg:sticky lg:top-4 lg:order-2">
+            <PendingTransactions
+              items={pendingShown}
+              accountById={accountById}
+              showAccount={showAccount || new Set(pendingShown.map((p) => p.accountId)).size > 1}
+              isMobile={isMobile}
+            />
+          </aside>
         )}
-
+        <div className="min-w-0 lg:order-1">
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-12" />
@@ -1335,7 +1346,11 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
             {loadMoreTrigger && <div className="flex justify-center pt-1">{loadMoreTrigger}</div>}
           </div>
         ) : (
-          <div className="rounded-md border" style={{ overflowAnchor: "none" }}>
+          <div
+            data-m="card"
+            className="rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-2 pb-1 pt-1"
+            style={{ overflowAnchor: "none" }}
+          >
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1375,6 +1390,8 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
             )}
           </div>
         )}
+        </div>
+        </div>
 
         <CashActivityForm
           open={showForm}

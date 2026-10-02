@@ -1655,6 +1655,23 @@ summary {
   --primary: var(--m-forest);
   --primary-foreground: var(--m-on-forest);
 }
+/* ...and so do the page header's buttons above them (outside the .meadow box), while such a page is open. */
+.light:has([data-mdash][data-light-skin="meadow"]) {
+  --primary: #054e04;
+  --primary-foreground: #cff6ac;
+}
+.dark:has([data-mdash][data-dark-skin="meadow"]) {
+  --primary: #cff6ac;
+  --primary-foreground: #0b2a0a;
+}
+.light:has([data-mdash][data-light-skin="bronze"]) {
+  --primary: #6e4a2a;
+  --primary-foreground: #f7efe4;
+}
+.dark:has([data-mdash][data-dark-skin="bronze"]) {
+  --primary: #c9a27a;
+  --primary-foreground: #211c1b;
+}
 
 /* Investments: the stock Accounts list inside one Meadow card, each account a tile (the canvas design). */
 [data-mdash] [data-acct] > div {
