@@ -388,14 +388,21 @@ function Logo({
   url,
   name,
   square,
+  className,
 }: {
   url: string | null | undefined;
   name: string;
   square?: boolean;
+  className?: string;
 }) {
   if (url)
     return (
-      <MerchantLogo url={url} name={name} whole className={cn("h-7 w-7", square && "rounded-lg")} />
+      <MerchantLogo
+        url={url}
+        name={name}
+        whole
+        className={cn("h-7 w-7", square && "rounded-lg", className)}
+      />
     );
   return (
     <span
@@ -403,6 +410,7 @@ function Logo({
       className={cn(
         "flex h-7 w-7 shrink-0 items-center justify-center bg-[var(--m-mint-tile)] text-[10.5px] font-medium",
         square ? "rounded-lg" : "rounded-full",
+        className,
       )}
     >
       {name.trim().slice(0, 2).toUpperCase()}
@@ -437,18 +445,39 @@ function CardRow({
           currency,
           maximumFractionDigits: 0,
         }).format(v);
-  // money-hub patch: a card row is the same two lines as a cash row (name over its usage words, the
-  // amount on the right) so the Cards list is no taller than the Cash list and the Free cash side
-  // (owner, 10-02). The usage bar is a thin line along the row's foot, under the words.
+  const cents = (v: number) =>
+    isBalanceHidden
+      ? "••••"
+      : new Intl.NumberFormat("en-US", { style: "currency", currency }).format(v);
+  // The full words: "8.6% of $22,500, + $568.43 pending". Shown on a phone, and as the row's tooltip on
+  // desktop, where the row keeps to one line.
+  const detail = [
+    c.needsLogin
+      ? "Sign in again"
+      : credit
+        ? "credit on the card"
+        : share != null
+          ? `${pctLabel(share)}${c.limit != null ? ` of ${whole(c.limit)}` : ""}`
+          : "owed",
+    c.pending !== 0
+      ? `${c.pending > 0 ? "+ " : "- "}${cents(Math.abs(c.pending))}${c.pending > 0 ? " pending" : " pending refund"}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  // money-hub patch: on desktop a card row is ONE line (logo, name, how much of the limit is used, the
+  // amount); on a phone it is two (name over the full words). The usage bar is a thin line along the
+  // row's foot (owner, 10-02).
   return (
     <Link
       to={cardTransactionsHref(c)}
-      className="relative flex items-center gap-2.5 rounded-xl bg-[var(--m-mint-tile)] px-2.5 pb-2.5 pt-2 hover:opacity-90"
+      title={`${name}: ${detail}`}
+      className="relative flex items-center gap-2.5 rounded-xl bg-[var(--m-mint-tile)] px-2.5 pb-2.5 pt-2 hover:opacity-90 md:pb-2 md:pt-1.5"
     >
-      <Logo url={logo} name={c.bank} square />
+      <Logo url={logo} name={c.bank} square className="md:h-[22px] md:w-[22px]" />
       {c.limit != null ? (
         <div
-          className="absolute bottom-[5px] left-12 right-2.5 flex h-[3px] overflow-hidden rounded-full bg-[var(--m-track)]"
+          className="absolute bottom-[5px] left-12 right-2.5 flex h-[3px] overflow-hidden rounded-full bg-[var(--m-track)] md:bottom-1 md:left-[42px]"
           aria-hidden
         >
           <div
@@ -467,29 +496,29 @@ function CardRow({
       ) : null}
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13.5px]">{name}</div>
-        <div className="truncate text-[11.5px] text-[var(--m-mint-muted)]">
-          {c.needsLogin ? (
-            <span className="text-[var(--m-warn)]">Sign in again</span>
-          ) : credit ? (
-            "credit on the card"
-          ) : share != null ? (
-            <>
-              <span className={high ? "text-[var(--m-warn)]" : undefined}>{pctLabel(share)}</span>
-              {c.limit != null ? ` of ${whole(c.limit)}` : ""}
-            </>
-          ) : (
-            "owed"
+        <div
+          className={cn(
+            "truncate text-[11.5px] text-[var(--m-mint-muted)] md:hidden",
+            (c.needsLogin || high) && "text-[var(--m-warn)]",
           )}
-          {c.pending !== 0 ? (
-            <>
-              {", "}
-              {c.pending > 0 ? "+ " : "- "}
-              <PrivacyAmount value={Math.abs(c.pending)} currency={currency} />
-              {c.pending > 0 ? " pending" : " pending refund"}
-            </>
-          ) : null}
+        >
+          {detail}
         </div>
       </div>
+      <span
+        className={cn(
+          "hidden shrink-0 text-[11.5px] text-[var(--m-mint-muted)] md:inline",
+          (c.needsLogin || high) && "text-[var(--m-warn)]",
+        )}
+      >
+        {c.needsLogin
+          ? "Sign in again"
+          : credit
+            ? "credit"
+            : share != null
+              ? pctLabel(share)
+              : null}
+      </span>
       <span className="shrink-0 text-[13.5px] font-medium">
         <PrivacyAmount value={credit ? -c.owed : c.owed} currency={currency} />
       </span>
