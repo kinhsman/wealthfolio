@@ -10,6 +10,7 @@ import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { SettingsHeader } from "../settings-header";
+import { EmailBanksSection } from "./email-banks-section";
 
 const BASE = "/api/money-hub/plaid";
 
@@ -180,7 +181,7 @@ export default function BanksSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <SettingsHeader heading="Banks" text="Your bank and credit card accounts, through Plaid. Read only: nothing here can move money." />
+      <SettingsHeader heading="Banks" text="Your bank and credit card accounts, through Plaid or the bank's alert emails. Read only: nothing here can move money." />
       <Separator />
 
       {loadError && <p className="text-destructive text-sm">{loadError}</p>}
@@ -374,6 +375,8 @@ export default function BanksSettingsPage() {
       {note && (
         <p className={`text-sm ${note.tone === "ok" ? "text-success" : "text-destructive"}`}>{note.text}</p>
       )}
+
+      <EmailBanksSection />
     </div>
   );
 }
