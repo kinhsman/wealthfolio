@@ -1,6 +1,7 @@
 // money-hub patch: Settings, Spending, Merchants. The owner's merchant logos (features/spending/
 // lib/merchants.ts): each a logo, a name and the words to look for; transactions whose text contains
 // the words show the logo. Laid out like the Rules page next to it.
+import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 
 import { Button, EmptyPlaceholder, Icons, Input, Skeleton } from "@wealthfolio/ui";
@@ -65,22 +66,31 @@ export default function SpendingMerchantsPage() {
         ) : (
           <div className="bg-card divide-y rounded-lg border">
             {shown.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setDraft({ merchant: m })}
-                className="hover:bg-muted/40 flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
-              >
-                <MerchantLogo url={m.logoUrl} name={m.name} className="h-9 w-9" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{m.name}</span>
-                  <span className="text-muted-foreground block truncate text-xs">
-                    Looks for {wordsOf(m).map((w) => `\u201c${w}\u201d`).join(" or ")}
-                    {m.useBank ? " · shows the bank's logo" : ""}
+              <div key={m.id} className="hover:bg-muted/40 flex w-full items-center gap-1 pr-2 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => setDraft({ merchant: m })}
+                  className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left"
+                >
+                  <MerchantLogo url={m.logoUrl} name={m.name} className="h-9 w-9" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{m.name}</span>
+                    <span className="text-muted-foreground block truncate text-xs">
+                      Looks for {wordsOf(m).map((w) => `\u201c${w}\u201d`).join(" or ")}
+                      {m.useBank ? " · shows the bank's logo" : ""}
+                    </span>
                   </span>
-                </span>
-                <Icons.ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
-              </button>
+                </button>
+                {/* money-hub patch: the store's page, its spending over time (pages/spending-drill-page.tsx). */}
+                <Link
+                  to={`/spending/merchant/${encodeURIComponent(m.id)}`}
+                  title={`Everything at ${m.name}`}
+                  aria-label={`Everything at ${m.name}`}
+                  className="text-muted-foreground hover:text-foreground hover:bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+                >
+                  <Icons.BarChart className="h-4 w-4" />
+                </Link>
+              </div>
             ))}
             {shown.length === 0 ? <p className="text-muted-foreground px-4 py-6 text-sm">No merchant matches &ldquo;{search}&rdquo;.</p> : null}
           </div>

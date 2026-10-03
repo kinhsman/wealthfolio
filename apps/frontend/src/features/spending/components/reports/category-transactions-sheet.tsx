@@ -248,6 +248,12 @@ export function CategoryTransactionsSheet({
                 {formatRangeLabel(rangeStart, rangeEnd, dateFormatting)} ·{" "}
                 {t("spending:categorySheet.daysCount", { count: rangeDays })}
               </p>
+              {/* money-hub patch: the category's own page, its spending over time (pages/spending-drill-page.tsx). */}
+              {category ? (
+                <Link to={`/spending/category/${encodeURIComponent(category.id)}`} className="text-muted-foreground hover:text-foreground mt-1 inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline">
+                  Over time <Icons.ChevronRight className="h-3 w-3" />
+                </Link>
+              ) : null}
             </div>
           </div>
 

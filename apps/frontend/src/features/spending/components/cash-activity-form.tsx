@@ -20,6 +20,7 @@ import { BankDescription } from "./bank-description";
 import { AmazonOrderDetails } from "./amazon-order";
 import { useAmazonLinks } from "../lib/amazon";
 import { MerchantShortcut } from "./merchant-dialog";
+import { Link } from "react-router-dom";
 import type { Account, Activity, ActivityCreate, ActivityUpdate } from "@/lib/types";
 
 import {
@@ -802,6 +803,13 @@ export function CashActivityForm({
                                 }
                               />
                             )}
+                            {/* money-hub patch: this category's page (pages/spending-drill-page.tsx). */}
+                            {isEditing && currentCat && !isNeutralBucket ? (
+                              <Link to={`/spending/category/${encodeURIComponent(currentCatId!)}`} onClick={() => onOpenChange(false)}
+                                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline">
+                                All in {currentCat.name} <Icons.ChevronRight className="h-3 w-3" />
+                              </Link>
+                            ) : null}
                             <FormMessage />
                           </FormItem>
                         );
@@ -875,6 +883,7 @@ export function CashActivityForm({
                           {/* money-hub patch: this transaction's merchant logo, or add one. */}
                           {isEditing ? (
                             <MerchantShortcut
+                              onLeave={() => onOpenChange(false)}
                               notes={field.value}
                               activityId={activity?.id}
                               account={spendingAccounts.find((a) => a.id === watchAccountId)}

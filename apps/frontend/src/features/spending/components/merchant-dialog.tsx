@@ -2,6 +2,7 @@
 // The service shrinks the logo to 128 by 128 on save. Opened from Settings, Spending, Merchants and
 // from a transaction's edit form, rendered inside whatever opened it (a window opened beside the
 // form's own would fight it for focus and close it).
+import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -51,11 +52,14 @@ export function MerchantShortcut({
   account,
   activityType,
   activityId,
+  onLeave,
 }: {
   notes?: string | null;
   account?: Account | null;
   activityType?: string | null;
   activityId?: string;
+  /** Called before going to the store's page (the edit window closes). */
+  onLeave?: () => void;
 }) {
   const { data: bankLines } = useBankLines();
   const { data: notesById } = useNotes();
@@ -94,6 +98,16 @@ export function MerchantShortcut({
             >
               Change
             </button>
+          ) : null}
+          {/* money-hub patch: the store's page (pages/spending-drill-page.tsx), for the owner's own merchants. */}
+          {merchant.source !== "bank" && !merchant.fallback ? (
+            <Link
+              to={`/spending/merchant/${encodeURIComponent(merchant.id)}`}
+              onClick={() => onLeave?.()}
+              className="text-foreground inline-flex shrink-0 items-center gap-0.5 underline-offset-4 hover:underline"
+            >
+              All from {merchant.name} <Icons.ChevronRight className="h-3 w-3" />
+            </Link>
           ) : null}
         </div>
       ) : (
