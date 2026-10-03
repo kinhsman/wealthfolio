@@ -21,6 +21,23 @@ interface MobileNavBarProps {
   navigation: NavigationProps;
 }
 
+// money-hub patch: the bar's buttons slide when the current page's button widens for its name, on the
+// same spring as the current-page pill so they move together.
+const MotionLink = motion.create(Link);
+const SLIDE = { type: "spring", stiffness: 400, damping: 30 } as const;
+
+// money-hub patch: on the phone, Transactions sits in the bar where Insights was and Insights takes
+// Transactions' place in the More sheet (owner, 10-03); the computer's sidebar keeps the stock order.
+function phoneOrder(items: NavLink[]): NavLink[] {
+  const ordered = [...items];
+  const insights = ordered.findIndex((item) => item.href === "/insights");
+  const transactions = ordered.findIndex((item) => item.href === "/activities");
+  if (insights >= 0 && transactions >= 0) {
+    [ordered[insights], ordered[transactions]] = [ordered[transactions], ordered[insights]];
+  }
+  return ordered;
+}
+
 export function MobileNavBar({ navigation }: MobileNavBarProps) {
   const { t } = useTranslation();
   const location = useLocation();
@@ -58,6 +75,10 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
   const containerClassName = "pointer-events-none fixed inset-x-0 bottom-0 z-50";
   const buttonClassName =
     "text-foreground relative z-10 flex h-14 w-full items-center justify-center rounded-full transition-colors landscape:size-11";
+  // money-hub patch: the current page's button shows its name under the icon (owner, 10-03), so its
+  // column grows to fit the name (see gridTemplateColumns below).
+  const activeButtonClassName =
+    "text-foreground relative z-10 flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-full px-2.5 transition-colors landscape:h-11";
 
   const handleNavigation = useCallback(
     (href: string, isActive: boolean) => {
@@ -70,7 +91,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
 
   const renderIcon = useCallback((icon?: ReactNode) => resolveNavigationIcon(icon, "size-6"), []);
 
-  const primaryItems = navigation?.primary ?? [];
+  const primaryItems = phoneOrder(navigation?.primary ?? []);
   const secondaryItems = navigation?.secondary ?? [];
   const pinnedAddonItems = navigation?.pinnedAddons ?? [];
   const addonMenuItems = navigation?.addonMenuItems ?? navigation?.addons ?? [];
@@ -108,6 +129,41 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
   ];
   const moreItems = [...standardMenuItems, ...addonItems];
   const hasMenu = moreItems.length > 0;
+  const activeMoreItem = moreItems.find((item) => isPathActive(location.pathname, item.href));
+
+  // Every column shares the room, except the current page's, which is as wide as its name.
+  const cellColumn = isLandscape ? "2.75rem" : "minmax(0, 1fr)";
+  const gridTemplateColumns = [
+    ...visibleItems.map((item) =>
+      isPathActive(location.pathname, item.href) ? "auto" : cellColumn,
+    ),
+    cellColumn,
+    ...(hasMenu ? [activeMoreItem ? "auto" : cellColumn] : []),
+  ].join(" ");
+
+  const pill = (
+    <motion.div
+      data-mbar-pill=""
+      layoutId={`mobile-nav-indicator-${uniqueId}`}
+      className="absolute inset-0 -z-10 rounded-full border border-black/10 bg-black/5 shadow-sm dark:border-white/10 dark:bg-white/10"
+      // Set here, not only as a class, so the corners stay round while the pill stretches.
+      style={{ borderRadius: 9999 }}
+      initial={false}
+      transition={SLIDE}
+    />
+  );
+  const pageName = (name: string) => (
+    <motion.span
+      layout
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={SLIDE}
+      className="whitespace-nowrap text-[10px] font-medium leading-3"
+      aria-hidden="true"
+    >
+      {name}
+    </motion.span>
+  );
 
   return (
     <div
@@ -129,13 +185,16 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
           <nav
             aria-label={t("common:layout.primary_navigation")}
             className="grid auto-cols-fr grid-flow-col place-items-center gap-2 landscape:auto-cols-[2.75rem]"
+            style={{ gridTemplateColumns }}
           >
             {visibleItems.map((item) => {
               const isActive = isPathActive(location.pathname, item.href);
               const isSearch = item.href === "#search";
 
               return (
-                <Link
+                <MotionLink
+                  layout
+                  transition={SLIDE}
                   to={item.href}
                   onClick={(e) => {
                     if (isSearch) {
@@ -157,66 +216,53 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                     }
                   }}
                   aria-label={item.title}
-                  className={buttonClassName}
+                  className={isActive ? activeButtonClassName : buttonClassName}
                   key={item.href}
                   aria-current={isActive ? "page" : undefined}
                 >
-                  {isActive && (
-                    <motion.div
-                      data-mbar-pill=""
-                      layoutId={`mobile-nav-indicator-${uniqueId}`}
-                      className="absolute inset-0 -z-10 rounded-full border border-black/10 bg-black/5 shadow-sm dark:border-white/10 dark:bg-white/10"
-                      initial={false}
-                      transition={{
-                        type: "spring",
-                        stiffness: 400,
-                        damping: 30,
-                      }}
-                    />
-                  )}
-                  <span
+                  {isActive && pill}
+                  <motion.span
+                    layout
+                    transition={SLIDE}
                     className="relative flex size-7 shrink-0 items-center justify-center outline-none"
                     aria-hidden="true"
                   >
                     {renderIcon(item.icon)}
-                  </span>
-                </Link>
+                  </motion.span>
+                  {isActive && pageName(item.title)}
+                </MotionLink>
               );
             })}
 
             {/* money-hub patch: the bell, every alert sent (features/notifications). */}
-            <NotificationsBell variant="mobile" className={buttonClassName} />
+            <motion.div layout="position" transition={SLIDE} className="w-full">
+              <NotificationsBell variant="mobile" className={buttonClassName} />
+            </motion.div>
 
             {hasMenu && (
-              <button
+              <motion.button
+                layout
+                transition={SLIDE}
                 onClick={() => {
                   triggerHaptic();
                   setProfileView(false);
                   setMobileMenuOpen(true);
                 }}
                 aria-label={t("common:layout.more_options")}
-                className={buttonClassName}
+                className={activeMoreItem ? activeButtonClassName : buttonClassName}
               >
-                {moreItems.some((item) => isPathActive(location.pathname, item.href)) && (
-                  <motion.div
-                    data-mbar-pill=""
-                    layoutId={`mobile-nav-indicator-${uniqueId}`}
-                    className="absolute inset-0 -z-10 rounded-full border border-black/10 bg-black/5 shadow-sm dark:border-white/10 dark:bg-white/10"
-                    initial={false}
-                    transition={{
-                      type: "spring",
-                      stiffness: 400,
-                      damping: 30,
-                    }}
-                  />
-                )}
-                <span
+                {activeMoreItem && pill}
+                <motion.span
+                  layout
+                  transition={SLIDE}
                   className="relative flex size-7 shrink-0 items-center justify-center outline-none"
                   aria-hidden="true"
                 >
                   <Icons.CirclesFour className="size-6" />
-                </span>
-              </button>
+                </motion.span>
+                {/* The page you are on lives in the More sheet: its name under the More icon. */}
+                {activeMoreItem && pageName(activeMoreItem.title)}
+              </motion.button>
             )}
           </nav>
         </LiquidGlass>
