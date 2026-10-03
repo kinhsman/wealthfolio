@@ -32,7 +32,11 @@ export interface LoanView {
     maturity: string | null;
     method: "annuity" | "equal_principal" | "interest_only";
     follow: boolean;
+    paymentDay: number | null;
   };
+  /** One loan drawn in lines: each its number, amount and the day its term ends, soonest first. */
+  lines: { id: string; number: string; amount: number; end: string | null; daysLeft: number | null }[];
+  linesTotal: number;
   missing: string[];
   /** No start date: counted from the first balance typed, the term from then. */
   countedFrom?: { date: string; balance: number } | null;
@@ -43,13 +47,15 @@ export interface LoanView {
     rows: LoanRow[];
     /** What is paid each month (interest only: the interest; the principal comes with `finalPayment`). */
     regular: number | null;
+    /** Interest only with no term or due date: the interest goes on, no last payment. */
+    openEnded: boolean;
     finalPayment: number | null;
     paidCount: number;
     balanceToday: number;
     next: LoanRow | null;
     payoff: string | null;
-    monthsLeft: number;
-    interestLeft: number;
+    monthsLeft: number | null;
+    interestLeft: number | null;
   };
 }
 
@@ -102,6 +108,60 @@ const STYLE = {
   interest_only: "Interest only, principal at the end",
 } as const;
 
+/** Lines to renew within this many days are marked (amber: needs a look). */
+const RENEW_SOON_DAYS = 14;
+
+function renewLabel(days: number): string {
+  if (days < 0) return `${-days} day${days === -1 ? "" : "s"} past`;
+  if (days === 0) return "today";
+  return `in ${days} day${days === 1 ? "" : "s"}`;
+}
+
+/** The loan's lines (owner, 10-03): the day each one's term ends, to renew it with the bank in time. */
+function LoanLines({ data, amount }: { data: LoanView; amount: (v: number) => React.ReactNode }) {
+  if (!data.lines.length) return null;
+  const last4 = (n: string, i: number) => (n ? `••${n.slice(-4)}` : `Line ${i + 1}`);
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between gap-3">
+        <span className="text-muted-foreground">
+          {data.lines.length} line{data.lines.length === 1 ? "" : "s"}
+        </span>
+        <span className="font-medium">{amount(data.linesTotal)}</span>
+      </div>
+      <div className="divide-y rounded-lg border">
+        {data.lines.map((l, i) => {
+          const soon = l.daysLeft != null && l.daysLeft <= RENEW_SOON_DAYS;
+          return (
+            <div key={l.id} className="flex items-center justify-between gap-3 px-3 py-2">
+              <span className="min-w-0">
+                <span className="block truncate font-medium" title={l.number || undefined}>
+                  {last4(l.number, i)}
+                </span>
+                <span className="text-muted-foreground block text-xs">{l.end ? `Ends ${fullDay(l.end)}` : "No end date"}</span>
+              </span>
+              <span className="shrink-0 text-right">
+                <span className="block font-medium">{amount(l.amount)}</span>
+                {l.daysLeft != null ? (
+                  <span
+                    className={
+                      soon
+                        ? "inline-block rounded-full bg-[var(--m-warn-soft,#fbe9d2)] px-1.5 py-px text-[11px] text-[var(--m-warn,#7a4300)]"
+                        : "text-muted-foreground block text-xs"
+                    }
+                  >
+                    {soon ? `Renew ${renewLabel(l.daysLeft)}` : renewLabel(l.daysLeft)}
+                  </span>
+                ) : null}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 /** The rows under the loan's details: term, payoff, the next payment, interest to come. */
 export function LoanScheduleSection({ id, currency }: { id: string; currency: string }) {
   const { isBalanceHidden } = useBalancePrivacy();
@@ -151,23 +211,28 @@ export function LoanScheduleSection({ id, currency }: { id: string; currency: st
                 )
               : null}
             {/* Interest only: the principal comes back in one payment at the end. */}
-            {t.method === "interest_only" && s.payoff && s.finalPayment != null && s.monthsLeft > 0
+            {t.method === "interest_only" && s.payoff && s.finalPayment != null && (s.monthsLeft ?? 0) > 0
               ? row("Last payment", amount(s.finalPayment), `${fullDay(s.payoff)}: the principal plus that month's interest`)
               : null}
-            {s.monthsLeft > 0 ? row("Interest still to pay", amount(s.interestLeft)) : null}
-            {data.countedFrom && !t.maturity ? (
+            {(s.monthsLeft ?? 0) > 0 && s.interestLeft != null ? row("Interest still to pay", amount(s.interestLeft)) : null}
+            {s.openEnded && s.regular != null ? row("Interest a year", amount(s.regular * 12)) : null}
+            {data.countedFrom && !t.maturity && !s.openEnded ? (
               <p className="text-muted-foreground text-xs leading-snug">
                 Counted from your balance on {fullDay(data.countedFrom.date)}. Add the start date and original amount in Edit details to
                 count from when the loan began.
               </p>
             ) : null}
-            <p className="text-muted-foreground text-xs leading-snug">
-              {t.follow
-                ? `The balance steps down on each payment day. Type the balance your bank shows (Update value) and it carries on from there.`
-                : `The balance stays as you type it. Turn on "Balance follows the schedule" in Edit details to step it down each month.`}
-            </p>
+            {data.lines.length || s.openEnded ? null : (
+              <p className="text-muted-foreground text-xs leading-snug">
+                {t.follow
+                  ? `The balance steps down on each payment day. Type the balance your bank shows (Update value) and it carries on from there.`
+                  : `The balance stays as you type it. Turn on "Balance follows the schedule" in Edit details to step it down each month.`}
+              </p>
+            )}
           </>
         )}
+        {/* The lines show whatever else is still missing. */}
+        <LoanLines data={data} amount={amount} />
       </div>
     </>
   );

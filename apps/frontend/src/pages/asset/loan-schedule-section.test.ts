@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formValuesToMetadata, getDefaultDetailsFormValues } from "./alternative-assets/components/asset-details-sheet-schema";
+import { formValuesToMetadata, getDefaultDetailsFormValues, linesFromMetadata, linesToMetadata } from "./alternative-assets/components/asset-details-sheet-schema";
 import { AlternativeAssetKind } from "@/lib/types";
 import { termLabel } from "./loan-schedule-section";
 
@@ -23,5 +23,25 @@ describe("a loan's term and schedule settings (money-hub, owner 10-03)", () => {
     // Interest only is kept as it is.
     const io = getDefaultDetailsFormValues(AlternativeAssetKind.LIABILITY, "Vietin", { ...md, repayment: "interest_only" }, null);
     expect(formValuesToMetadata(io)).toMatchObject({ repayment: "interest_only" });
+  });
+  it("one loan in lines: kept as the bank lists them, a line with no amount left out, none clears them", () => {
+    const raw = JSON.stringify([
+      { id: "a", number: "862012139429", amount: 4350000000, end: "2026-10-12" },
+      { id: "b", number: "869012229524", amount: 1356000000, end: null },
+    ]);
+    const lines = linesFromMetadata(raw);
+    expect(lines.map((l) => [l.number, l.amount, l.end?.getDate() ?? null])).toEqual([
+      ["862012139429", 4350000000, 12],
+      ["869012229524", 1356000000, null],
+    ]);
+    expect(JSON.parse(linesToMetadata([...lines, { id: "c", number: "", amount: 0, end: null }]))).toEqual([
+      { id: "a", number: "862012139429", amount: 4350000000, end: "2026-10-12" },
+      { id: "b", number: "869012229524", amount: 1356000000, end: null },
+    ]);
+    expect(linesToMetadata([])).toBe("");
+    expect(linesFromMetadata("not json")).toEqual([]);
+    const v = getDefaultDetailsFormValues(AlternativeAssetKind.LIABILITY, "Vietin", { loan_lines: raw, payment_day: "25" }, null);
+    expect(v).toMatchObject({ paymentDay: 25 });
+    expect(formValuesToMetadata(v)).toMatchObject({ payment_day: "25", loan_lines: linesToMetadata(lines) });
   });
 });

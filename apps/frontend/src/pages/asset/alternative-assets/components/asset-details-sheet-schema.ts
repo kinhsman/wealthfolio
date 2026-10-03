@@ -141,6 +141,21 @@ export const liabilityDetailsSchema = baseSchema.extend({
   repayment: z.enum(["annuity", "equal_principal", "interest_only"]).optional().nullable(),
   /** The day the loan must be paid back (a Vietnamese bank's "ngày đáo hạn"): payments fall on its day. */
   maturityDate: z.date().optional().nullable(),
+  /** The day of the month the payment is made (owner, 10-03: the loan's, the same for all its lines). */
+  paymentDay: z.coerce.number().int("A day of the month").min(1, "1 to 31").max(31, "1 to 31").optional().nullable(),
+  /** One loan drawn in lines (owner, 10-03: split by the bank's limit per line): each line's number,
+   *  amount and the day its term ends, to renew it in time. Lines with no amount are left out on save. */
+  lines: z
+    .array(
+      z.object({
+        id: z.string(),
+        number: z.string().max(40).optional().nullable(),
+        amount: z.coerce.number().min(0),
+        end: z.date().optional().nullable(),
+      }),
+    )
+    .optional()
+    .nullable(),
   followSchedule: z.boolean().optional().nullable(),
 });
 
@@ -250,6 +265,8 @@ export function getDefaultDetailsFormValues(
             : "annuity",
         followSchedule: metadata?.follow_schedule === "true",
         maturityDate: metadata?.maturity_date ? parseLocalDate(metadata.maturity_date as string) : null,
+        paymentDay: metadata?.payment_day ? parseInt(metadata.payment_day as string, 10) : null,
+        lines: linesFromMetadata(metadata?.loan_lines),
       };
 
     case AlternativeAssetKind.OTHER:
@@ -319,6 +336,8 @@ export function formValuesToMetadata(values: AssetDetailsFormValues): Record<str
       metadata.repayment = values.repayment ?? "annuity";
       metadata.follow_schedule = values.followSchedule ? "true" : "false";
       metadata.maturity_date = values.maturityDate ? formatDateToISO(values.maturityDate) : "";
+      metadata.payment_day = values.paymentDay != null ? values.paymentDay.toString() : "";
+      metadata.loan_lines = linesToMetadata(values.lines);
       break;
 
     case AlternativeAssetKind.OTHER:
@@ -327,6 +346,32 @@ export function formValuesToMetadata(values: AssetDetailsFormValues): Record<str
   }
 
   return metadata;
+}
+
+// money-hub: a loan's lines, kept as JSON in its metadata (the money-hub service reads them too).
+export type LoanLineForm = { id: string; number?: string | null; amount: number; end?: Date | null };
+
+export function linesFromMetadata(raw: unknown): LoanLineForm[] {
+  try {
+    const list = JSON.parse(typeof raw === "string" && raw ? raw : "[]") as { id?: string; number?: string; amount?: number | string; end?: string | null }[];
+    return (Array.isArray(list) ? list : []).map((x, i) => ({
+      id: String(x.id ?? i),
+      number: x.number ?? "",
+      amount: Number(x.amount) || 0,
+      end: x.end ? parseLocalDate(x.end) : null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** The lines with an amount, as saved; "" when there are none (so removing the last one sticks). */
+export function linesToMetadata(lines: LoanLineForm[] | null | undefined): string {
+  const kept = (lines ?? []).filter((l) => Number(l.amount) > 0);
+  if (!kept.length) return "";
+  return JSON.stringify(
+    kept.map((l) => ({ id: l.id, number: (l.number ?? "").trim(), amount: Number(l.amount), end: l.end ? formatDateToISO(l.end) : null })),
+  );
 }
 
 // Helper to format date to ISO string (YYYY-MM-DD)

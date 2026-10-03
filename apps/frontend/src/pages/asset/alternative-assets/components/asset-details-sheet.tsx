@@ -40,6 +40,8 @@ import {
   assetDetailsSchema,
   type AssetDetailsFormValues,
   getDefaultDetailsFormValues,
+  linesToMetadata,
+  type LoanLineForm,
   formValuesToMetadata,
   PROPERTY_TYPES,
   VEHICLE_TYPES,
@@ -51,6 +53,7 @@ import {
 import { type LinkableAsset } from "./alternative-asset-quick-add-modal";
 import { AlternativeAssetKind, ALTERNATIVE_ASSET_KIND_DISPLAY_NAMES } from "@/lib/types";
 import { syncLoanAfterSave, termLabel } from "../../loan-schedule-section";
+import { updateAlternativeAssetValuation } from "@/adapters";
 
 /**
  * Asset data required by the sheet.
@@ -163,8 +166,20 @@ export function AssetDetailsSheet({
       const nameChanged = values.name !== asset.name ? values.name : undefined;
       // Pass notes separately (it goes to asset.notes, not metadata)
       await onSave(asset.id, metadata, nameChanged, values.notes);
-      // money-hub: a loan's balance brought up to its schedule right away (lib/loans.js).
-      if (asset.kind === AlternativeAssetKind.LIABILITY) void syncLoanAfterSave(asset.id, queryClient);
+      if (asset.kind === AlternativeAssetKind.LIABILITY) {
+        // money-hub: a loan in lines owes their total; changed lines set its balance from today.
+        const before = linesToMetadata(
+          (getDefaultDetailsFormValues(AlternativeAssetKind.LIABILITY, asset.name, asset.metadata, asset.notes) as { lines?: LoanLineForm[] }).lines,
+        );
+        if (metadata.loan_lines && metadata.loan_lines !== before) {
+          const total = (JSON.parse(metadata.loan_lines) as { amount: number }[]).reduce((sum, l) => sum + l.amount, 0);
+          const d = new Date();
+          const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+          await updateAlternativeAssetValuation(asset.id, { value: String(total), date: today, notes: "Total of the loan's lines" });
+        }
+        // a loan's balance brought up to its schedule right away (lib/loans.js).
+        void syncLoanAfterSave(asset.id, queryClient);
+      }
       toast({
         title: t("asset:detailsSheet.details_saved"),
         variant: "success",
@@ -808,6 +823,30 @@ function LiabilityFields({
 
       <FormField
         control={form.control}
+        name="paymentDay"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Payment day</FormLabel>
+            <FormControl>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={31}
+                placeholder="25"
+                value={field.value ?? ""}
+                onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                className="w-28"
+              />
+            </FormControl>
+            <p className="text-muted-foreground text-xs">The day of the month it is paid. Empty: the start or due date&rsquo;s day.</p>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
         name="maturityDate"
         render={({ field }) => (
           <FormItem>
@@ -837,6 +876,19 @@ function LiabilityFields({
             <FormControl>
               <Switch checked={!!field.value} onCheckedChange={field.onChange} aria-label="Balance follows the schedule" />
             </FormControl>
+          </FormItem>
+        )}
+      />
+
+      {/* money-hub: one loan drawn in lines (owner, 10-03: split by the bank's limit per line). */}
+      <FormField
+        control={form.control}
+        name="lines"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Lines</FormLabel>
+            <LoanLinesEditor value={field.value ?? []} onChange={field.onChange} />
+            <FormMessage />
           </FormItem>
         )}
       />
@@ -873,6 +925,73 @@ function LiabilityFields({
           </FormItem>
         )}
       />
+    </div>
+  );
+}
+
+/** money-hub: a loan's lines (owner, 10-03: "part of the same loan, they just being split due to bank max
+ *  amount limitation"): each its number, amount and the day its term ends; the rate, payment day and term
+ *  are the loan's. Saving with lines sets the loan's balance to their total. */
+function LoanLinesEditor({ value, onChange }: { value: LoanLineForm[]; onChange: (lines: LoanLineForm[]) => void }) {
+  const set = (i: number, patch: Partial<LoanLineForm>) => onChange(value.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const total = value.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
+  return (
+    <div className="space-y-2">
+      {value.map((l, i) => (
+        <div key={l.id} className="space-y-2 rounded-lg border p-3">
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Loan number"
+              value={l.number ?? ""}
+              onChange={(e) => set(i, { number: e.target.value })}
+              aria-label={`Line ${i + 1} loan number`}
+              autoComplete="off"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0"
+              aria-label={`Remove line ${i + 1}`}
+              onClick={() => onChange(value.filter((_, j) => j !== i))}
+            >
+              <Icons.Close className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0 space-y-1">
+              <p className="text-muted-foreground text-[11px]">Amount</p>
+              <Input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="any"
+                value={l.amount ? String(l.amount) : ""}
+                onChange={(e) => set(i, { amount: Number(e.target.value) || 0 })}
+                aria-label={`Line ${i + 1} amount`}
+              />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <p className="text-muted-foreground text-[11px]">Term ends</p>
+              <DatePickerInput value={l.end ?? undefined} onChange={(date) => set(i, { end: date ?? null })} />
+            </div>
+          </div>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => onChange([...value, { id: crypto.randomUUID(), number: "", amount: 0, end: null }])}
+      >
+        <Icons.Plus className="mr-1 h-3.5 w-3.5" />
+        Add line
+      </Button>
+      <p className="text-muted-foreground text-xs">
+        {value.length
+          ? `${value.length} line${value.length === 1 ? "" : "s"}, ${total.toLocaleString()} in all: the loan's balance when you save.`
+          : "A loan drawn in parts: each line's amount and the day its term ends, to renew in time."}
+      </p>
     </div>
   );
 }
