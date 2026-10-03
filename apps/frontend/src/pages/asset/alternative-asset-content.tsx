@@ -1,6 +1,7 @@
 import HistoryChart from "@/components/history-chart-symbol";
 import { useAlternativeHoldings, useLinkedLiabilities } from "@/hooks/use-alternative-assets";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
+import { LoanScheduleSection } from "./loan-schedule-section";
 import type { AlternativeAssetHolding, Asset, DateRange, Quote, TimePeriod } from "@/lib/types";
 import { AlternativeAssetKind } from "@/lib/types";
 import {
@@ -620,6 +621,9 @@ const AlternativeAssetDetailCard: React.FC<AlternativeAssetDetailCardProps> = ({
             ))}
           </div>
         )}
+
+        {/* money-hub: the loan's term, payoff and next payment (loan-schedule-section.tsx). */}
+        {isLiability && <LoanScheduleSection id={holding.id} currency={holding.currency} />}
 
         {/* Linked Asset (for liabilities) */}
         {isLiability && linkedAsset && (

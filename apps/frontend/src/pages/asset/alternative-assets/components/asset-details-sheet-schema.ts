@@ -128,6 +128,18 @@ export const liabilityDetailsSchema = baseSchema.extend({
     .optional()
     .nullable(),
   linkedAssetId: z.string().optional().nullable(),
+  // money-hub: the loan's term and how it is paid back, for its schedule (owner, 10-03: a loan in
+  // Vietnam, "track the loan amount term and the interest rate"); the money-hub service steps the
+  // balance down each payment day when followSchedule is on (lib/loans.js).
+  termMonths: z.coerce
+    .number()
+    .int("Whole months")
+    .positive("The term must be at least 1 month")
+    .max(600, "The term must be 50 years or less")
+    .optional()
+    .nullable(),
+  repayment: z.enum(["annuity", "equal_principal"]).optional().nullable(),
+  followSchedule: z.boolean().optional().nullable(),
 });
 
 // Other asset schema (generic)
@@ -229,6 +241,9 @@ export function getDefaultDetailsFormValues(
         originationDate: origDate ? parseLocalDate(origDate as string) : null,
         interestRate: metadata?.interest_rate ? parseFloat(metadata.interest_rate as string) : null,
         linkedAssetId: (metadata?.linked_asset_id as string) ?? null,
+        termMonths: metadata?.term_months ? parseInt(metadata.term_months as string, 10) : null,
+        repayment: metadata?.repayment === "equal_principal" ? "equal_principal" : "annuity",
+        followSchedule: metadata?.follow_schedule === "true",
       };
 
     case AlternativeAssetKind.OTHER:
@@ -293,6 +308,10 @@ export function formValuesToMetadata(values: AssetDetailsFormValues): Record<str
         metadata.origination_date = formatDateToISO(values.originationDate);
       if (values.interestRate != null) metadata.interest_rate = values.interestRate.toString();
       if (values.linkedAssetId) metadata.linked_asset_id = values.linkedAssetId;
+      // Always sent, so clearing the term or turning the schedule off sticks (the server merges keys).
+      metadata.term_months = values.termMonths != null ? values.termMonths.toString() : "";
+      metadata.repayment = values.repayment ?? "annuity";
+      metadata.follow_schedule = values.followSchedule ? "true" : "false";
       break;
 
     case AlternativeAssetKind.OTHER:

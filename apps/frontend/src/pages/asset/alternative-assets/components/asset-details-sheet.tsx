@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm, type Resolver } from "react-hook-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,6 +25,7 @@ import { Input } from "@wealthfolio/ui/components/ui/input";
 import { Textarea } from "@wealthfolio/ui/components/ui/textarea";
 import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { Badge } from "@wealthfolio/ui/components/ui/badge";
+import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import {
   MoneyInput,
@@ -48,6 +50,7 @@ import {
 } from "./asset-details-sheet-schema";
 import { type LinkableAsset } from "./alternative-asset-quick-add-modal";
 import { AlternativeAssetKind, ALTERNATIVE_ASSET_KIND_DISPLAY_NAMES } from "@/lib/types";
+import { syncLoanAfterSave, termLabel } from "../../loan-schedule-section";
 
 /**
  * Asset data required by the sheet.
@@ -117,6 +120,7 @@ export function AssetDetailsSheet({
   isSaving = false,
 }: AssetDetailsSheetProps) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   // Use a fallback kind for the form when asset is null (form state won't be used anyway)
   const assetKind = asset?.kind ?? AlternativeAssetKind.OTHER;
   const assetName = asset?.name ?? "";
@@ -159,6 +163,8 @@ export function AssetDetailsSheet({
       const nameChanged = values.name !== asset.name ? values.name : undefined;
       // Pass notes separately (it goes to asset.notes, not metadata)
       await onSave(asset.id, metadata, nameChanged, values.notes);
+      // money-hub: a loan's balance brought up to its schedule right away (lib/loans.js).
+      if (asset.kind === AlternativeAssetKind.LIABILITY) void syncLoanAfterSave(asset.id, queryClient);
       toast({
         title: t("asset:detailsSheet.details_saved"),
         variant: "success",
@@ -724,7 +730,8 @@ function LiabilityFields({
                   name={field.name}
                   value={field.value}
                   onValueChange={(value) => field.onChange(value ?? null)}
-                  maxDecimalPlaces={2}
+                  // money-hub: 3 places, so a 3.125% mortgage is not saved back as 3.13%.
+                  maxDecimalPlaces={3}
                 />
               </FormControl>
               <FormMessage />
@@ -746,6 +753,78 @@ function LiabilityFields({
               />
             </FormControl>
             <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {/* money-hub: the loan's term and how it is paid back, for its schedule (owner, 10-03). */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField
+          control={form.control}
+          name="termMonths"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Term in months</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  step={1}
+                  placeholder="240"
+                  value={field.value ?? ""}
+                  onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                />
+              </FormControl>
+              <p className="text-muted-foreground text-xs">
+                {field.value && field.value > 0 ? termLabel(field.value) : "240 is 20 years"}
+              </p>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="repayment"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Payment</FormLabel>
+              <FormControl>
+                <ResponsiveSelect
+                  value={field.value ?? "annuity"}
+                  onValueChange={(val) => field.onChange(val || "annuity")}
+                  options={[
+                    { value: "annuity", label: "Same every month" },
+                    { value: "equal_principal", label: "Goes down each month" },
+                  ]}
+                  sheetTitle="Payment"
+                />
+              </FormControl>
+              <p className="text-muted-foreground text-xs">
+                {field.value === "equal_principal"
+                  ? "Same principal each month, interest on what is left. Most Vietnamese banks."
+                  : "One amount each month, like a US mortgage."}
+              </p>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <FormField
+        control={form.control}
+        name="followSchedule"
+        render={({ field }) => (
+          <FormItem className="flex items-start justify-between gap-4 rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <FormLabel>Balance follows the schedule</FormLabel>
+              <p className="text-muted-foreground text-xs leading-snug">
+                Steps the balance down on each payment day. Type the balance your bank shows any time and it carries on from there.
+              </p>
+            </div>
+            <FormControl>
+              <Switch checked={!!field.value} onCheckedChange={field.onChange} aria-label="Balance follows the schedule" />
+            </FormControl>
           </FormItem>
         )}
       />
