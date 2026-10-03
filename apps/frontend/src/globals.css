@@ -360,7 +360,7 @@
   --color-purple-950: #1a1623;
 
   /* Custom sizes */
-  --spacing-sidebar: 220px;
+  --spacing-sidebar: 244px; /* money-hub: room for "Lam’sfolio" beside the logo on the top row */
   --spacing-sidebar-collapsed: 84px; /* money-hub: WheelTradr's rail, room for a name under each icon */
   --grid-template-columns-sidebar: 200px auto;
   --grid-template-columns-sidebar-collapsed: 84px auto;
@@ -1866,6 +1866,17 @@ summary {
   background: var(--ms-fill);
   box-shadow: var(--ms-fill-shadow);
   color: var(--ms-on-fill);
+}
+/* The name beside the logo: Meadow never goes bold; Bronze sets it in its display serif. */
+[data-mside] [data-mside-brand] {
+  font-weight: 500;
+  color: var(--ms-ink);
+}
+:is(.light [data-mside][data-light-skin="bronze"], .dark [data-mside][data-dark-skin="bronze"])
+  [data-mside-brand] {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-weight: 600;
+  font-size: 20px;
 }
 /* The floating bottom bars (phone, and the computer's bottom-bar mode): the bar in the theme's surface or
    glass, the stock sheen layers off, the current page's pill in the fill. */

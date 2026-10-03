@@ -29,14 +29,17 @@ interface AppSidebarProps {
 const modKey = isAppleDevice() ? "⌘" : "Ctrl";
 
 // money-hub patch: a compact sidebar like Monarch's (owner, 10-02, with a picture of Monarch: "make the menu
-// side bar of money compact like this, not too tall but very readable"). The logo, Search, Alerts, Settings
-// and the collapse button share the top row (a column when collapsed); pages are 36px rows in 15px type.
+// side bar of money compact like this, not too tall but very readable"). The logo and the app's name, Search,
+// Alerts and the collapse button share the top row (a column when collapsed; owner: never a second row);
+// Settings sits at the bottom above Logout (owner, 10-02); pages are 36px rows in 15px type.
 const ROW =
   "text-foreground [&_svg]:size-[18px]! mb-0.5 h-9 gap-3 rounded-md text-[15px] transition-all duration-300";
 // money-hub patch: collapsed, a row is its icon over its name in 10px type, like WheelTradr's rail (owner,
 // 10-02: "even in collapsed mode it still shows the name of the menu item"); the rail is 84px for it.
 const rowAlign = (collapsed: boolean) =>
-  collapsed ? "h-auto w-full flex-col justify-center gap-1 px-0.5 py-2 [&_svg]:size-5!" : "justify-start px-3";
+  collapsed
+    ? "h-auto w-full flex-col justify-center gap-1 px-0.5 py-2 [&_svg]:size-5!"
+    : "justify-start px-3";
 /** The row's name: beside the icon, or under it in small type when collapsed. */
 function RowLabel({ collapsed, children }: { collapsed: boolean; children: ReactNode }) {
   return (
@@ -51,16 +54,15 @@ function RowLabel({ collapsed, children }: { collapsed: boolean; children: React
     </span>
   );
 }
-/** The top row's buttons: 32px squares, full-width rows when the sidebar is narrow. */
+/** The top row's buttons: 28px squares, full-width rows when the sidebar is narrow. */
 const headButton = (collapsed: boolean) =>
   cn(
-    "text-muted-foreground hover:text-foreground [&_svg]:size-[18px]! shrink-0 rounded-md p-0 transition-colors",
-    collapsed ? "mb-0.5 h-9 w-full" : "size-8",
+    "text-muted-foreground hover:text-foreground [&_svg]:size-[18px]! shrink-0 rounded-md p-0 transition-colors has-[>svg]:px-0",
+    collapsed ? "mb-0.5 h-9 w-full" : "size-7",
   );
 
 export function AppSidebar({ navigation }: AppSidebarProps) {
   const { t } = useTranslation();
-  const location = useLocation();
   // Remember expanded/collapsed per profile; first visit still starts collapsed.
   const [collapsed, setCollapsed] = usePersistentState("sidebar-collapsed", true);
   const { logout, requiresAuth } = useAuth();
@@ -106,20 +108,32 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                     to="/"
                     title={t("common:dashboard")}
                     className={cn(
-                      "group/logo block shrink-0 [perspective:400px]",
-                      collapsed ? "mb-2" : "mr-auto",
+                      "group/logo flex items-center gap-2",
+                      collapsed ? "mb-2 shrink-0" : "mr-auto min-w-0 pr-2",
                     )}
                   >
-                    <img
-                      className={cn(
-                        "h-8 w-8 rounded-full bg-transparent shadow-md transition-transform duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
-                        collapsed
-                          ? "motion-safe:[transform:rotateY(180deg)] motion-safe:group-hover/logo:[transform:rotateY(360deg)]"
-                          : "motion-safe:[transform:rotateY(0deg)] motion-safe:group-hover/logo:[transform:rotateY(180deg)]",
-                      )}
-                      aria-hidden="true"
-                      src="/logo.png"
-                    />
+                    <span className="block shrink-0 [perspective:400px]">
+                      <img
+                        className={cn(
+                          "h-8 w-8 rounded-full bg-transparent shadow-md transition-transform duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+                          collapsed
+                            ? "motion-safe:[transform:rotateY(180deg)] motion-safe:group-hover/logo:[transform:rotateY(360deg)]"
+                            : "motion-safe:[transform:rotateY(0deg)] motion-safe:group-hover/logo:[transform:rotateY(180deg)]",
+                        )}
+                        aria-hidden="true"
+                        src="/logo.png"
+                      />
+                    </span>
+                    {/* money-hub patch: the app's own name (owner, 10-02: "bring back the Wealthfolio name next to
+                        the logo, but rename it to Lam'sfolio"). */}
+                    {!collapsed && (
+                      <span
+                        data-mside-brand=""
+                        className="text-foreground/90 truncate whitespace-nowrap font-serif text-[15px] leading-none"
+                      >
+                        Lam’sfolio
+                      </span>
+                    )}
                   </Link>
 
                   <Button
@@ -149,28 +163,6 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
 
                   {/* money-hub patch: the bell, every alert sent (features/notifications). */}
                   <NotificationsBell variant="sidebar" className={headButton(collapsed)} />
-
-                  {navigation?.secondary?.map((item) => {
-                    const isActive = isPathActive(location.pathname, item.href);
-                    return (
-                      <Button
-                        key={item.title}
-                        variant="ghost"
-                        asChild
-                        data-mside-icon=""
-                        className={headButton(collapsed)}
-                      >
-                        <Link
-                          to={item.href}
-                          title={item.title}
-                          aria-label={item.title}
-                          aria-current={isActive ? "page" : undefined}
-                        >
-                          {resolveNavigationIcon(item.icon, "size-[18px]")}
-                        </Link>
-                      </Button>
-                    );
-                  })}
 
                   <Button
                     type="button"
@@ -216,6 +208,9 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
             </div>
 
             <div className={cn("flex shrink-0 flex-col py-2", collapsed ? "px-1" : "px-2")}>
+              {navigation?.secondary?.map((item) => (
+                <NavItem key={item.title} item={item} collapsed={collapsed} />
+              ))}
               {!CONNECT_HIDDEN && <ConnectNavItem collapsed={collapsed} />}
               {isWeb && requiresAuth && (
                 <Button
