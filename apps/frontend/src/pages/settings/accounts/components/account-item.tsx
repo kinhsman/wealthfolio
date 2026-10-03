@@ -70,16 +70,17 @@ export function AccountItem({
   return (
     <div className="flex items-center justify-between p-4">
       <div className="flex items-center gap-3">
-        {/* Avatar with platform logo or account type icon */}
-        <Avatar className="h-10 w-10 rounded-lg">
+        {/* Avatar with platform logo or account type icon. money-hub patch: round, the logo at 70% on
+            white so a square logo's corners stay inside the circle (owner, 10-02). */}
+        <Avatar className="h-10 w-10 rounded-full border">
           {logoUrl ? (
             <AvatarImage
               src={logoUrl}
               alt={platform?.name || account.group || t("settings:accounts.platform_alt")}
-              className="bg-white object-contain p-1"
+              className="bg-white object-contain p-[15%]"
             />
           ) : null}
-          <AvatarFallback className={`rounded-lg ${typeConfig.bgClass}`}>
+          <AvatarFallback className={`rounded-full ${typeConfig.bgClass}`}>
             <IconComponent className={`h-5 w-5 ${typeConfig.iconClass}`} />
           </AvatarFallback>
         </Avatar>

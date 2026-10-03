@@ -25,6 +25,7 @@ export function McpHero({
   return (
     <section
       aria-label={t("settings:agentAccess.hero_aria")}
+      data-m="hero" // money-hub patch: the theme's highlight card on Settings (globals.css [data-mset])
       className="bg-foreground text-background relative overflow-hidden rounded-lg shadow-lg"
     >
       <div className="p-5 sm:px-7 sm:py-6">

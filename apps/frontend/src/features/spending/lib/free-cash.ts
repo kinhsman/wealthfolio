@@ -116,12 +116,13 @@ function parseMeta(meta?: string | null): Record<string, unknown> {
 }
 
 /** Whether an account's cash counts as free cash: its own switch (meta.freeCash), else a bank account
- *  linked through Plaid that is not a card. Never a card. The service's countsAsCash has the same rule. */
+ *  linked through Plaid or the bank's alert emails (MB, ACB) that is not a card. Never a card. The
+ *  service's countsAsCash has the same rule. */
 export function countsAsFreeCash(account: { accountType: string; meta?: string | null }): boolean {
   if (account.accountType === "CREDIT_CARD") return false;
   const meta = parseMeta(account.meta);
   if (typeof meta.freeCash === "boolean") return meta.freeCash;
-  return account.accountType === "CASH" && meta.source === "plaid";
+  return account.accountType === "CASH" && (meta.source === "plaid" || meta.source === "email");
 }
 
 export function setFreeCashInMeta(meta: string | null | undefined, on: boolean): string {

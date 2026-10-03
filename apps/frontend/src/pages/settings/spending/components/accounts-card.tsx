@@ -108,14 +108,16 @@ export function AccountsCard() {
                 >
                   <div
                     className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-md border",
+                      // money-hub patch: round like the other account logos (owner, 10-02).
+                      "flex h-8 w-8 items-center justify-center rounded-full border",
                       tracked
                         ? "bg-background border-border text-foreground"
                         : "border-border/60 text-muted-foreground bg-transparent",
+                      logoUrl && "bg-white",
                     )}
                   >
                     {logoUrl ? (
-                      <img src={logoUrl} alt="" className="h-5 w-5 rounded-sm object-contain" />
+                      <img src={logoUrl} alt="" className="h-[70%] w-[70%] object-contain" />
                     ) : (
                       <TypeIcon size={18} weight="duotone" />
                     )}

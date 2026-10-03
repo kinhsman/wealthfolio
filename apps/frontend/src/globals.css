@@ -1922,6 +1922,16 @@ summary {
   box-shadow: var(--bt-glass-edge);
   border-radius: 14px;
 }
+/* The stock inverted banners (Spending Tracker, AI Agent Access) become the theme's one highlight card:
+   Meadow's mint panel, Bronze's glowing hero (the rule above). Their text is drawn in the page colour,
+   so that colour is pointed at the hero's ink. */
+[data-mset] [data-m="hero"] {
+  --background: var(--m-mint-ink);
+  background: var(--m-mint);
+  color: var(--m-mint-ink);
+  border-radius: 20px;
+  box-shadow: none;
+}
 [data-mset] aside nav a {
   border-radius: 12px;
 }
