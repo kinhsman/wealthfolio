@@ -5,11 +5,12 @@
 // (Settings, Banks, Email alerts) and Amazon orders, which reads the account the owner picks here
 // ("allow user to switch to whatever google account they connected"). The money-hub service keeps the
 // links (/api/money-hub/email, lib/emailAlerts.js) and Amazon (/api/money-hub/amazon, lib/amazon.js).
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
+import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { SettingsHeader } from "../settings-header";
 
 const EMAIL = "/api/money-hub/email";
@@ -27,6 +28,10 @@ interface AmazonStatus {
   matched: number;
   returns: number;
   last: { at: string; read: number; orders: number; charges: number; matched: number; errors: string[] } | null;
+  /** Each kind Amazon names on the matched charges, and the owner's category for it (null: left as it is). */
+  kinds?: { kind: string; charges: number; last: string | null; categoryId: string | null }[];
+  /** How many charges took their kind's category so far. */
+  categorized?: number;
 }
 
 async function call<T>(base: string, method: string, path: string, body?: unknown): Promise<T> {
@@ -110,6 +115,51 @@ function Logo({ src, children }: { src?: string; children?: ReactNode }) {
 }
 
 const AMAZON_LOGO = "https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/amazon.png";
+
+/** Amazon's kinds to the owner's categories (owner, 10-03: "does amazon orders has a feature to
+ *  autobcategorize?"): one picker per kind; a charge you filed by hand is never moved. */
+function AmazonCategories({ amazon, busy, onPick }: { amazon: AmazonStatus; busy: boolean; onPick: (kind: string, categoryId: string | null) => void }) {
+  const { data: tax } = useTaxonomy("spending_categories");
+  const options = useMemo(() => {
+    const cats = tax?.categories ?? [];
+    const byId = new Map(cats.map((c) => [c.id, c]));
+    return cats
+      .map((c) => ({ id: c.id, label: c.parentId && byId.get(c.parentId) ? `${byId.get(c.parentId)!.name} › ${c.name}` : c.name }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [tax]);
+  const kinds = amazon.kinds ?? [];
+  if (!kinds.length) return null;
+  return (
+    <div className="space-y-2 border-t px-4 py-3 text-xs">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-foreground font-medium">Categories</span>
+        <span className="text-muted-foreground">
+          {amazon.categorized ? `${amazon.categorized} charges filed · ` : ""}one you filed by hand never moves
+        </span>
+      </div>
+      <div className="divide-y">
+        {kinds.map((k) => (
+          <label key={k.kind} className="flex items-center gap-2 py-1.5">
+            <span className="min-w-0 flex-1">
+              <span className="text-foreground block truncate">{k.kind}</span>
+              <span className="text-muted-foreground block">{k.charges} {k.charges === 1 ? "charge" : "charges"}</span>
+            </span>
+            <select
+              value={k.categoryId ?? ""}
+              disabled={busy || !options.length}
+              onChange={(e) => onPick(k.kind, e.target.value || null)}
+              className={`${field} w-[46%] shrink-0 sm:w-auto sm:max-w-[220px]`}
+              aria-label={`Category for ${k.kind}`}
+            >
+              <option value="">Leave as it is</option>
+              {options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function GoogleSettingsPage() {
   const [email, setEmail] = useState<EmailStatus | null>(null);
@@ -239,6 +289,11 @@ export default function GoogleSettingsPage() {
                 </div>
                 {amazonErrors ? <p className="text-warning">{amazon.last?.errors.join(" · ")}</p> : null}
               </div>
+            ) : null}
+            {amazon.on ? (
+              <AmazonCategories amazon={amazon} busy={!!busy}
+                onPick={(kind, categoryId) => run(`amazon-cat:${kind}`, () => call<AmazonStatus>(AMAZON, "PUT", "", { kind, categoryId }), setAmazon,
+                  categoryId ? `Saved. ${kind} charges are being filed now.` : `${kind} left as it is.`)} />
             ) : null}
           </div>
         ) : null}
