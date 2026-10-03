@@ -71,7 +71,12 @@ function usePendingView(p: PendingTransaction, account: Account | undefined) {
     merchant,
     name,
     bankLine: p.notes && p.bankText && p.bankText !== p.notes ? p.bankText : null,
-    day: formatDate(`${p.date}T12:00:00`, { month: "short", day: "numeric" }),
+    // The year only when it is not this one, like the posted rows.
+    day: formatDate(`${p.date}T12:00:00`, {
+      month: "short",
+      day: "numeric",
+      ...(p.date.slice(0, 4) !== String(new Date().getFullYear()) ? { year: "numeric" } : {}),
+    }),
     amountClass: p.amount < 0 ? "text-destructive/70" : "text-success/70",
     amount: (
       <>

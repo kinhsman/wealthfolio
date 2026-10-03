@@ -145,7 +145,11 @@ function TransactionRowImpl({
           {formatDate(a.activityDate, {
             month: "short",
             day: "numeric",
-            year: "numeric",
+            // money-hub patch: the year only when it is not this one, like the phone cards and the
+            // pending rows (owner, 10-02).
+            ...(new Date(a.activityDate).getFullYear() !== new Date().getFullYear()
+              ? { year: "numeric" }
+              : {}),
             ...(appTimezone ? { timeZone: appTimezone } : {}),
           })}
         </TableCell>
