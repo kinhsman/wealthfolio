@@ -183,6 +183,7 @@ import {
 import type { ComponentType, CSSProperties } from "react";
 
 // Phosphor icons - deep imports for optimal tree shaking with Vite
+import { BankIcon } from "@phosphor-icons/react/dist/csr/Bank";
 import { CalendarDotsIcon } from "@phosphor-icons/react/dist/csr/CalendarDots";
 import { CarProfileIcon } from "@phosphor-icons/react/dist/csr/CarProfile";
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ClockCounterClockwise";
@@ -757,6 +758,10 @@ const IconsInternal = {
   House: ({ size, className, style, color }: IconProps) => (
     <HouseIcon size={size} weight="duotone" className={className} style={style} color={color} />
   ),
+  // money-hub patch: the Taxes page's own picture; Invoice is the same drawing as Activity (Transactions).
+  Taxes: ({ size, className, style, color }: IconProps) => (
+    <BankIcon size={size} weight="duotone" className={className} style={style} color={color} />
+  ),
   UploadSimple: ({ size, className, style, color }: IconProps) => (
     <UploadSimpleIcon size={size} weight="duotone" className={className} style={style} color={color} />
   ),
@@ -1006,6 +1011,7 @@ export type IconName =
   | "Upload"
   | "DotsThree"
   | "House"
+  | "Taxes"
   | "UploadSimple"
   | "ClockCounterClockwise"
   | "RealEstateDuotone"
