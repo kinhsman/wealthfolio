@@ -47,7 +47,7 @@ import { PhoneFold } from "../components/phone-fold";
 import { useDashboardSkins } from "../lib/dashboard-skin";
 import { StreamCategory, useStreamCategory } from "../components/stream-category";
 import { StreamLogo } from "../components/stream-logo";
-import { billMonth, ymd } from "../lib/bill-calendar";
+import { billMonth, ymd, type BillMonth } from "../lib/bill-calendar";
 import type { BillDue } from "../lib/budget-forecast";
 import { ruleOfferStore } from "../lib/rule-offer";
 import { FrequencyPicker } from "../components/frequency-picker";
@@ -59,6 +59,7 @@ import {
   localToday,
   nextChargeAfter,
   openDatePicker,
+  partitionPaidStreams,
   rentalSettingsHref,
   shortDate,
   statusLabel,
@@ -295,9 +296,10 @@ export default function SpendingSubscriptionsPage() {
   };
 
   const items = data?.items ?? [];
-  // The next one due on top (owner, 10-01: "sort the subscription by due day, up coming on top");
-  // stopped ones by when they were last paid, the latest first.
-  const live = items.filter((s) => s.status !== "stopped").sort((a, b) => a.dueInDays - b.dueInDays || a.name.localeCompare(b.name));
+  const today = useMemo(() => ymd(new Date()), []);
+  const m = useMemo(() => ({ ...billMonth(items, today), month: new Date().toLocaleDateString(undefined, { month: "long" }), today }), [items, today]);
+  const { upcoming: upcomingLive, paid } = useMemo(() => partitionPaidStreams(items, m), [items, m]);
+
   const groups: { group: StreamGroup; title: string; monthly: number; blurb: string }[] = [
     { group: "subscriptions", title: "Subscriptions", monthly: data?.totals.subscriptionsMonthly ?? 0, blurb: "Services you pay for again and again." },
     { group: "bills", title: "Bills", monthly: data?.totals.billsMonthly ?? 0, blurb: "Utilities, phone, insurance and the like." },
@@ -305,6 +307,11 @@ export default function SpendingSubscriptionsPage() {
   const stopped = items
     .filter((s) => s.status === "stopped")
     .sort((a, b) => (b.last?.date ?? "").localeCompare(a.last?.date ?? "") || a.name.localeCompare(b.name));
+
+  const paidTotal = useMemo(() => {
+    const keys = new Set(paid.map((s) => s.key));
+    return Math.round(m.paid.filter((b) => keys.has(b.key)).reduce((acc, b) => acc + b.amount, 0) * 100) / 100;
+  }, [m.paid, paid]);
 
   const rowProps = { currency, busy, act };
 
@@ -360,7 +367,8 @@ export default function SpendingSubscriptionsPage() {
                 <ThisMonth
                   items={items}
                   currency={currency}
-                  totals={{ monthly: data.totals.monthly, yearly: data.totals.yearly, repeating: live.length, stopped: stopped.length }}
+                  totals={{ monthly: data.totals.monthly, yearly: data.totals.yearly, repeating: items.filter((s) => s.status !== "stopped").length, stopped: stopped.length }}
+                  monthInfo={m}
                 />
               </div>
               {items.length > 0 ? (
@@ -386,8 +394,9 @@ export default function SpendingSubscriptionsPage() {
                 ) : null}
 
                 {groups.map((g) => {
-                  const rows = live.filter((s) => s.group === g.group);
-                  if (!rows.length) return null;
+                  const allInGroup = items.filter((s) => s.status !== "stopped" && s.group === g.group);
+                  if (!allInGroup.length) return null;
+                  const rows = upcomingLive.filter((s) => s.group === g.group);
                   // Paid from a mortgage's escrow: shown, but counted once, in the mortgage payment.
                   const inMortgage = rows.filter((s) => s.escrow);
                   const lenders = [...new Set(inMortgage.map((s) => s.escrow?.mortgageName).filter(Boolean))];
@@ -407,19 +416,46 @@ export default function SpendingSubscriptionsPage() {
                         ) : null
                       }
                     >
-                      {rows.slice(0, 6).map((s) => (
-                        <StreamRow key={s.key} s={s} {...rowProps} />
-                      ))}
-                      {rows.length > 6 ? (
-                        <PhoneFold id={`subscriptions-${g.group}`} closedLabel={`Show ${rows.length - 6} more`} openLabel="Show less">
-                          {rows.slice(6).map((s) => (
+                      {rows.length === 0 ? (
+                        <p className="text-muted-foreground py-2 text-xs">All paid for {m.month}.</p>
+                      ) : (
+                        <>
+                          {rows.slice(0, 6).map((s) => (
                             <StreamRow key={s.key} s={s} {...rowProps} />
                           ))}
-                        </PhoneFold>
-                      ) : null}
+                          {rows.length > 6 ? (
+                            <PhoneFold id={`subscriptions-${g.group}`} closedLabel={`Show ${rows.length - 6} more`} openLabel="Show less">
+                              {rows.slice(6).map((s) => (
+                                <StreamRow key={s.key} s={s} {...rowProps} />
+                              ))}
+                            </PhoneFold>
+                          ) : null}
+                        </>
+                      )}
                     </Section>
                   );
                 })}
+
+                {paid.length ? (
+                  <Section
+                    title="Paid items"
+                    blurb={`${paid.length} charge${paid.length === 1 ? "" : "s"} already paid this month.`}
+                    collapsible
+                    defaultOpen={false}
+                    aside={<><PrivacyAmount value={paidTotal} currency={currency} /> this month</>}
+                  >
+                    {paid.slice(0, 6).map((s) => (
+                      <StreamRow key={s.key} s={s} {...rowProps} />
+                    ))}
+                    {paid.length > 6 ? (
+                      <PhoneFold id="subscriptions-paid" closedLabel={`Show ${paid.length - 6} more`} openLabel="Show less">
+                        {paid.slice(6).map((s) => (
+                          <StreamRow key={s.key} s={s} {...rowProps} />
+                        ))}
+                      </PhoneFold>
+                    ) : null}
+                  </Section>
+                ) : null}
 
                 {stopped.length ? (
                   <Section title="Stopped" blurb="No charge for two periods. Cancelled, or the card changed.">
@@ -537,14 +573,17 @@ function ThisMonth({
   items,
   currency,
   totals,
+  monthInfo,
 }: {
   items: Stream[];
   currency: string;
   totals: { monthly: number; yearly: number; repeating: number; stopped: number };
+  monthInfo?: BillMonth & { month: string; today: string };
 }) {
   const phone = useIsMobileViewport();
-  const today = ymd(new Date());
-  const m = useMemo(() => ({ ...billMonth(items, today), month: new Date().toLocaleDateString(undefined, { month: "long" }), today }), [items, today]);
+  const today = useMemo(() => ymd(new Date()), []);
+  const fallbackM = useMemo(() => ({ ...billMonth(items, today), month: new Date().toLocaleDateString(undefined, { month: "long" }), today }), [items, today]);
+  const m = monthInfo ?? fallbackM;
   const byKey = useMemo(() => new Map(items.map((s) => [s.key, s])), [items]);
   const whole = Math.max(0, m.paidTotal) + m.leftTotal;
   const pct = whole > 0 ? Math.min(100, (Math.max(0, m.paidTotal) / whole) * 100) : 0;
@@ -659,33 +698,74 @@ function Section({
   blurb,
   aside,
   note,
+  collapsible = false,
+  defaultOpen = true,
   children,
 }: {
   title: string;
   blurb?: string;
   aside?: ReactNode;
   note?: ReactNode;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
   children: ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+
   return (
     <section
       data-m="card"
       aria-label={title}
-      className="min-w-0 rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-[18px] pb-2 pt-3.5 max-md:px-3 max-md:pb-1 max-md:pt-2.5"
+      className={cn(
+        "min-w-0 rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-[18px] pt-3.5 max-md:px-3 max-md:pt-2.5",
+        collapsible && !open ? "pb-3.5 max-md:pb-2.5" : "pb-2 max-md:pb-1",
+      )}
     >
-      <div className="flex items-baseline justify-between gap-3 pb-1.5">
+      <div
+        className={cn(
+          "flex items-baseline justify-between gap-3 pb-1.5",
+          collapsible && "cursor-pointer select-none",
+        )}
+        onClick={collapsible ? () => setOpen((v) => !v) : undefined}
+      >
         <div className="flex min-w-0 items-baseline gap-2.5">
-          <h2 className="text-sm font-medium">{title}</h2>
+          {collapsible ? (
+            <h2 className="text-sm font-medium">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpen((v) => !v);
+                }}
+                aria-expanded={open}
+                className="flex items-center gap-1.5 rounded transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--m-ink)]"
+              >
+                <span>{title}</span>
+                <span
+                  aria-hidden
+                  className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--m-tile)] text-[var(--m-muted)]"
+                >
+                  {open ? <Icons.ChevronUp className="h-3 w-3" /> : <Icons.ChevronDown className="h-3 w-3" />}
+                </span>
+              </button>
+            </h2>
+          ) : (
+            <h2 className="text-sm font-medium">{title}</h2>
+          )}
           {blurb ? <span className="hidden truncate text-[12.5px] text-[var(--m-muted)] sm:inline">{blurb}</span> : null}
         </div>
         {aside ? <span className="shrink-0 whitespace-nowrap text-[13px] tabular-nums text-[var(--m-muted)] [&>span:first-child]:font-medium [&>span:first-child]:text-[var(--m-ink)]">{aside}</span> : null}
       </div>
-      <div className="flex flex-col">{children}</div>
-      {note ? (
-        <p className="mb-1.5 mt-1 flex gap-2 rounded-[14px] bg-[var(--m-sand)] px-2.5 py-2 text-xs leading-snug text-[var(--m-ink-2)]">
-          <Icons.Home className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--m-muted)]" aria-hidden />
-          <span>{note}</span>
-        </p>
+      {!collapsible || open ? (
+        <>
+          <div className="flex flex-col">{children}</div>
+          {note ? (
+            <p className="mb-1.5 mt-1 flex gap-2 rounded-[14px] bg-[var(--m-sand)] px-2.5 py-2 text-xs leading-snug text-[var(--m-ink-2)]">
+              <Icons.Home className="mt-px h-3.5 w-3.5 shrink-0 text-[var(--m-muted)]" aria-hidden />
+              <span>{note}</span>
+            </p>
+          ) : null}
+        </>
       ) : null}
     </section>
   );

@@ -486,3 +486,26 @@ export function upcoming(items: Stream[], limit = 3): Stream[] {
     .sort((a, b) => a.dueInDays - b.dueInDays || b.monthly - a.monthly)
     .slice(0, limit);
 }
+
+/**
+ * Splits live streams into upcoming/due streams and those already paid this month.
+ * A stream counts as paid when it has a charge this month and no more charges left to pay this month.
+ */
+export function partitionPaidStreams(
+  items: Stream[],
+  billMonthInfo: { paid: { key: string }[]; left: { key: string }[] },
+): { upcoming: Stream[]; paid: Stream[] } {
+  const paidKeys = new Set(billMonthInfo.paid.map((b) => b.key));
+  const leftKeys = new Set(billMonthInfo.left.map((b) => b.key));
+  const isPaid = (s: Stream) => paidKeys.has(s.key) && !leftKeys.has(s.key);
+
+  const live = items.filter((s) => s.status !== "stopped");
+  const upcoming = live
+    .filter((s) => !isPaid(s))
+    .sort((a, b) => a.dueInDays - b.dueInDays || a.name.localeCompare(b.name));
+  const paid = live
+    .filter(isPaid)
+    .sort((a, b) => (b.last?.date ?? "").localeCompare(a.last?.date ?? "") || a.name.localeCompare(b.name));
+
+  return { upcoming, paid };
+}

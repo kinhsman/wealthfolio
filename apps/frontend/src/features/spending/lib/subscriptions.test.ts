@@ -11,6 +11,7 @@ import {
   subscriptionFilterOptions,
   transactionsHref,
   upcoming,
+  partitionPaidStreams,
   type Stream,
 } from "@/features/spending/lib/subscriptions";
 
@@ -153,5 +154,37 @@ describe("custom frequencies (every # week/month/year)", () => {
     expect(nextChargeAfter("2026-09-01", "2 weeks", true, "2026-10-03")).toBe("2026-10-13");
     expect(nextChargeAfter("2026-09-01", "2 months")).toBe("2026-11-01");
     expect(nextChargeAfter("2026-09-01", "2 years")).toBe("2028-09-01");
+  });
+});
+
+describe("partitionPaidStreams", () => {
+  it("splits streams into upcoming and paid this month, stopped excluded from both", () => {
+    const paidStream = mk({ key: "paid1", name: "Netflix", last: { date: "2026-10-01", amount: 15, id: "c1" }, next: "2026-11-01", dueInDays: 29 });
+    const upcomingStream = mk({ key: "up1", name: "Electric", dueInDays: 5, next: "2026-10-08" });
+    const futureStream = mk({ key: "fut1", name: "Annual Prime", dueInDays: 60, next: "2026-12-03" });
+    const stoppedStream = mk({ key: "stop1", name: "Gym", status: "stopped" });
+    // Weekly stream that had 1 charge paid but still has another charge due this month
+    const weeklyStream = mk({ key: "week1", name: "Weekly Meal", dueInDays: 7, next: "2026-10-10" });
+
+    const monthInfo = {
+      paid: [{ key: "paid1" }, { key: "week1" }],
+      left: [{ key: "up1" }, { key: "week1" }],
+    };
+
+    const res = partitionPaidStreams([paidStream, upcomingStream, futureStream, stoppedStream, weeklyStream], monthInfo);
+
+    expect(res.paid.map((s) => s.key)).toEqual(["paid1"]);
+    expect(res.upcoming.map((s) => s.key)).toEqual(["up1", "week1", "fut1"]);
+  });
+
+  it("sorts paid items by last paid date descending", () => {
+    const s1 = mk({ key: "s1", name: "Stream 1", last: { date: "2026-10-01", amount: 10, id: "1" } });
+    const s2 = mk({ key: "s2", name: "Stream 2", last: { date: "2026-10-03", amount: 20, id: "2" } });
+    const monthInfo = {
+      paid: [{ key: "s1" }, { key: "s2" }],
+      left: [],
+    };
+    const res = partitionPaidStreams([s1, s2], monthInfo);
+    expect(res.paid.map((s) => s.key)).toEqual(["s2", "s1"]);
   });
 });
