@@ -11,6 +11,7 @@ import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { SettingsHeader } from "../settings-header";
 import { EmailBanksSection } from "./email-banks-section";
+import { RoundLogo } from "@/components/round-logo";
 
 const BASE = "/api/money-hub/plaid";
 
@@ -266,11 +267,14 @@ export default function BanksSettingsPage() {
             <div key={item.id} className="bg-card rounded-xl border">
               <div className="flex items-center justify-between gap-3 px-4 py-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="bg-muted flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-                    {item.institution.logoUrl
-                      ? <img src={item.institution.logoUrl} alt="" className="size-7 object-contain" />
-                      : <Icons.Building className="text-primary size-5" />}
-                  </span>
+                  {/* money-hub patch: the bank's logo filling its circle, no white ring (owner, 10-02). */}
+                  {item.institution.logoUrl
+                    ? <RoundLogo url={item.institution.logoUrl} name={item.institution.name} className="size-10" />
+                    : (
+                      <span className="bg-muted flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full">
+                        <Icons.Building className="text-primary size-5" />
+                      </span>
+                    )}
                   <div className="min-w-0 flex-1">
                     <InlineName value={item.institution.name} fallback={item.institution.plaidName} disabled={!!busy}
                       className="text-sm font-semibold"

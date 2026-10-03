@@ -24,7 +24,7 @@ import { usePersistentState } from "@/hooks/use-persistent-state";
 import { InfiniteScrollTrigger } from "@/components/infinite-scroll-trigger";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { QueryKeys } from "@/lib/query-keys";
-import { cn, formatDateISO } from "@/lib/utils";
+import { formatDateISO } from "@/lib/utils";
 import type { Account, ActivityDetails, TaxonomyCategory } from "@/lib/types";
 import { useSettingsContext } from "@/lib/settings-provider";
 
@@ -51,7 +51,7 @@ import { ActivityType } from "@/lib/constants";
 import type { AmountRange } from "./amount-range-filter";
 import { DeleteTransactionsDialog, type DeletePreview } from "./delete-transactions-dialog";
 import { TransactionCard } from "./transaction-card";
-import { PendingTransactions, usePendingTransactions } from "./pending-transactions";
+import { PendingCards, PendingHeaderRow, PendingRow, usePendingTransactions } from "./pending-transactions";
 import { useDashboardSkins } from "../lib/dashboard-skin";
 import { SelectionToolbar } from "./selection-toolbar";
 import { TransactionDayHeader, TransactionDayHeading } from "./transaction-day-header";
@@ -574,7 +574,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       return m;
     }, [spendingAccounts]);
 
-    // money-hub patch: bank entries not posted yet, read-only above the list. Shown unless a
+    // money-hub patch: bank entries not posted yet, read-only at the top of the list. Shown unless a
     // filter they cannot answer is on (category, type, status, event, amount, dates).
     const { data: pendingAll = [] } = usePendingTransactions();
     const pendingShown = useMemo(() => {
@@ -621,10 +621,12 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       [items, allCategories],
     );
 
-    /** Account is only worth a slot in the row when the results span several. */
+    /** Account is only worth a column when the results span several (money-hub: pending ones too). */
     const showAccount = useMemo(
-      () => new Set(rows.map((r) => r.activity.accountId)).size > 1,
-      [rows],
+      () =>
+        new Set([...rows.map((r) => r.activity.accountId), ...pendingShown.map((p) => p.accountId)])
+          .size > 1,
+      [rows, pendingShown],
     );
 
     const dayGroups = useMemo(() => groupRowsByDay(rows, appTimezone), [rows, appTimezone]);
@@ -1050,8 +1052,9 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
           : rows.map((row) => ({ kind: "row" as const, key: row.activity.id, row })),
       [groupByDay, dayGroups, rows],
     );
-    /** The table's column count, for the spacer rows that span it. */
-    const columnCount = groupByDay ? 5 : 6;
+    /** The table's column count, for the spacer rows that span it (money-hub: + Date when the day
+     *  groups are off, + Account when the list spans several accounts). */
+    const columnCount = 5 + (groupByDay ? 0 : 1) + (showAccount ? 1 : 0);
 
     // Neither layout owns its scroll box — the table scrolls with the page, the
     // card list scrolls inside its swipeable pane — so both sit below a filter
@@ -1197,6 +1200,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
               selectionState={daySelectionState(item.group)}
               onToggleDay={handleToggleDay}
               isPartial={hasNextPage === true && item.isLastGroup}
+              showAccount={showAccount}
             />
           ) : (
             <TransactionRow
@@ -1232,8 +1236,9 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
     }, [editingActivity]);
 
     // money-hub patch: the Spending dashboard's look, Meadow or Bronze per mode (owner, 10-02 canvas
-    // design): the filters across the top, the list in a card in two thirds, Pending in a card beside it.
-    const pendingCard = !isLoading && pendingShown.length > 0;
+    // design): the filters across the top, the list in a card below. Pending charges lead the list
+    // itself, read-only (owner, 10-02: "make the pending charge the same table").
+    const pendingRows = isLoading ? [] : pendingShown;
     return (
       <div className="meadow flex flex-col gap-3.5 max-md:gap-2" data-mdash data-light-skin={skins.light} data-dark-skin={skins.dark}>
         <TransactionsFilterBar
@@ -1287,21 +1292,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
           />
         )}
 
-        <div
-          className={cn("grid items-start gap-3.5 max-md:gap-2", pendingCard && "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]")}
-          style={{ overflowX: "visible" }}
-        >
-        {pendingCard && (
-          <aside className="min-w-0 lg:sticky lg:top-4 lg:order-2">
-            <PendingTransactions
-              items={pendingShown}
-              accountById={accountById}
-              showAccount={showAccount || new Set(pendingShown.map((p) => p.accountId)).size > 1}
-              isMobile={isMobile}
-            />
-          </aside>
-        )}
-        <div className="min-w-0 lg:order-1">
+        <div className="min-w-0">
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-12" />
@@ -1319,7 +1310,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
               {t("common:retry")}
             </Button>
           </EmptyPlaceholder>
-        ) : rows.length === 0 ? (
+        ) : rows.length === 0 && pendingRows.length === 0 ? (
           <EmptyPlaceholder>
             <EmptyPlaceholder.Icon name="Activity" />
             <EmptyPlaceholder.Title>{t("spending:txTab.noTransactions")}</EmptyPlaceholder.Title>
@@ -1339,6 +1330,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
           </EmptyPlaceholder>
         ) : isMobile ? (
           <div className="spending-activity-list space-y-2">
+            <PendingCards items={pendingRows} accountById={accountById} showAccount={showAccount} />
             <SelectionToolbar
               rowCount={rows.length}
               selectionMode={selectionMode}
@@ -1385,6 +1377,12 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
                   </TableHead>
                   {!groupByDay && <TableHead className="w-28 px-3">Date</TableHead>}
                   <TableHead className="px-3">{t("spending:txTab.nameNotes")}</TableHead>
+                  {/* money-hub patch: the account in its own column, its bank's logo first (owner, 10-02). */}
+                  {showAccount && (
+                    <TableHead className="w-40 px-3 max-lg:w-12">
+                      <span className="max-lg:sr-only">Account</span>
+                    </TableHead>
+                  )}
                   <TableHead className="hidden w-44 px-3 sm:table-cell">
                     {t("spending:filters.category")}
                   </TableHead>
@@ -1392,6 +1390,22 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
                   <TableHead className="w-10 px-3" />
                 </TableRow>
               </TableHeader>
+              {/* money-hub patch: pending charges in a body of their own above the posted ones, so the
+                  virtualizer's origin (the next body) stays where its rows start. */}
+              {pendingRows.length > 0 && (
+                <TableBody>
+                  <PendingHeaderRow count={pendingRows.length} columnCount={columnCount} />
+                  {pendingRows.map((p) => (
+                    <PendingRow
+                      key={p.id}
+                      p={p}
+                      account={accountById.get(p.accountId)}
+                      showAccount={showAccount}
+                      showDate={!groupByDay}
+                    />
+                  ))}
+                </TableBody>
+              )}
               {/* The ref goes on the body, not the table: the virtualizer's
                   origin has to be where the rows start, below the header. */}
               <TableBody ref={listRef}>{renderGroupedRows()}</TableBody>
@@ -1404,7 +1418,6 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
             )}
           </div>
         )}
-        </div>
         </div>
 
         <CashActivityForm

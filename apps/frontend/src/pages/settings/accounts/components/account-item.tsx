@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from "@wealthfolio/ui/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@wealthfolio/ui/components/ui/avatar";
 import { Icons, type Icon } from "@wealthfolio/ui/components/ui/icons";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@wealthfolio/ui";
@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { AccountOperations } from "./account-operations";
 import { displayAccountType } from "@/lib/account-display";
 import { accountLogoUrl } from "@/lib/account-logo";
+import { RoundLogo } from "@/components/round-logo";
 
 // Map account types to icons and colors for visual distinction
 const accountTypeConfig: Record<AccountType | "RENTAL", { icon: Icon; bgClass: string; iconClass: string }> = {
@@ -70,20 +71,21 @@ export function AccountItem({
   return (
     <div className="flex items-center justify-between p-4">
       <div className="flex items-center gap-3">
-        {/* Avatar with platform logo or account type icon. money-hub patch: round, the logo at 70% on
-            white so a square logo's corners stay inside the circle (owner, 10-02). */}
-        <Avatar className="h-10 w-10 rounded-full border">
-          {logoUrl ? (
-            <AvatarImage
-              src={logoUrl}
-              alt={platform?.name || account.group || t("settings:accounts.platform_alt")}
-              className="bg-white object-contain p-[15%]"
-            />
-          ) : null}
-          <AvatarFallback className={`rounded-full ${typeConfig.bgClass}`}>
-            <IconComponent className={`h-5 w-5 ${typeConfig.iconClass}`} />
-          </AvatarFallback>
-        </Avatar>
+        {/* Avatar with platform logo or account type icon. money-hub patch: the logo fills the circle on
+            its own background, no white ring (components/round-logo.tsx, owner 10-02). */}
+        {logoUrl ? (
+          <RoundLogo
+            url={logoUrl}
+            name={platform?.name || account.group || t("settings:accounts.platform_alt")}
+            className="h-10 w-10"
+          />
+        ) : (
+          <Avatar className="h-10 w-10 rounded-full border">
+            <AvatarFallback className={`rounded-full ${typeConfig.bgClass}`}>
+              <IconComponent className={`h-5 w-5 ${typeConfig.iconClass}`} />
+            </AvatarFallback>
+          </Avatar>
+        )}
 
         <div className="grid gap-1">
           <div className="flex items-center gap-2">

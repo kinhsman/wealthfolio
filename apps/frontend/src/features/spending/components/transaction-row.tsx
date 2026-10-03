@@ -33,6 +33,7 @@ import { QuickEventPopover } from "./quick-event-popover";
 import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
+import { AccountMark } from "./account-mark";
 import { useNotes } from "../lib/notes";
 import { PendingChangeTag } from "./pending-change-tag";
 import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
@@ -47,7 +48,7 @@ interface TransactionRowProps {
   event: { id: string; name: string; eventTypeId: string } | null;
   eventTypeColor: string | null;
   appTimezone?: string;
-  /** True when the loaded result set spans more than one account. */
+  /** True when the loaded result set spans more than one account: the Account column shows. */
   showAccount: boolean;
   /** money-hub patch: day groups switched off, so the date gets its own column. */
   showDate?: boolean;
@@ -187,13 +188,6 @@ function TransactionRowImpl({
           <ReturnBadge mark={returnMark} />
           {/* money-hub patch: the bank's own line after the payee (lib/bank-lines.ts). */}
           {bankLine ? <TruncatedText text={bankLine} className="text-muted-foreground flex-1 text-xs" /> : null}
-          {/* money-hub patch: it may shrink (truncate) rather than spill into the Category column when
-              the Date column takes room (day groups off, 10-02). */}
-          {showAccount && (
-            <span className="text-muted-foreground min-w-0 max-w-[8rem] truncate text-xs">
-              {accountName}
-            </span>
-          )}
           <QuickEventPopover
             selectedEventId={event?.id ?? null}
             onSelect={(eventId) => onSetEvent(a.id, eventId)}
@@ -230,6 +224,12 @@ function TransactionRowImpl({
           />
         </div>
       </TableCell>
+      {/* money-hub patch: the account in its own column, with its bank's logo (owner, 10-02). */}
+      {showAccount && (
+        <TableCell className="w-40 px-3 py-2 max-lg:w-12">
+          <AccountMark account={account} fallbackName={accountName} />
+        </TableCell>
+      )}
       <TableCell className="hidden w-44 px-3 py-2 sm:table-cell">
         {isNeutral ? (
           <span className="text-muted-foreground text-xs">

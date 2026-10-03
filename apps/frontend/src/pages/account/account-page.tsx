@@ -1,6 +1,7 @@
 import { parseLocalDate } from "@/lib/utils";
 import { displayAccountType } from "@/lib/account-display";
 import { accountLogoUrl } from "@/lib/account-logo";
+import { RoundLogo } from "@/components/round-logo";
 import { formatZonedDateKey } from "@/features/spending/lib/timezone";
 import { getContributionLimit, getSnapshots, searchActivities, updateAccount } from "@/adapters";
 import { HistoryChart } from "@/components/history-chart";
@@ -926,7 +927,7 @@ const AccountPage = () => {
                                   className="flex items-center py-1.5"
                                 >
                                   {accountLogoUrl(acc) ? (
-                                    <img src={accountLogoUrl(acc)!} alt="" className="mr-2 h-4 w-4 rounded-sm object-contain" />
+                                    <RoundLogo url={accountLogoUrl(acc)!} className="mr-2 h-4 w-4" />
                                   ) : (
                                     <IconComponent className="mr-2 h-4 w-4" />
                                   )}
@@ -994,13 +995,13 @@ const AccountPage = () => {
                                         : "border-transparent",
                                     )}
                                   >
-                                    <div className="bg-primary/10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
-                                      {accountLogoUrl(acc) ? (
-                                        <img src={accountLogoUrl(acc)!} alt="" className="h-6 w-6 rounded-sm object-contain" />
-                                      ) : (
+                                    {accountLogoUrl(acc) ? (
+                                      <RoundLogo url={accountLogoUrl(acc)!} className="h-10 w-10" />
+                                    ) : (
+                                      <div className="bg-primary/10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
                                         <IconComponent className="text-primary h-5 w-5" />
-                                      )}
-                                    </div>
+                                      </div>
+                                    )}
                                     <div className="min-w-0 flex-1">
                                       <div className="text-foreground truncate font-medium">
                                         {acc.name}

@@ -50,6 +50,8 @@ interface TransactionDayHeaderProps {
    * are pending, since that day is still missing rows.
    */
   isPartial: boolean;
+  /** money-hub patch: the Account column is showing, so the label spans it too. */
+  showAccount?: boolean;
   /**
    * Virtualizer wiring: it measures the rendered header through the ref and
    * identifies it by `data-index`. Both are unset when the list renders
@@ -67,6 +69,7 @@ function TransactionDayHeaderImpl({
   selectionState,
   onToggleDay,
   isPartial,
+  showAccount = false,
 }: TransactionDayHeaderProps) {
   const { t } = useTranslation();
   const label = useDayLabel(group, appTimezone);
@@ -88,8 +91,8 @@ function TransactionDayHeaderImpl({
           }
         />
       </TableCell>
-      {/* money-hub patch: name + category (the Time column is gone, 10-02). */}
-      <TableCell colSpan={2} className="px-3 py-1.5">
+      {/* money-hub patch: name + account + category (the Time column is gone, 10-02). */}
+      <TableCell colSpan={showAccount ? 3 : 2} className="px-3 py-1.5">
         <div className="flex items-baseline gap-2">
           <span className="text-xs font-medium">{label}</span>
           {/* "1 transaction" restates the single row below it, so the count

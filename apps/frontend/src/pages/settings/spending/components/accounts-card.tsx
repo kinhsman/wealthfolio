@@ -5,6 +5,7 @@ import { useAccounts } from "@/hooks/use-accounts";
 import { useNameComparator } from "@/hooks/use-name-comparator";
 import type { Account } from "@/lib/types";
 import { accountLogoUrl } from "@/lib/account-logo";
+import { RoundLogo } from "@/components/round-logo";
 import {
   Card,
   CardContent,
@@ -106,22 +107,21 @@ export function AccountsCard() {
                       : "border-border border-dashed bg-transparent opacity-80",
                   )}
                 >
-                  <div
-                    className={cn(
-                      // money-hub patch: round like the other account logos (owner, 10-02).
-                      "flex h-8 w-8 items-center justify-center rounded-full border",
-                      tracked
-                        ? "bg-background border-border text-foreground"
-                        : "border-border/60 text-muted-foreground bg-transparent",
-                      logoUrl && "bg-white",
-                    )}
-                  >
-                    {logoUrl ? (
-                      <img src={logoUrl} alt="" className="h-[70%] w-[70%] object-contain" />
-                    ) : (
+                  {/* money-hub patch: the bank's logo filling the circle, no white ring (owner, 10-02). */}
+                  {logoUrl ? (
+                    <RoundLogo url={logoUrl} name={account.group ?? account.name} className="h-8 w-8" />
+                  ) : (
+                    <div
+                      className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-full border",
+                        tracked
+                          ? "bg-background border-border text-foreground"
+                          : "border-border/60 text-muted-foreground bg-transparent",
+                      )}
+                    >
                       <TypeIcon size={18} weight="duotone" />
-                    )}
-                  </div>
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="truncate text-sm font-medium">{account.name}</span>

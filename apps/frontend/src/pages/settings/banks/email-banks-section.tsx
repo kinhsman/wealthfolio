@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Icons } from "@wealthfolio/ui";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
+import { RoundLogo } from "@/components/round-logo";
 
 const BASE = "/api/money-hub/email";
 
@@ -75,9 +76,12 @@ function LogoRow({ bank, onSaved }: { bank: Bank; onSaved: (s: Status) => void }
     <section className="space-y-2">
       <div className="text-xs font-semibold">Logo <span className="text-muted-foreground font-normal">· shown on the account</span></div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="bg-muted flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border">
-          {bank.hasLogo ? <img src={logoSrc(bank)} alt="" className="size-full object-contain" /> : <Icons.Building className="text-muted-foreground size-5" />}
-        </span>
+        {/* money-hub patch: as it shows on the account, round and filling the circle (owner, 10-02). */}
+        {bank.hasLogo ? <RoundLogo url={logoSrc(bank)} className="size-10" /> : (
+          <span className="bg-muted flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border">
+            <Icons.Building className="text-muted-foreground size-5" />
+          </span>
+        )}
         <button type="button" className={btn} disabled={!!busy}
           onClick={() => act("load", async () => setChoices((await call<{ choices: { key: string; dataUrl: string }[] }>("GET", `/banks/${bank.id}/logo-choices`)).choices))}>
           {busy === "load" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Mail className="size-3.5" />} From the email
@@ -507,9 +511,11 @@ export function EmailBanksSection() {
         return (
           <div key={b.id} className="bg-card rounded-xl border">
             <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <span className="bg-muted flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-                {b.hasLogo ? <img src={logoSrc(b)} alt="" className="size-full object-contain" /> : <Icons.Building className="text-primary size-5" />}
-              </span>
+              {b.hasLogo ? <RoundLogo url={logoSrc(b)} name={b.bankName} className="size-10" /> : (
+                <span className="bg-muted flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full">
+                  <Icons.Building className="text-primary size-5" />
+                </span>
+              )}
               <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
                 <div className="truncate text-sm font-semibold">{b.accountName || b.bankName}</div>
                 <div className="text-muted-foreground truncate text-xs">

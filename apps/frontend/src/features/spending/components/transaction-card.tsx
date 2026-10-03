@@ -26,6 +26,7 @@ import { ReturnBadge } from "./return-badge";
 import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
+import { AccountLogo } from "./account-mark";
 import { CategoryMark } from "./category-chips";
 import { useShownAmount } from "@/lib/display-currency";
 
@@ -259,6 +260,8 @@ function TransactionCardImpl({
             {showAccount && (
               <>
                 <span aria-hidden="true">·</span>
+                {/* money-hub patch: the bank's logo before the account (owner, 10-02). */}
+                <AccountLogo account={account} className="h-3.5 w-3.5 text-[7px]" />
                 <span className="min-w-0 flex-1 truncate">{accountName}</span>
               </>
             )}
