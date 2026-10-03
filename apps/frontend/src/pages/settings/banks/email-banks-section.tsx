@@ -2,7 +2,7 @@
 // each transaction; the owner links one or more Gmail accounts (read only) and sets each bank up as a
 // template: which Gmail, which emails (conditions, all or any), and the words written in front of the
 // date, amount, account and the rest. The money-hub service (lib/emailAlerts.js, /api/money-hub/email)
-// reads them every 5 minutes into a Cash or Credit Card account, like any other bank.
+// checks them every minute into a Cash or Credit Card account, like any other bank.
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, Icons } from "@wealthfolio/ui";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
@@ -600,7 +600,7 @@ export function EmailBanksSection() {
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-muted-foreground text-xs">
-          {status.banks.length ? (status.lastRun ? `Checked ${when(status.lastRun)}. Every 5 minutes.` : "Not checked yet.") : "No bank set up yet."}
+          {status.banks.length ? (status.lastRun ? `Checked ${when(status.lastRun)}. Every minute.` : "Not checked yet.") : "No bank set up yet."}
         </span>
         <div className="flex flex-wrap gap-2">
           {status.banks.length > 0 && (
