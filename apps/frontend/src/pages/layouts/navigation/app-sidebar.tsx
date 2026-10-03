@@ -15,7 +15,6 @@ import {
 } from "@wealthfolio/ui";
 import { Button } from "@wealthfolio/ui/components/ui/button";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
-import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "react-router-dom";
@@ -29,8 +28,22 @@ interface AppSidebarProps {
 
 const modKey = isAppleDevice() ? "⌘" : "Ctrl";
 
+// money-hub patch: a compact sidebar like Monarch's (owner, 10-02, with a picture of Monarch: "make the menu
+// side bar of money compact like this, not too tall but very readable"). The logo, Search, Alerts, Settings
+// and the collapse button share the top row (a column when collapsed); pages are 36px rows in 15px type.
+const ROW =
+  "text-foreground [&_svg]:size-[18px]! mb-0.5 h-9 gap-3 rounded-md text-[15px] transition-all duration-300";
+const rowAlign = (collapsed: boolean) => (collapsed ? "justify-center px-0" : "justify-start px-3");
+/** The top row's buttons: 32px squares, full-width rows when the sidebar is narrow. */
+const headButton = (collapsed: boolean) =>
+  cn(
+    "text-muted-foreground hover:text-foreground [&_svg]:size-[18px]! shrink-0 rounded-md p-0 transition-colors",
+    collapsed ? "mb-0.5 h-9 w-full" : "size-8",
+  );
+
 export function AppSidebar({ navigation }: AppSidebarProps) {
   const { t } = useTranslation();
+  const location = useLocation();
   // Remember expanded/collapsed per profile; first visit still starts collapsed.
   const [collapsed, setCollapsed] = usePersistentState("sidebar-collapsed", true);
   const { logout, requiresAuth } = useAuth();
@@ -38,6 +51,9 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
   // money-hub patch: the sidebar wears the theme picked for each mode on Settings, Appearance (Meadow or
   // Bronze Titanium; owner, 10-02). globals.css styles it by these attributes.
   const skins = useDashboardSkins();
+  const toggleLabel = collapsed
+    ? t("common:layout.expand_sidebar")
+    : t("common:layout.collapse_sidebar");
 
   return (
     <div
@@ -45,7 +61,9 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
       data-light-skin={skins.light}
       data-dark-skin={skins.dark}
       className={cn({
-        "light:bg-secondary/50 hidden h-full border-r pt-12 transition-[width] duration-300 ease-in-out md:flex md:flex-shrink-0 md:overflow-hidden": true,
+        "light:bg-secondary/50 hidden h-full border-r transition-[width] duration-300 ease-in-out md:flex md:flex-shrink-0 md:overflow-hidden": true,
+        "pt-3": isWeb,
+        "pt-12": !isWeb,
         "md:w-sidebar": !collapsed,
         "md:w-sidebar-collapsed": collapsed,
       })}
@@ -58,16 +76,26 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
               <nav
                 data-tauri-drag-region="true"
                 aria-label={t("common:layout.sidebar")}
-                className="flex shrink-0 flex-col p-2"
+                className="flex shrink-0 flex-col px-2 pb-2"
               >
                 <div
                   data-tauri-drag-region="true"
-                  className="draggable flex items-center justify-center pb-6"
+                  className={cn(
+                    "draggable flex",
+                    collapsed ? "flex-col items-center pb-1" : "items-center gap-0.5 pb-4 pl-1.5",
+                  )}
                 >
-                  <Link to="/" className="group/logo block shrink-0 [perspective:400px]">
+                  <Link
+                    to="/"
+                    title={t("common:dashboard")}
+                    className={cn(
+                      "group/logo block shrink-0 [perspective:400px]",
+                      collapsed ? "mb-2" : "mr-auto",
+                    )}
+                  >
                     <img
                       className={cn(
-                        "h-10 w-10 rounded-full bg-transparent shadow-lg transition-transform duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+                        "h-8 w-8 rounded-full bg-transparent shadow-md transition-transform duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
                         collapsed
                           ? "motion-safe:[transform:rotateY(180deg)] motion-safe:group-hover/logo:[transform:rotateY(360deg)]"
                           : "motion-safe:[transform:rotateY(0deg)] motion-safe:group-hover/logo:[transform:rotateY(180deg)]",
@@ -77,67 +105,75 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                     />
                   </Link>
 
-                  <span
-                    data-mside-brand=""
-                    className={cn(
-                      "text-md text-foreground/90 ml-2 font-serif text-xl font-bold transition-opacity delay-100 duration-300 ease-in-out",
-                      {
-                        "sr-only opacity-0": collapsed,
-                        "block opacity-100": !collapsed,
-                      },
-                    )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      // Trigger the launcher by dispatching Cmd/Ctrl+K
+                      const event = new KeyboardEvent("keydown", {
+                        key: "k",
+                        code: "KeyK",
+                        keyCode: 75,
+                        which: 75,
+                        metaKey: true,
+                        ctrlKey: true,
+                        bubbles: true,
+                        cancelable: true,
+                      });
+                      document.dispatchEvent(event);
+                    }}
+                    data-mside-icon=""
+                    className={headButton(collapsed)}
+                    title={t("common:layout.search_shortcut", { shortcut: `${modKey}+K` })}
+                    aria-label={t("common:layout.search")}
                   >
-                    Wealthfolio
-                  </span>
+                    <Icons.Search2 />
+                  </Button>
+
+                  {/* money-hub patch: the bell, every alert sent (features/notifications). */}
+                  <NotificationsBell variant="sidebar" className={headButton(collapsed)} />
+
+                  {navigation?.secondary?.map((item) => {
+                    const isActive = isPathActive(location.pathname, item.href);
+                    return (
+                      <Button
+                        key={item.title}
+                        variant="ghost"
+                        asChild
+                        data-mside-icon=""
+                        className={headButton(collapsed)}
+                      >
+                        <Link
+                          to={item.href}
+                          title={item.title}
+                          aria-label={item.title}
+                          aria-current={isActive ? "page" : undefined}
+                        >
+                          {resolveNavigationIcon(item.icon, "size-[18px]")}
+                        </Link>
+                      </Button>
+                    );
+                  })}
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setCollapsed(!collapsed)}
+                    data-mside-icon=""
+                    className={headButton(collapsed)}
+                    title={toggleLabel}
+                    aria-label={toggleLabel}
+                  >
+                    <Icons.PanelLeftOpen
+                      className={cn(
+                        "transition-transform duration-500 ease-in-out",
+                        !collapsed && "rotate-180",
+                      )}
+                    />
+                  </Button>
                 </div>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => {
-                    // Trigger the launcher by dispatching Cmd/Ctrl+K
-                    const event = new KeyboardEvent("keydown", {
-                      key: "k",
-                      code: "KeyK",
-                      keyCode: 75,
-                      which: 75,
-                      metaKey: true,
-                      ctrlKey: true,
-                      bubbles: true,
-                      cancelable: true,
-                    });
-                    document.dispatchEvent(event);
-                  }}
-                  data-mside-search=""
-                  className={cn(
-                    "text-foreground [&_svg]:size-5! mb-4 h-12 transition-all duration-300",
-                    collapsed
-                      ? "justify-center rounded-md"
-                      : "bg-muted/50 hover:bg-muted/80 justify-start rounded-full px-4 shadow-none",
-                  )}
-                  title={t("common:layout.search_shortcut", { shortcut: `${modKey}+K` })}
-                >
-                  <span aria-hidden="true">
-                    <Icons.Search2 className="h-5 w-5 opacity-60" />
-                  </span>
-                  <span
-                    className={cn({
-                      "text-muted-foreground ml-2 flex-1 text-left text-sm transition-opacity delay-100 duration-300 ease-in-out": true,
-                      "sr-only opacity-0": collapsed,
-                      "block opacity-100": !collapsed,
-                    })}
-                  >
-                    {t("common:layout.search")}
-                  </span>
-                  {!collapsed && (
-                    <kbd className="bg-background text-muted-foreground pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border px-1.5 font-mono text-[10px] font-medium opacity-100">
-                      <span className="text-xs">{modKey}</span>K
-                    </kbd>
-                  )}
-                </Button>
-
-                {/* money-hub patch: the bell, every alert sent (features/notifications). */}
-                <NotificationsBell variant="sidebar" collapsed={collapsed} className="mb-3" />
+                {collapsed && <div className="bg-border mx-3 mb-2 h-px" aria-hidden="true" />}
 
                 {navigation?.primary?.map((item) => (
                   <NavItem key={item.title} item={item} collapsed={collapsed} />
@@ -163,9 +199,6 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
             </div>
 
             <div className="flex shrink-0 flex-col p-2">
-              {navigation?.secondary?.map((item) => (
-                <NavItem key={item.title} item={item} collapsed={collapsed} />
-              ))}
               {!CONNECT_HIDDEN && <ConnectNavItem collapsed={collapsed} />}
               {isWeb && requiresAuth && (
                 <Button
@@ -173,18 +206,15 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                   variant="ghost"
                   onClick={logout}
                   data-mside-row=""
-                  className={cn(
-                    "text-foreground [&_svg]:size-5! mb-1 h-12 rounded-md transition-all duration-300",
-                    collapsed ? "justify-center" : "justify-start",
-                  )}
+                  className={cn(ROW, rowAlign(collapsed))}
                   title={t("common:layout.logout")}
                 >
                   <span aria-hidden="true">
-                    <Icons.LogOut className="h-5 w-5" />
+                    <Icons.LogOut />
                   </span>
                   <span
                     className={cn({
-                      "ml-2 transition-opacity delay-100 duration-300 ease-in-out": true,
+                      "transition-opacity delay-100 duration-300 ease-in-out": true,
                       "sr-only opacity-0": collapsed,
                       "block opacity-100": !collapsed,
                     })}
@@ -193,32 +223,8 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                   </span>
                 </Button>
               )}
-              <Separator className="mt-0" />
-              <div className="flex justify-end">
-                <Button
-                  title={t("common:layout.toggle_sidebar")}
-                  variant="ghost"
-                  onClick={() => setCollapsed(!collapsed)}
-                  className="text-muted-foreground [&_svg]:size-5! cursor-pointer rounded-md hover:bg-transparent"
-                  aria-label={
-                    collapsed
-                      ? t("common:layout.expand_sidebar")
-                      : t("common:layout.collapse_sidebar")
-                  }
-                >
-                  <Icons.PanelLeftOpen
-                    size={18}
-                    className={`h-5 w-5 transition-transform duration-500 ease-in-out ${!collapsed ? "rotate-180" : ""}`}
-                    aria-label={
-                      collapsed
-                        ? t("common:layout.expand_sidebar")
-                        : t("common:layout.collapse_sidebar")
-                    }
-                  />
-                </Button>
-              </div>
-              <div className="flex justify-center pt-1">
-                <ProfileMenu collapsed={collapsed} />
+              <div className={cn("flex pt-1", collapsed && "justify-center")}>
+                <ProfileMenu collapsed={collapsed} className={collapsed ? undefined : "h-10"} />
               </div>
             </div>
           </div>
@@ -250,7 +256,7 @@ function PinnedAddonNavItem({ item, collapsed, onSetPinned }: PinnedAddonNavItem
             type="button"
             variant="ghost"
             size="icon"
-            className="hover:bg-accent pointer-events-none absolute right-1 top-1/2 z-10 h-8 w-8 -translate-y-1/2 rounded-full opacity-0 transition-opacity focus:pointer-events-auto focus:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
+            className="hover:bg-accent pointer-events-none absolute right-1 top-1/2 z-10 h-7 w-7 -translate-y-1/2 rounded-full opacity-0 transition-opacity focus:pointer-events-auto focus:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100"
             title={t("common:layout.addon_options", { name: item.title })}
             aria-label={t("common:layout.addon_options", { name: item.title })}
           >
@@ -285,11 +291,7 @@ function NavItem({ item, collapsed, className, ...props }: NavItemProps) {
       variant={isActive ? "secondary" : "ghost"}
       asChild
       data-mside-row=""
-      className={cn(
-        "text-foreground [&_svg]:size-5! mb-1 h-12 rounded-md transition-all duration-300",
-        collapsed ? "justify-center" : "justify-start",
-        className,
-      )}
+      className={cn(ROW, rowAlign(collapsed), className)}
     >
       <Link
         key={item.title}
@@ -298,11 +300,11 @@ function NavItem({ item, collapsed, className, ...props }: NavItemProps) {
         aria-current={isActive ? "page" : undefined}
         {...props}
       >
-        <span aria-hidden="true">{resolveNavigationIcon(item.icon, "h-5 w-5")}</span>
+        <span aria-hidden="true">{resolveNavigationIcon(item.icon, "size-[18px]")}</span>
 
         <span
           className={cn({
-            "ml-2 transition-opacity delay-100 duration-300 ease-in-out": true,
+            "truncate transition-opacity delay-100 duration-300 ease-in-out": true,
             "sr-only opacity-0": collapsed,
             "block opacity-100": !collapsed,
           })}
@@ -333,17 +335,14 @@ function AddonsMenu({ addons, collapsed, onSetPinned }: AddonsMenuProps) {
           variant={hasActiveAddon ? "secondary" : "ghost"}
           data-active={hasActiveAddon ? "" : undefined}
           data-mside-row=""
-          className={cn(
-            "text-foreground [&_svg]:size-5! mb-1 h-12 rounded-md transition-all duration-300",
-            collapsed ? "justify-center" : "justify-start",
-          )}
+          className={cn(ROW, rowAlign(collapsed))}
         >
           <span aria-hidden="true">
-            <Icons.Addons className="h-5 w-5" />
+            <Icons.Addons />
           </span>
           <span
             className={cn({
-              "ml-2 transition-opacity delay-100 duration-300 ease-in-out": true,
+              "transition-opacity delay-100 duration-300 ease-in-out": true,
               "sr-only opacity-0": collapsed,
               "block opacity-100": !collapsed,
             })}
@@ -368,13 +367,13 @@ function AddonsMenu({ addons, collapsed, onSetPinned }: AddonsMenuProps) {
             <div
               key={addon.id ?? addon.href}
               className={cn(
-                "hover:bg-accent focus-within:bg-accent group flex h-12 items-center rounded-sm transition-colors",
+                "hover:bg-accent focus-within:bg-accent group flex h-10 items-center rounded-sm transition-colors",
                 isActive && "bg-secondary",
               )}
             >
               <DropdownMenuItem
                 asChild
-                className="h-12 min-w-0 flex-1 gap-3 px-3 py-3 text-sm font-medium"
+                className="h-10 min-w-0 flex-1 gap-3 px-3 py-2 text-sm font-medium"
               >
                 <Link to={addon.href} onClick={() => setOpen(false)}>
                   <span

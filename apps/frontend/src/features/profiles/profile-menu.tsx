@@ -13,7 +13,13 @@ import {
 import { ProfileAvatar } from "./profile-avatar";
 import { useProfile } from "./profile-context";
 
-export function ProfileMenu({ collapsed = false }: { collapsed?: boolean }) {
+export function ProfileMenu({
+  collapsed = false,
+  className,
+}: {
+  collapsed?: boolean;
+  className?: string;
+}) {
   const { t } = useTranslation("common");
   const context = useProfile();
   if (!context?.profile) return null;
@@ -31,6 +37,7 @@ export function ProfileMenu({ collapsed = false }: { collapsed?: boolean }) {
             collapsed
               ? "w-12 shrink-0 rounded-full p-0 has-[>svg]:px-0"
               : "w-full justify-start rounded-lg px-2 has-[>svg]:px-2",
+            className,
           )}
           aria-label={t("profiles.menuLabel", { name: profile.name })}
           title={profile.name}

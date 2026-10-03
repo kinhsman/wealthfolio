@@ -1854,25 +1854,18 @@ summary {
     radial-gradient(300px 380px at 100% 88%, rgba(78, 80, 124, 0.4), transparent 70%), #1e1918;
   box-shadow: inset -1px 0 0 rgba(255, 236, 214, 0.06);
 }
-/* Rows: Meadow's tile corners; the current page (and Add-ons while one is open) in the fill. */
-[data-mside] :is([data-mside-row], [data-mside-search].rounded-md) {
-  border-radius: 12px;
+/* Rows: Meadow's tile corners, kept in step with the compact 36px rows (the top row's icons a notch
+   tighter); the current page (and Add-ons while one is open) in the fill. */
+[data-mside] [data-mside-row] {
+  border-radius: 10px;
+}
+[data-mside] [data-mside-icon] {
+  border-radius: 8px;
 }
 [data-mside] :is([aria-current="page"], [data-active]) {
   background: var(--ms-fill);
   box-shadow: var(--ms-fill-shadow);
   color: var(--ms-on-fill);
-}
-/* The name beside the logo: Meadow never goes bold; Bronze sets it in its display serif. */
-[data-mside] [data-mside-brand] {
-  font-weight: 500;
-  color: var(--ms-ink);
-}
-:is(.light [data-mside][data-light-skin="bronze"], .dark [data-mside][data-dark-skin="bronze"])
-  [data-mside-brand] {
-  font-family: "Cormorant Garamond", Georgia, serif;
-  font-weight: 600;
-  font-size: 22px;
 }
 /* The floating bottom bars (phone, and the computer's bottom-bar mode): the bar in the theme's surface or
    glass, the stock sheen layers off, the current page's pill in the fill. */

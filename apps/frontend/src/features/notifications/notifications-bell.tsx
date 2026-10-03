@@ -2,7 +2,7 @@
 // this notification panel which users can clear manually"). Every alert sent to Discord and the phone is
 // listed here too: new ones counted on the bell, read once the panel has shown them, cleared one by one
 // or all at once. In the sidebar, the floating bar (a panel beside or above it) and the phone's bar (a sheet).
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Icons, Sheet, SheetContent, SheetTitle } from "@wealthfolio/ui";
@@ -163,15 +163,18 @@ function Panel({
 }
 
 /**
- * The bell and its panel. `sidebar`: a row like the pages' (a count beside the name, or on the icon when
- * the sidebar is narrow), the panel to its right. `floating`: a round button in the floating bar, the
+ * The bell and its panel. `sidebar`: an icon in the sidebar's top row (the count on the icon), the panel
+ * just past the sidebar's edge. `floating`: a round button in the floating bar, the
  * panel above. `mobile`: a button in the phone's bar, the list in a sheet from the bottom.
  */
-export function NotificationsBell({ variant, collapsed = false, className }: { variant: Variant; collapsed?: boolean; className?: string }) {
+export function NotificationsBell({ variant, className }: { variant: Variant; className?: string }) {
   const { data, isError } = useInbox();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  // Sidebar: the panel opens past the sidebar's right edge, not over the rest of its top row.
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [edge, setEdge] = useState(10);
   // The newest alert when the panel opened: closing marks up to it read, Clear all clears up to it, so
   // one that comes in while the panel is open stays new.
   const [upTo, setUpTo] = useState<string | null>(null);
@@ -179,7 +182,12 @@ export function NotificationsBell({ variant, collapsed = false, className }: { v
 
   const take = (v: InboxView) => qc.setQueryData(INBOX_KEY, v);
   const change = (next: boolean) => {
-    if (next) setUpTo(data?.items[0]?.at ?? null);
+    if (next) {
+      setUpTo(data?.items[0]?.at ?? null);
+      const bar = trigger.current?.closest("[data-mside]")?.getBoundingClientRect();
+      const own = trigger.current?.getBoundingClientRect();
+      if (bar && own) setEdge(Math.max(10, Math.round(bar.right - own.right + 10)));
+    }
     else if (unread > 0 && upTo) inboxApi.read({ upTo }).then(take).catch(() => {});
     setOpen(next);
   };
@@ -238,37 +246,25 @@ export function NotificationsBell({ variant, collapsed = false, className }: { v
           </button>
         ) : (
           <Button
+            ref={trigger}
             type="button"
-            variant={open ? "secondary" : "ghost"}
-            data-mside-row=""
+            variant="ghost"
+            data-mside-icon=""
             title={label}
             aria-label={label}
-            className={cn(
-              "text-foreground [&_svg]:size-5! mb-1 h-12 w-full rounded-md transition-all duration-300",
-              collapsed ? "justify-center" : "justify-start",
-              className,
-            )}
+            className={cn(className, open && "bg-accent text-foreground")}
           >
             <span className="relative" aria-hidden="true">
-              <Icons.Bell className="h-5 w-5" />
-              {collapsed ? <Count n={unread} className="absolute -right-2 -top-1.5" /> : null}
+              <Icons.Bell />
+              <Count n={unread} className="absolute -right-2 -top-1.5" />
             </span>
-            <span
-              className={cn("ml-2 transition-opacity delay-100 duration-300 ease-in-out", {
-                "sr-only opacity-0": collapsed,
-                "block flex-1 text-left opacity-100": !collapsed,
-              })}
-            >
-              Alerts
-            </span>
-            {!collapsed ? <Count n={unread} /> : null}
           </Button>
         )}
       </PopoverTrigger>
       <PopoverContent
         side={variant === "floating" ? "top" : "right"}
         align={variant === "floating" ? "center" : "start"}
-        sideOffset={variant === "floating" ? 16 : 10}
+        sideOffset={variant === "floating" ? 16 : edge}
         collisionPadding={12}
         // No focus ring on Clear all each time it opens; Tab still reaches every button.
         onOpenAutoFocus={(e) => e.preventDefault()}
