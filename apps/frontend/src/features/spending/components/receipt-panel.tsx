@@ -1,9 +1,10 @@
 // money-hub patch: receipts (lib/receipts.ts): snap a store receipt, see its lines and their categories,
 // change one (the charge is split again, and the store's next receipts remember it). Used in a
-// transaction's edit window (ReceiptFor), on the Transactions page (SnapReceiptButton) and on the
-// Receipts page (pages/spending-receipts-page.tsx).
-import { useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+// transaction's edit window (ReceiptFor) and on the Receipts page (pages/spending-receipts-page.tsx), which
+// Transactions links to. A photo can also be pasted (owner, 10-03: "allow receipt photo pasting"): Ctrl or
+// Cmd V on the Receipts page or in the edit window, or the Paste button.
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -52,20 +53,142 @@ const field =
   "h-7 w-full rounded-md border bg-background px-1.5 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-50";
 
 /** What happened, in a toast: where it was filed, or what it waits for. */
-export function receiptToast(r: ReceiptAnswer, see?: () => void) {
+export function receiptToast(r: ReceiptAnswer) {
   const name = `${storeName(r.store)}${r.total != null ? `, ${usd(r.total)}` : ""}`;
-  const action = see ? { action: { label: "See it", onClick: see } } : {};
   if (r.status === "filed") {
     const parts = receiptSplit(r).map((l) => `${shortCategory(r.categories, l.categoryId)} ${usd(l.amount)}`);
-    toast.success(name, { description: parts.join(" · "), ...action });
-  } else if (r.status === "waiting") toast.success(name, { description: "Read. It files itself when the card charge comes in.", ...action });
-  else if (r.status === "failed") toast.error(r.error || "The receipt could not be read.", action);
-  else toast.message(name, { description: r.held || receiptState(r).text, ...action });
+    toast.success(name, { description: parts.join(" · ") });
+  } else if (r.status === "waiting") toast.success(name, { description: "Read. It files itself when the card charge comes in." });
+  else if (r.status === "failed") toast.error(r.error || "The receipt could not be read.");
+  else toast.message(name, { description: r.held || receiptState(r).text });
+}
+
+interface UploadOptions {
+  activityId?: string;
+  activityDate?: string;
+  onDone?: (r: ReceiptAnswer) => void;
+}
+
+/** Send photos of one receipt, with a toast while it reads and one with what it did. */
+export function useReceiptUpload({ activityId, activityDate, onDone }: UploadOptions = {}) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const send = async (files: File[]) => {
+    if (!files.length || busy) return;
+    setBusy(true);
+    const id = toast.loading("Reading the receipt…", { description: "About 10 seconds." });
+    try {
+      const r = await receiptsApi.add(files.slice(0, 4), { activityId, activityDate });
+      toast.dismiss(id);
+      receiptToast(r);
+      refreshAfterReceipt(qc);
+      onDone?.(r);
+    } catch (e) {
+      toast.dismiss(id);
+      toast.error(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { busy, send };
+}
+
+/** The pictures in a paste or a clipboard read (a screenshot, a photo copied from Photos or a page). */
+export function imagesIn(dt: Pick<DataTransfer, "items" | "files"> | null): File[] {
+  if (!dt) return [];
+  const out: File[] = [];
+  for (const it of Array.from(dt.items ?? [])) {
+    if (it.kind !== "file" || !it.type.startsWith("image/")) continue;
+    const f = it.getAsFile();
+    if (f) out.push(f);
+  }
+  if (!out.length) for (const f of Array.from(dt.files ?? [])) if (f.type.startsWith("image/")) out.push(f);
+  return out;
+}
+
+/**
+ * Ctrl or Cmd V with a picture on the clipboard sends it as a receipt while `enabled`. Text pasted into a
+ * box stays text: a picture is taken only when the clipboard has no text, or the paste is not in a box.
+ */
+export function usePastedReceipt(send: (files: File[]) => void, enabled = true) {
+  const latest = useRef(send);
+  latest.current = send;
+  useEffect(() => {
+    if (!enabled) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const files = imagesIn(e.clipboardData);
+      if (!files.length) return;
+      const t = e.target as HTMLElement | null;
+      const inBox = !!t && (t.isContentEditable || ["INPUT", "TEXTAREA"].includes(t.tagName));
+      if (inBox && e.clipboardData?.getData("text/plain")) return;
+      e.preventDefault();
+      latest.current(files);
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [enabled]);
+}
+
+/** Read the pictures on the clipboard (a phone has no Ctrl V: this asks the browser for them). */
+async function clipboardImages(): Promise<File[]> {
+  if (!navigator.clipboard?.read) throw new Error("This browser can't read the clipboard here. Press Ctrl or Cmd V instead.");
+  let items: ClipboardItems;
+  try {
+    items = await navigator.clipboard.read();
+  } catch {
+    throw new Error("The browser didn't allow reading the clipboard. Allow it, or press Ctrl or Cmd V.");
+  }
+  const out: File[] = [];
+  for (const item of items) {
+    const type = item.types.find((x) => x.startsWith("image/"));
+    if (!type) continue;
+    const blob = await item.getType(type);
+    out.push(new File([blob], `pasted-receipt.${type.split("/")[1] || "png"}`, { type }));
+  }
+  if (!out.length) throw new Error("No picture on the clipboard. Copy the receipt photo first.");
+  return out;
+}
+
+/** The Paste button: the picture on the clipboard as a receipt. */
+export function PasteReceiptButton({
+  send,
+  busy,
+  className,
+  children,
+  size = "sm",
+}: {
+  send: (files: File[]) => void;
+  busy: boolean;
+  className?: string;
+  children?: ReactNode;
+  size?: "sm" | "icon" | "default";
+}) {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size={size}
+      title="Paste a receipt photo"
+      aria-label="Paste a receipt photo"
+      disabled={busy}
+      className={className}
+      onClick={async () => {
+        try {
+          send(await clipboardImages());
+        } catch (e) {
+          toast.error(errorText(e));
+        }
+      }}
+    >
+      {children ?? <Icons.Copy className="size-4" />}
+    </Button>
+  );
 }
 
 /**
  * A button that opens the camera or the photo picker (up to 4 photos for a long receipt) and sends them.
- * `children` is the button's face; `activityId` ties the receipt to that transaction.
+ * `children` is the button's face; `activityId` ties the receipt to that transaction. `upload`: a shared
+ * sender (so a Paste button beside it shows the same busy state).
  */
 export function SnapReceiptButton({
   activityId,
@@ -76,42 +199,18 @@ export function SnapReceiptButton({
   variant = "outline",
   size = "sm",
   title = "Snap a receipt",
-  seeOnPage = false,
-}: {
-  activityId?: string;
-  activityDate?: string;
-  onDone?: (r: ReceiptAnswer) => void;
+  upload,
+}: UploadOptions & {
   children?: ReactNode;
   className?: string;
   variant?: "outline" | "ghost" | "default";
   size?: "sm" | "icon" | "default";
   title?: string;
-  /** The toast offers the Receipts page (used away from it). */
-  seeOnPage?: boolean;
+  upload?: ReturnType<typeof useReceiptUpload>;
 }) {
-  const qc = useQueryClient();
-  const navigate = useNavigate();
+  const own = useReceiptUpload({ activityId, activityDate, onDone });
+  const { busy, send } = upload ?? own;
   const input = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-
-  const send = async (files: File[]) => {
-    if (!files.length) return;
-    setBusy(true);
-    const id = toast.loading("Reading the receipt…", { description: "About 10 seconds." });
-    try {
-      const r = await receiptsApi.add(files.slice(0, 4), { activityId, activityDate });
-      toast.dismiss(id);
-      receiptToast(r, seeOnPage ? () => navigate("/spending/receipts") : undefined);
-      refreshAfterReceipt(qc);
-      onDone?.(r);
-    } catch (e) {
-      toast.dismiss(id);
-      toast.error(errorText(e));
-    } finally {
-      setBusy(false);
-      if (input.current) input.current.value = "";
-    }
-  };
 
   return (
     <>
@@ -121,7 +220,11 @@ export function SnapReceiptButton({
         accept="image/*"
         multiple
         className="hidden"
-        onChange={(e) => void send(Array.from(e.target.files ?? []))}
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          e.target.value = "";
+          void send(files);
+        }}
       />
       <Button
         type="button"
@@ -399,9 +502,12 @@ function ChargePicker({ receipt: r, busy, onPick }: { receipt: Receipt; busy: bo
   );
 }
 
-/** A transaction's receipt in its edit window, or the button to add one. */
+/** A transaction's receipt in its edit window, or the buttons to add one (a photo, or a pasted one). */
 export function ReceiptFor({ activityId, activityDate, onFiled }: { activityId: string; activityDate?: string; onFiled?: (r: ReceiptAnswer) => void }) {
   const { data } = useReceiptFor(activityId);
+  const upload = useReceiptUpload({ activityId, activityDate, onDone: onFiled });
+  const canAdd = !!data && !data.receipt && data.ready;
+  usePastedReceipt((files) => void upload.send(files), canAdd);
   if (!data) return null;
   if (data.receipt) {
     return (
@@ -416,19 +522,28 @@ export function ReceiptFor({ activityId, activityDate, onFiled }: { activityId: 
   }
   if (!data.ready) return null;
   return (
-    <SnapReceiptButton
-      activityId={activityId}
-      activityDate={activityDate}
-      variant="outline"
-      size="default"
-      className="text-muted-foreground h-auto w-full justify-start gap-2.5 whitespace-normal rounded-lg border-dashed px-3 py-2.5 text-left text-xs font-normal"
-      onDone={onFiled}
-    >
-      <Icons.Receipt className="size-4 shrink-0" />
-      <span className="min-w-0 flex-1">
-        <span className="text-foreground block text-sm font-medium">Add a receipt</span>
-        <span className="block">A photo of it: each item gets its category, and the charge is split to match.</span>
-      </span>
-    </SnapReceiptButton>
+    <div className="flex items-stretch gap-2">
+      <SnapReceiptButton
+        upload={upload}
+        variant="outline"
+        size="default"
+        className="text-muted-foreground h-auto min-w-0 flex-1 justify-start gap-2.5 whitespace-normal rounded-lg border-dashed px-3 py-2.5 text-left text-xs font-normal"
+      >
+        <Icons.Receipt className="size-4 shrink-0" />
+        <span className="min-w-0 flex-1">
+          <span className="text-foreground block text-sm font-medium">Add a receipt</span>
+          <span className="block">Take or pick a photo, or paste one here. Each item gets its category, and the charge is split to match.</span>
+        </span>
+      </SnapReceiptButton>
+      <PasteReceiptButton
+        send={(files) => void upload.send(files)}
+        busy={upload.busy}
+        size="default"
+        className="text-muted-foreground h-auto shrink-0 flex-col gap-1 rounded-lg border-dashed px-3 text-xs font-normal"
+      >
+        <Icons.Copy className="size-4" />
+        Paste
+      </PasteReceiptButton>
+    </div>
   );
 }

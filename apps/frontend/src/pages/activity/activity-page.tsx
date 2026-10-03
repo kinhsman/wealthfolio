@@ -44,7 +44,6 @@ import {
   resolveActivityTabFromUrlFilters,
   resolveActivityUrlFilters,
 } from "./utils/url-filters";
-import { SnapReceiptButton } from "@/features/spending/components/receipt-panel";
 
 interface ActivityDateRangeFilter {
   from?: string;
@@ -684,8 +683,14 @@ const ActivityPage = () => {
   const spendingActions = (
     <div className="flex flex-wrap items-center gap-2">
       <SyncButton />
-      {/* money-hub patch: snap a store receipt; its lines file the card charge (lib/receipts.ts). */}
-      <SnapReceiptButton size="icon" seeOnPage />
+      {/* money-hub patch: the Receipts page (snap or paste a store receipt there; lib/receipts.ts). The owner,
+          10-03: "i dont see the button to access this page in the transactions page". */}
+      <Button asChild size={isMobileViewport ? "icon" : "sm"} variant="outline" title="Receipts" aria-label="Receipts">
+        <Link to="/spending/receipts">
+          <Icons.Receipt className={isMobileViewport ? "size-4" : "mr-1.5 size-4"} />
+          {isMobileViewport ? null : "Receipts"}
+        </Link>
+      </Button>
       {/* Ask AI to categorize uncategorized transactions */}
       <Button
         asChild

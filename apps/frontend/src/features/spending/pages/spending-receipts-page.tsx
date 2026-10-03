@@ -1,6 +1,7 @@
 // money-hub patch: Receipts (/spending/receipts; lib/receipts.ts, owner 2026-10-03: "build an auto category
 // for costco", "the only way is to snap the receipt"). Every receipt snapped, the ones that need a look
-// first, then the ones waiting for their card charge, then the filed ones; a row opens its lines.
+// first, then the ones waiting for their card charge, then the filed ones; a row opens its lines. A photo
+// pasted anywhere on the page (Ctrl or Cmd V) or with the Paste button is snapped too.
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -10,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { Icons, Page, PageContent, PageHeader } from "@wealthfolio/ui";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 
-import { ReceiptDetails, SnapReceiptButton, STATE_TONE } from "../components/receipt-panel";
+import { PasteReceiptButton, ReceiptDetails, SnapReceiptButton, STATE_TONE, usePastedReceipt, useReceiptUpload } from "../components/receipt-panel";
 import { useDashboardSkins } from "../lib/dashboard-skin";
 import { photoUrl, receiptState, storeName, useReceipts, type Receipt } from "../lib/receipts";
 
@@ -27,6 +28,8 @@ export default function SpendingReceiptsPage() {
   const skins = useDashboardSkins();
   const { data, isLoading, isError, error } = useReceipts();
   const [open, setOpen] = useState<string | null>(null);
+  const upload = useReceiptUpload({ onDone: (r) => setOpen(r.id) });
+  usePastedReceipt((files) => void upload.send(files), !!data?.ready);
 
   const rows = useMemo(
     () => [...(data?.receipts ?? [])].sort((a, b) => RANK[a.status] - RANK[b.status] || String(b.date ?? b.at).localeCompare(String(a.date ?? a.at))),
@@ -36,10 +39,16 @@ export default function SpendingReceiptsPage() {
   const waiting = rows.filter((r) => r.status === "waiting").length;
 
   const snap = (
-    <SnapReceiptButton variant="default" size="sm" onDone={(r) => setOpen(r.id)}>
-      <Icons.Receipt className="size-4 sm:mr-1.5" />
-      <span className="hidden sm:inline">Snap a receipt</span>
-    </SnapReceiptButton>
+    <div className="flex items-center gap-2">
+      <PasteReceiptButton send={(files) => void upload.send(files)} busy={upload.busy}>
+        <Icons.Copy className="size-4 sm:mr-1.5" />
+        <span className="hidden sm:inline">Paste</span>
+      </PasteReceiptButton>
+      <SnapReceiptButton variant="default" size="sm" upload={upload}>
+        <Icons.Receipt className="size-4 sm:mr-1.5" />
+        <span className="hidden sm:inline">Snap a receipt</span>
+      </SnapReceiptButton>
+    </div>
   );
 
   return (
@@ -47,7 +56,7 @@ export default function SpendingReceiptsPage() {
       <Page>
         <PageHeader
           heading="Receipts"
-          text={isMobile ? undefined : "Snap a store receipt: each item gets its category, and the card charge is split to match."}
+          text={isMobile ? undefined : "Snap or paste a receipt; the card charge is split to match."}
           onBack={() => (window.history.length > 1 ? navigate(-1) : navigate("/activities?tab=spending"))}
           actions={data?.ready ? snap : undefined}
         />
@@ -65,10 +74,10 @@ export default function SpendingReceiptsPage() {
                 <div className="space-y-1">
                   <p className="text-foreground text-sm font-medium">No receipts yet</p>
                   <p className="text-muted-foreground mx-auto max-w-sm text-xs">
-                    Snap one at the store. Food stays Groceries, things for the house go to Home maintenance, and the card charge is split to match when it comes in.
+                    Snap one at the store, or paste a photo here. Food stays Groceries, things for the house go to Maintenance & Repairs, and the card charge is split to match when it comes in.
                   </p>
                 </div>
-                <SnapReceiptButton variant="default" size="sm" onDone={(r) => setOpen(r.id)}>
+                <SnapReceiptButton variant="default" size="sm" upload={upload}>
                   <Icons.Receipt className="mr-1.5 size-4" />
                   Snap a receipt
                 </SnapReceiptButton>
