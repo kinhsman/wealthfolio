@@ -144,7 +144,7 @@ function TransactionRowImpl({
         />
       </TableCell>
       {showDate && (
-        <TableCell className="w-28 whitespace-nowrap px-3 py-2 text-xs tabular-nums">
+        <TableCell className="whitespace-nowrap px-3 py-2 text-xs tabular-nums">
           {formatDate(a.activityDate, {
             month: "short",
             day: "numeric",
@@ -309,13 +309,15 @@ function TransactionRowImpl({
       <TableCell className="w-10 px-3 py-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
+            {/* money-hub patch: a chevron, always there, in a ring while the row is hovered or its
+                menu is open (owner, 10-02, from a picture of Origin's list); the same menu as before. */}
             <Button
               variant="ghost"
               size="icon"
-              className={cn("h-7 w-7 data-[state=open]:opacity-100", HOVER_SLOT)}
+              className="text-muted-foreground hover:text-foreground data-[state=open]:border-border group-hover/row:border-border h-8 w-8 border border-transparent hover:bg-transparent data-[state=open]:text-foreground"
               aria-label={t("spending:transactions.rowActions")}
             >
-              <Icons.MoreVertical className="h-4 w-4" aria-hidden="true" />
+              <Icons.ChevronRight className="h-4 w-4" aria-hidden="true" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

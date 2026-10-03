@@ -10,7 +10,7 @@ import { Link } from "react-router-dom";
 
 import type { Account } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Card, Icons, PrivacyAmount, TableCell, TableRow, useDateFormatting } from "@wealthfolio/ui";
+import { Button, Card, Icons, PrivacyAmount, TableCell, TableRow, useDateFormatting } from "@wealthfolio/ui";
 
 import { useMerchantFor } from "../lib/merchants";
 import { AccountLogo, AccountMark } from "./account-mark";
@@ -49,17 +49,15 @@ function PendingPill() {
 }
 
 function PendingVsPosted({ className }: { className?: string }) {
-  // money-hub patch: what each one posts as, beside what it was (lib/pending-changes.ts).
+  // money-hub patch: what each one posts as, beside what it was (lib/pending-changes.ts). A button,
+  // not a link (owner, 10-02).
   return (
-    <Link
-      to="/spending/pending-changes"
-      className={cn(
-        "shrink-0 whitespace-nowrap text-xs text-[var(--m-forest,var(--foreground))] underline-offset-4 hover:underline",
-        className,
-      )}
-    >
-      Pending vs posted
-    </Link>
+    <Button asChild variant="outline" size="xs" className={cn("h-7 shrink-0 px-3 text-xs", className)}>
+      <Link to="/spending/pending-changes">
+        <Icons.ArrowLeftRight className="size-3.5" aria-hidden="true" />
+        Pending vs posted
+      </Link>
+    </Button>
   );
 }
 
@@ -92,15 +90,14 @@ export function PendingHeaderRow({ count, columnCount }: { count: number; column
   return (
     <TableRow className="bg-muted/40 hover:bg-muted/40">
       <TableCell className="px-3 py-1.5" />
-      <TableCell colSpan={columnCount - 3} className="px-3 py-1.5">
-        <div className="flex min-w-0 items-baseline gap-2">
+      {/* One cell over every other column, so the button never widens Amount. */}
+      <TableCell colSpan={columnCount - 1} className="px-3 py-1">
+        <div className="flex min-w-0 items-center gap-2">
           <span className="text-xs font-medium">Pending</span>
           <span className="text-muted-foreground text-xs tabular-nums">{count}</span>
           <span className="text-muted-foreground min-w-0 truncate text-xs max-lg:hidden">{NOT_POSTED}</span>
+          <PendingVsPosted className="ml-auto" />
         </div>
-      </TableCell>
-      <TableCell colSpan={2} className="px-3 py-1.5 text-right">
-        <PendingVsPosted />
       </TableCell>
     </TableRow>
   );
@@ -125,7 +122,7 @@ export function PendingRow({
       <TableCell className="w-10 px-3 py-2">
         <Icons.Clock className="text-muted-foreground/70 h-4 w-4" aria-label="Pending" />
       </TableCell>
-      {showDate && <TableCell className="text-muted-foreground w-28 whitespace-nowrap px-3 py-2 text-xs tabular-nums">{v.day}</TableCell>}
+      {showDate && <TableCell className="text-muted-foreground whitespace-nowrap px-3 py-2 text-xs tabular-nums">{v.day}</TableCell>}
       <TableCell className="max-w-0! px-3 py-2">
         <div className="flex items-center gap-2">
           {v.merchant ? (
@@ -198,7 +195,7 @@ export function PendingCards({
   if (!items.length) return null;
   return (
     <section aria-label="Pending transactions" className="space-y-2">
-      <div className="flex items-baseline gap-2 px-1 pt-2">
+      <div className="flex items-center gap-2 px-1 pt-2">
         <span className="text-muted-foreground text-xs font-medium">Pending</span>
         <span className="text-muted-foreground text-xs tabular-nums">{items.length}</span>
         <PendingVsPosted className="ml-auto" />

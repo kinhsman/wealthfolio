@@ -24,7 +24,7 @@ import { usePersistentState } from "@/hooks/use-persistent-state";
 import { InfiniteScrollTrigger } from "@/components/infinite-scroll-trigger";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { QueryKeys } from "@/lib/query-keys";
-import { formatDateISO } from "@/lib/utils";
+import { cn, formatDateISO } from "@/lib/utils";
 import type { Account, ActivityDetails, TaxonomyCategory } from "@/lib/types";
 import { useSettingsContext } from "@/lib/settings-provider";
 
@@ -628,6 +628,17 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
           .size > 1,
       [rows, pendingShown],
     );
+
+    /** money-hub patch: the Date column is as wide as its dates (owner, 10-02): "Oct 1" needs little,
+     *  a year only shows for an earlier year. Decided over every loaded row, not the ones on screen,
+     *  so the column never jumps while scrolling. */
+    const dateColClass = useMemo(() => {
+      const thisYear = new Date().getFullYear();
+      const older =
+        rows.some((r) => new Date(r.activity.activityDate).getFullYear() !== thisYear) ||
+        pendingShown.some((p) => p.date.slice(0, 4) !== String(thisYear));
+      return older ? "w-28" : "w-[4.5rem]";
+    }, [rows, pendingShown]);
 
     const dayGroups = useMemo(() => groupRowsByDay(rows, appTimezone), [rows, appTimezone]);
 
@@ -1375,7 +1386,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
                       }
                     />
                   </TableHead>
-                  {!groupByDay && <TableHead className="w-28 px-3">Date</TableHead>}
+                  {!groupByDay && <TableHead className={cn(dateColClass, "px-3")}>Date</TableHead>}
                   <TableHead className="px-3">{t("spending:txTab.nameNotes")}</TableHead>
                   {/* money-hub patch: the account in its own column, its bank's logo first (owner, 10-02). */}
                   {showAccount && (

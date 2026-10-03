@@ -400,12 +400,13 @@ function TransactionCardImpl({
             },
           ]}
           trigger={
+            // money-hub patch: a chevron, like the table rows (owner, 10-02); no ring, a phone has no hover.
             <button
               type="button"
-              className="hover:bg-muted -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors"
+              className="text-muted-foreground active:bg-muted -mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors"
               aria-label={t("spending:transactions.rowActions")}
             >
-              <Icons.MoreVertical className="h-4 w-4" aria-hidden="true" />
+              <Icons.ChevronRight className="h-4 w-4" aria-hidden="true" />
             </button>
           }
         />
