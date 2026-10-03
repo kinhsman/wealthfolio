@@ -141,6 +141,8 @@ export const liabilityDetailsSchema = baseSchema.extend({
   repayment: z.enum(["annuity", "equal_principal", "interest_only"]).optional().nullable(),
   /** The day the loan must be paid back (a Vietnamese bank's "ngày đáo hạn"): payments fall on its day. */
   maturityDate: z.date().optional().nullable(),
+  /** Renewing a line costs this percent of its amount, due when its term ends (owner, 10-03). */
+  renewalFeePct: z.coerce.number().min(0, "0 or more").max(100, "100 or less").optional().nullable(),
   /** The day of the month the payment is made (owner, 10-03: the loan's, the same for all its lines). */
   paymentDay: z.coerce.number().int("A day of the month").min(1, "1 to 31").max(31, "1 to 31").optional().nullable(),
   /** One loan drawn in lines (owner, 10-03: split by the bank's limit per line): each line's number,
@@ -266,6 +268,7 @@ export function getDefaultDetailsFormValues(
         followSchedule: metadata?.follow_schedule === "true",
         maturityDate: metadata?.maturity_date ? parseLocalDate(metadata.maturity_date as string) : null,
         paymentDay: metadata?.payment_day ? parseInt(metadata.payment_day as string, 10) : null,
+        renewalFeePct: metadata?.renewal_fee_pct ? parseFloat(metadata.renewal_fee_pct as string) : null,
         lines: linesFromMetadata(metadata?.loan_lines),
       };
 
@@ -337,6 +340,7 @@ export function formValuesToMetadata(values: AssetDetailsFormValues): Record<str
       metadata.follow_schedule = values.followSchedule ? "true" : "false";
       metadata.maturity_date = values.maturityDate ? formatDateToISO(values.maturityDate) : "";
       metadata.payment_day = values.paymentDay != null ? values.paymentDay.toString() : "";
+      metadata.renewal_fee_pct = values.renewalFeePct != null ? values.renewalFeePct.toString() : "";
       metadata.loan_lines = linesToMetadata(values.lines);
       break;
 

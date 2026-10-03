@@ -826,7 +826,7 @@ function LiabilityFields({
         name="paymentDay"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Payment day</FormLabel>
+            <FormLabel className="block">Payment day</FormLabel>
             <FormControl>
               <Input
                 type="number"
@@ -888,6 +888,30 @@ function LiabilityFields({
           <FormItem>
             <FormLabel>Lines</FormLabel>
             <LoanLinesEditor value={field.value ?? []} onChange={field.onChange} />
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="renewalFeePct"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="block">Renewal fee (%)</FormLabel>
+            <FormControl>
+              <Input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="any"
+                placeholder="0.5"
+                value={field.value ?? ""}
+                onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                className="w-28"
+              />
+            </FormControl>
+            <p className="text-muted-foreground text-xs">Of each line&rsquo;s amount, due when its term ends.</p>
             <FormMessage />
           </FormItem>
         )}

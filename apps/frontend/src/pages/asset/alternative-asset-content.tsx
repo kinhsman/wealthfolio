@@ -1,7 +1,7 @@
 import HistoryChart from "@/components/history-chart-symbol";
 import { useAlternativeHoldings, useLinkedLiabilities } from "@/hooks/use-alternative-assets";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
-import { LoanScheduleSection } from "./loan-schedule-section";
+import { LoanLinesTable, LoanScheduleSection } from "./loan-schedule-section";
 import type { AlternativeAssetHolding, Asset, DateRange, Quote, TimePeriod } from "@/lib/types";
 import { AlternativeAssetKind } from "@/lib/types";
 import {
@@ -265,6 +265,9 @@ export const AlternativeAssetContent: React.FC<AlternativeAssetContentProps> = (
             className="col-span-1"
           />
         </div>
+
+        {/* money-hub: a loan's lines, like the bank's sheet (loan-schedule-section.tsx; owner, 10-03). */}
+        {isLiability ? <LoanLinesTable id={holding.id} currency={holding.currency} /> : null}
 
         {/* Second row: About section */}
         <div className="space-y-4">

@@ -6,6 +6,7 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { AmountDisplay } from "@wealthfolio/ui";
 import { Separator } from "@wealthfolio/ui/components/ui/separator";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@wealthfolio/ui/components/ui/table";
 
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 import { QueryKeys } from "@/lib/query-keys";
@@ -33,10 +34,24 @@ export interface LoanView {
     method: "annuity" | "equal_principal" | "interest_only";
     follow: boolean;
     paymentDay: number | null;
+    renewalFeePct: number | null;
   };
   /** One loan drawn in lines: each its number, amount and the day its term ends, soonest first. */
-  lines: { id: string; number: string; amount: number; end: string | null; daysLeft: number | null }[];
+  lines: {
+    id: string;
+    number: string;
+    amount: number;
+    end: string | null;
+    daysLeft: number | null;
+    /** Its amount times the renewal fee percent, due when its term ends; null with no percent set. */
+    fee: number | null;
+    /** Its share of the month's interest. */
+    monthlyInterest: number | null;
+  }[];
   linesTotal: number;
+  feesTotal: number | null;
+  /** The next day lines end, how many, their amount and the fee due then. */
+  nextRenewal: { date: string; daysLeft: number; count: number; amount: number; fee: number | null } | null;
   missing: string[];
   /** No start date: counted from the first balance typed, the term from then. */
   countedFrom?: { date: string; balance: number } | null;
@@ -117,46 +132,127 @@ function renewLabel(days: number): string {
   return `in ${days} day${days === 1 ? "" : "s"}`;
 }
 
-/** The loan's lines (owner, 10-03): the day each one's term ends, to renew it with the bank in time. */
-function LoanLines({ data, amount }: { data: LoanView; amount: (v: number) => React.ReactNode }) {
+/** The loan's lines in short, for its details card: how many and their total, and the next renewal
+ *  (owner, 10-03: each line is renewed with the bank when its term ends; the full table is below). */
+function LoanLinesSummary({ data, amount }: { data: LoanView; amount: (v: number) => React.ReactNode }) {
   if (!data.lines.length) return null;
-  const last4 = (n: string, i: number) => (n ? `••${n.slice(-4)}` : `Line ${i + 1}`);
+  const n = data.nextRenewal;
+  const soon = !!n && n.daysLeft <= RENEW_SOON_DAYS;
   return (
-    <div className="space-y-2">
+    <>
       <div className="flex justify-between gap-3">
-        <span className="text-muted-foreground">
-          {data.lines.length} line{data.lines.length === 1 ? "" : "s"}
+        <span className="text-muted-foreground shrink-0">Lines</span>
+        <span className="min-w-0 text-right font-medium">
+          {amount(data.linesTotal)}
+          <span className="text-muted-foreground block text-xs font-normal">
+            {data.lines.length} line{data.lines.length === 1 ? "" : "s"}, table below
+          </span>
         </span>
-        <span className="font-medium">{amount(data.linesTotal)}</span>
       </div>
-      <div className="divide-y rounded-lg border">
-        {data.lines.map((l, i) => {
-          const soon = l.daysLeft != null && l.daysLeft <= RENEW_SOON_DAYS;
-          return (
-            <div key={l.id} className="flex items-center justify-between gap-3 px-3 py-2">
-              <span className="min-w-0">
-                <span className="block truncate font-medium" title={l.number || undefined}>
-                  {last4(l.number, i)}
-                </span>
-                <span className="text-muted-foreground block text-xs">{l.end ? `Ends ${fullDay(l.end)}` : "No end date"}</span>
+      {n ? (
+        <div className="flex justify-between gap-3">
+          <span className="text-muted-foreground shrink-0">Next renewal</span>
+          <span className="min-w-0 text-right font-medium">
+            {fullDay(n.date)}
+            <span className="block text-xs font-normal">
+              <span className={soon ? "rounded-full bg-[var(--m-warn-soft,#fbe9d2)] px-1.5 py-px text-[var(--m-warn,#7a4300)]" : "text-muted-foreground"}>
+                {renewLabel(n.daysLeft)}
               </span>
-              <span className="shrink-0 text-right">
-                <span className="block font-medium">{amount(l.amount)}</span>
-                {l.daysLeft != null ? (
-                  <span
-                    className={
-                      soon
-                        ? "inline-block rounded-full bg-[var(--m-warn-soft,#fbe9d2)] px-1.5 py-px text-[11px] text-[var(--m-warn,#7a4300)]"
-                        : "text-muted-foreground block text-xs"
-                    }
-                  >
-                    {soon ? `Renew ${renewLabel(l.daysLeft)}` : renewLabel(l.daysLeft)}
-                  </span>
+              <span className="text-muted-foreground">
+                {" "}
+                {n.count} line{n.count === 1 ? "" : "s"}
+                {n.fee != null ? (
+                  <>
+                    , fee {amount(n.fee)}
+                  </>
                 ) : null}
               </span>
-            </div>
-          );
-        })}
+            </span>
+          </span>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+/** Every line of the loan, like the bank's sheet (owner, 10-03: "add a table of those lines to the bottom
+ *  ... similar to the excel screenshot"): its number, amount, share of the monthly interest, the day its
+ *  term ends and the days left, and the renewal fee due then. On a phone: number and amount, the rest
+ *  under them. */
+export function LoanLinesTable({ id, currency }: { id: string; currency: string }) {
+  const { isBalanceHidden } = useBalancePrivacy();
+  const { data } = useLoan(id);
+  if (!data || data.keptBy || !data.lines.length) return null;
+  const amount = (v: number | null) => (v == null ? <span className="text-muted-foreground">-</span> : <AmountDisplay value={v} currency={currency} isHidden={isBalanceHidden} />);
+  const pct = data.terms.renewalFeePct;
+  const totalInterest = data.lines.reduce((sum, l) => sum + (l.monthlyInterest ?? 0), 0);
+  const head = "text-muted-foreground h-9 px-3 text-[11px] font-normal";
+  const cell = "px-3 py-2.5 tabular-nums";
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h3 className="text-lg font-bold">Lines</h3>
+        <span className="text-muted-foreground text-xs">
+          {pct != null ? `Renewal fee ${pct}% of each line, due when its term ends` : "Set a renewal fee % in Edit details to see each fee"}
+        </span>
+      </div>
+      <div className="overflow-hidden rounded-xl border">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className={head}>Loan number</TableHead>
+              <TableHead className={`${head} text-right`}>Amount</TableHead>
+              <TableHead className={`${head} hidden text-right md:table-cell`}>Interest a month</TableHead>
+              <TableHead className={`${head} hidden sm:table-cell`}>Term ends</TableHead>
+              <TableHead className={`${head} hidden text-right sm:table-cell`}>Renewal fee</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.lines.map((l, i) => {
+              const soon = l.daysLeft != null && l.daysLeft <= RENEW_SOON_DAYS;
+              const when = l.end ? (
+                <>
+                  {fullDay(l.end)}{" "}
+                  <span className={soon ? "rounded-full bg-[var(--m-warn-soft,#fbe9d2)] px-1.5 py-px text-[11px] text-[var(--m-warn,#7a4300)]" : "text-muted-foreground text-xs"}>
+                    {l.daysLeft != null ? renewLabel(l.daysLeft) : ""}
+                  </span>
+                </>
+              ) : (
+                <span className="text-muted-foreground">No end date</span>
+              );
+              return (
+                <TableRow key={l.id}>
+                  <TableCell className={cell}>
+                    <span className="font-medium">{l.number || `Line ${i + 1}`}</span>
+                    {/* A phone: when it ends, under its number. */}
+                    <span className="block text-xs sm:hidden">{when}</span>
+                  </TableCell>
+                  <TableCell className={`${cell} text-right`}>
+                    <span className="font-medium">{amount(l.amount)}</span>
+                    {l.fee != null ? (
+                      <span className="text-muted-foreground block text-xs sm:hidden">fee {amount(l.fee)}</span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className={`${cell} hidden text-right md:table-cell`}>{amount(l.monthlyInterest)}</TableCell>
+                  <TableCell className={`${cell} hidden sm:table-cell`}>{when}</TableCell>
+                  <TableCell className={`${cell} hidden text-right sm:table-cell`}>{amount(l.fee)}</TableCell>
+                </TableRow>
+              );
+            })}
+            <TableRow className="hover:bg-transparent">
+              <TableCell className={`${cell} text-muted-foreground`}>
+                Total, {data.lines.length} line{data.lines.length === 1 ? "" : "s"}
+              </TableCell>
+              <TableCell className={`${cell} text-right font-medium`}>
+                {amount(data.linesTotal)}
+                {data.feesTotal != null ? <span className="text-muted-foreground block text-xs font-normal sm:hidden">fees {amount(data.feesTotal)}</span> : null}
+              </TableCell>
+              <TableCell className={`${cell} hidden text-right font-medium md:table-cell`}>{amount(totalInterest)}</TableCell>
+              <TableCell className={`${cell} hidden sm:table-cell`} />
+              <TableCell className={`${cell} hidden text-right font-medium sm:table-cell`}>{amount(data.feesTotal)}</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
@@ -232,7 +328,7 @@ export function LoanScheduleSection({ id, currency }: { id: string; currency: st
           </>
         )}
         {/* The lines show whatever else is still missing. */}
-        <LoanLines data={data} amount={amount} />
+        <LoanLinesSummary data={data} amount={amount} />
       </div>
     </>
   );
