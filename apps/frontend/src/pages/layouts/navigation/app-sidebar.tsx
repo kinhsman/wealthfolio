@@ -127,11 +127,8 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                     {/* money-hub patch: the app's own name (owner, 10-02: "bring back the Wealthfolio name next to
                         the logo, but rename it to Lam'sfolio"). */}
                     {!collapsed && (
-                      <span
-                        data-mside-brand=""
-                        className="text-foreground/90 truncate whitespace-nowrap font-serif text-[15px] leading-none"
-                      >
-                        Lam’sfolio
+                      <span data-mside-brand="" className="truncate whitespace-nowrap leading-none">
+                        Lam’s<span data-mside-brand-folio="">folio</span>
                       </span>
                     )}
                   </Link>

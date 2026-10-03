@@ -1867,16 +1867,26 @@ summary {
   box-shadow: var(--ms-fill-shadow);
   color: var(--ms-on-fill);
 }
-/* The name beside the logo: Meadow never goes bold; Bronze sets it in its display serif. */
+/* The name beside the logo, the same in every look (owner, 10-03, picked from the Claude Design board: style 3
+   "two-tone" in colour B "Bronze"): Cormorant Garamond, "Lam’s" in the ink, "folio" in a warm bronze tuned per
+   look (Meadow Day #8a5a24, Night #d8b07a; Bronze Titanium Dark #dfbe96, Light #7a5332). */
 [data-mside] [data-mside-brand] {
-  font-weight: 500;
-  color: var(--ms-ink);
-}
-:is(.light [data-mside][data-light-skin="bronze"], .dark [data-mside][data-dark-skin="bronze"])
-  [data-mside-brand] {
   font-family: "Cormorant Garamond", Georgia, serif;
   font-weight: 600;
   font-size: 20px;
+  color: var(--ms-ink);
+}
+[data-mside] [data-mside-brand-folio] {
+  color: #8a5a24;
+}
+.dark [data-mside] [data-mside-brand-folio] {
+  color: #d8b07a;
+}
+.light [data-mside][data-light-skin="bronze"] [data-mside-brand-folio] {
+  color: #7a5332;
+}
+.dark [data-mside][data-dark-skin="bronze"] [data-mside-brand-folio] {
+  color: #dfbe96;
 }
 /* The floating bottom bars (phone, and the computer's bottom-bar mode): the bar in the theme's surface or
    glass, the stock sheen layers off, the current page's pill in the fill. */
