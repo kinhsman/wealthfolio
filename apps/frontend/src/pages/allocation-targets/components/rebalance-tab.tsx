@@ -401,7 +401,7 @@ function Eyebrow({ children, className }: { children: ReactNode; className?: str
   return (
     <div
       className={cn(
-        "text-muted-foreground font-mono text-xs uppercase tracking-[0.14em]",
+        "text-muted-foreground text-xs uppercase tracking-[0.14em]",
         className,
       )}
     >
@@ -458,7 +458,7 @@ function ModeSwitch({
             disabled={disabled}
             onClick={() => !disabled && onChange(m.id)}
             className={cn(
-              "group inline-flex min-w-0 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2 py-3 font-mono text-xs transition-colors sm:w-auto sm:px-4",
+              "group inline-flex min-w-0 shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2 py-3 text-xs transition-colors sm:w-auto sm:px-4",
               active
                 ? "bg-foreground text-background"
                 : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
@@ -546,7 +546,7 @@ export function PlannerInput({
     <div className="flex h-full flex-col">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
         <Eyebrow>{t("allocation:planner.cashToDeploy")}</Eyebrow>
-        <span className="text-muted-foreground font-mono text-[11px] sm:text-xs">
+        <span className="text-muted-foreground text-[11px] sm:text-xs">
           {t("allocation:planner.ofInScope", {
             amount: roundedCurrency(availableCash, currency, amountFormatting),
           })}
@@ -555,7 +555,7 @@ export function PlannerInput({
 
       <div
         className={cn(
-          "mt-1 flex items-center font-mono",
+          "mt-1 flex items-center",
           overBudget ? "text-destructive" : "text-foreground",
         )}
       >
@@ -593,7 +593,7 @@ export function PlannerInput({
             disabled={limit <= 0}
             onClick={() => onCashChange(p.value.toFixed(fraction))}
             className={cn(
-              "rounded-full border px-2.5 py-0.5 text-center font-mono text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto",
+              "rounded-full border px-2.5 py-0.5 text-center text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto",
               activePreset === p.id
                 ? "border-foreground bg-foreground text-background"
                 : "border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground",
@@ -604,12 +604,12 @@ export function PlannerInput({
         ))}
       </div>
 
-      <p className="text-foreground/80 mt-3 font-mono text-xs leading-relaxed sm:mt-4">
+      <p className="text-foreground/80 mt-3 text-xs leading-relaxed sm:mt-4">
         {description}
       </p>
 
       {overBudget && (
-        <p className="text-destructive mt-2 font-mono text-xs">
+        <p className="text-destructive mt-2 text-xs">
           {t("allocation:planner.exceedsAvailableCash")}
         </p>
       )}
@@ -622,7 +622,6 @@ export function PlannerInput({
           disabled={!canCalculate}
           variant={hasPlan ? "outline" : "default"}
           size="sm"
-          className="font-mono"
         >
           {hasPlan ? (
             <Icons.RefreshCw className="mr-1.5 h-3.5 w-3.5" />
@@ -718,10 +717,10 @@ function DriftBar({
           className={cn("absolute flex flex-col", primaryLabel.className)}
           style={primaryLabel.style}
         >
-          <span className="text-foreground font-mono text-xs font-semibold tabular-nums leading-none">
+          <span className="text-foreground text-xs font-semibold tabular-nums leading-none">
             {isAfter ? pp1(afterBps) : fmtBps(beforeBps)}
           </span>
-          <span className="text-muted-foreground font-mono text-xs uppercase tracking-wider">
+          <span className="text-muted-foreground text-xs uppercase tracking-wider">
             {isAfter ? t("allocation:driftBar.after") : t("allocation:driftBar.now")}
           </span>
         </div>
@@ -730,10 +729,10 @@ function DriftBar({
             className={cn("absolute flex flex-col", beforeLabel.className)}
             style={beforeLabel.style}
           >
-            <span className="text-muted-foreground font-mono text-xs tabular-nums leading-none">
+            <span className="text-muted-foreground text-xs tabular-nums leading-none">
               {pp1(beforeBps)}
             </span>
-            <span className="text-muted-foreground font-mono text-xs uppercase tracking-wider">
+            <span className="text-muted-foreground text-xs uppercase tracking-wider">
               {t("allocation:driftBar.before")}
             </span>
           </div>
@@ -741,7 +740,7 @@ function DriftBar({
       </div>
 
       {/* scale */}
-      <div className="text-muted-foreground mt-1 flex justify-between font-mono text-xs tabular-nums">
+      <div className="text-muted-foreground mt-1 flex justify-between text-xs tabular-nums">
         <span>0%</span>
         <span>{tolerance.label}</span>
         <span>{(scaleMaxBps / 100).toFixed(0)}%</span>
@@ -784,10 +783,10 @@ function PlannerResult({
     return (
       <div className="flex h-full flex-col">
         <Eyebrow>{t("allocation:result.currentMaxDrift")}</Eyebrow>
-        <div className="text-muted-foreground mt-0.5 font-mono text-2xl font-semibold tabular-nums leading-none">
+        <div className="text-muted-foreground mt-0.5 text-2xl font-semibold tabular-nums leading-none">
           {fmtBps(driftReport.maxDriftBps)}
         </div>
-        {driver && <p className="text-muted-foreground mt-1.5 font-mono text-xs">{driver}</p>}
+        {driver && <p className="text-muted-foreground mt-1.5 text-xs">{driver}</p>}
 
         <div className="mt-4">
           <DriftBar
@@ -806,12 +805,12 @@ function PlannerResult({
           ].map(({ key, label }) => (
             <div key={key}>
               <Eyebrow>{label}</Eyebrow>
-              <div className="text-muted-foreground mt-1 font-mono text-sm">—</div>
+              <div className="text-muted-foreground mt-1 text-sm">—</div>
             </div>
           ))}
         </div>
 
-        <p className="text-muted-foreground mt-auto pt-4 font-mono text-xs">
+        <p className="text-muted-foreground mt-auto pt-4 text-xs">
           {t("allocation:result.setInputsHint")}
         </p>
       </div>
@@ -844,7 +843,7 @@ function PlannerResult({
         {improvedBps !== 0 && (
           <span
             className={cn(
-              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-xs font-medium",
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
               improved
                 ? "bg-[#dfe9df] text-[#2f6b46] dark:bg-emerald-950/40 dark:text-emerald-400"
                 : "bg-[#f0e0da] text-[#b4664a] dark:bg-red-950/40 dark:text-red-400",
@@ -856,7 +855,7 @@ function PlannerResult({
       </div>
       <div
         className={cn(
-          "mt-0.5 font-mono text-2xl font-semibold tabular-nums leading-none",
+          "mt-0.5 text-2xl font-semibold tabular-nums leading-none",
           improved ? "text-[#2f6b46] dark:text-emerald-400" : "text-foreground",
         )}
       >
@@ -875,20 +874,20 @@ function PlannerResult({
       <div className="border-border/70 mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t pt-3 sm:grid-cols-3 sm:gap-4">
         <div>
           <Eyebrow>{t("allocation:result.trades")}</Eyebrow>
-          <div className="text-foreground mt-1 font-mono text-sm font-semibold tabular-nums leading-none sm:text-base">
+          <div className="text-foreground mt-1 text-sm font-semibold tabular-nums leading-none sm:text-base">
             {plan.trades.length}
           </div>
-          <div className="text-muted-foreground mt-1 font-mono text-xs">{tradeSub}</div>
+          <div className="text-muted-foreground mt-1 text-xs">{tradeSub}</div>
         </div>
         <div>
           <Eyebrow>
             <span className="sm:hidden">{t("allocation:result.deployedShort")}</span>
             <span className="hidden sm:inline">{t("allocation:result.cashDeployed")}</span>
           </Eyebrow>
-          <div className="text-foreground mt-1 font-mono text-sm font-semibold tabular-nums leading-none sm:text-base">
+          <div className="text-foreground mt-1 text-sm font-semibold tabular-nums leading-none sm:text-base">
             {roundedCurrency(deployed, currency, formatting)}
           </div>
-          <div className="text-muted-foreground mt-1 font-mono text-xs">
+          <div className="text-muted-foreground mt-1 text-xs">
             {t("allocation:result.percentOfScope", { pct: scopePct })}
           </div>
         </div>
@@ -897,10 +896,10 @@ function PlannerResult({
             <span className="sm:hidden">{t("allocation:result.remainingShort")}</span>
             <span className="hidden sm:inline">{t("allocation:result.cashRemaining")}</span>
           </Eyebrow>
-          <div className="text-foreground mt-1 font-mono text-sm font-semibold tabular-nums leading-none sm:text-base">
+          <div className="text-foreground mt-1 text-sm font-semibold tabular-nums leading-none sm:text-base">
             {roundedCurrency(plan.cashRemaining, currency, formatting)}
           </div>
-          <div className="text-muted-foreground mt-1 font-mono text-xs">
+          <div className="text-muted-foreground mt-1 text-xs">
             {sells > 0
               ? t("allocation:result.cashPlusProceeds")
               : t("allocation:result.belowMinLot")}
@@ -908,7 +907,7 @@ function PlannerResult({
         </div>
       </div>
 
-      <p className="text-foreground/80 mt-4 hidden font-mono text-xs leading-relaxed sm:block">
+      <p className="text-foreground/80 mt-4 hidden text-xs leading-relaxed sm:block">
         {t("allocation:result.deployNarrative", {
           amount: roundedCurrency(deployed, currency, formatting),
           actions: tradesActionSummary,
@@ -921,7 +920,7 @@ function PlannerResult({
         <button
           type="button"
           onClick={onReview}
-          className="mt-4 inline-flex w-fit items-center gap-1 font-mono text-xs font-medium text-[#2f6b46] underline-offset-4 hover:underline sm:mt-3 dark:text-emerald-400"
+          className="mt-4 inline-flex w-fit items-center gap-1 text-xs font-medium text-[#2f6b46] underline-offset-4 hover:underline sm:mt-3 dark:text-emerald-400"
         >
           {t("allocation:result.reviewTrades", { trades: tradesWord })}{" "}
           <Icons.ArrowRight className="h-3.5 w-3.5" />
@@ -948,7 +947,7 @@ function StackedBar({
     <div className="flex items-center gap-3">
       <span
         className={cn(
-          "w-12 shrink-0 font-mono text-xs",
+          "w-12 shrink-0 text-xs",
           bold ? "text-foreground font-semibold" : "text-muted-foreground",
         )}
       >
@@ -961,7 +960,7 @@ function StackedBar({
           return (
             <div
               key={s.categoryId}
-              className="flex items-center justify-start overflow-hidden whitespace-nowrap pl-2 font-mono text-xs font-medium text-white/95"
+              className="flex items-center justify-start overflow-hidden whitespace-nowrap pl-2 text-xs font-medium text-white/95"
               style={{ width: `${pct}%`, background: s.color }}
               title={`${s.categoryName}: ${pct.toFixed(1)}%`}
             >
@@ -986,7 +985,7 @@ function SleeveTable({ sleeves }: { sleeves: SleeveSummaryRow[] }) {
   });
 
   return (
-    <table className="w-full font-mono text-xs">
+    <table className="w-full text-xs">
       <thead>
         <tr className="text-muted-foreground border-border border-b text-xs uppercase tracking-wider">
           <th className="pb-2 text-left font-medium">{t("allocation:sleeve.sleeve")}</th>
@@ -1043,10 +1042,10 @@ function SleeveReshapeCard({ sleeves, mode }: { sleeves: SleeveSummaryRow[]; mod
     <Card>
       <CardContent className="p-0">
         <div className="px-5 pt-4">
-          <h3 className="text-foreground font-mono text-sm font-semibold">
+          <h3 className="text-foreground text-sm font-semibold">
             {t("allocation:sleeve.nowAfterTarget")}
           </h3>
-          <p className="text-muted-foreground mt-1 font-mono text-xs leading-relaxed">
+          <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
             {t("allocation:sleeve.reshapeDescription")}
           </p>
         </div>
@@ -1074,7 +1073,7 @@ function SleeveReshapeCard({ sleeves, mode }: { sleeves: SleeveSummaryRow[]; mod
                 .map((s) => (
                   <div
                     key={s.categoryId}
-                    className="flex items-center gap-1.5 whitespace-nowrap font-mono text-xs"
+                    className="flex items-center gap-1.5 whitespace-nowrap text-xs"
                   >
                     <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: s.color }} />
                     <span className="text-foreground">{s.categoryName}</span>
@@ -1087,7 +1086,7 @@ function SleeveReshapeCard({ sleeves, mode }: { sleeves: SleeveSummaryRow[]; mod
           <div className="px-5 py-5">
             <SleeveTable sleeves={sleeves} />
             {narrative && (
-              <p className="text-muted-foreground mt-5 font-mono text-xs leading-relaxed">
+              <p className="text-muted-foreground mt-5 text-xs leading-relaxed">
                 {narrative}
               </p>
             )}
@@ -1121,7 +1120,7 @@ function Warnings({ items }: { items: RebalanceWarning[] }) {
         className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
       >
         <Icons.AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-        <span className="flex-1 font-mono text-xs font-semibold text-amber-800 dark:text-amber-300">
+        <span className="flex-1 text-xs font-semibold text-amber-800 dark:text-amber-300">
           {t("allocation:warnings.thingsToKnow", { count: items.length })}
         </span>
         <Icons.ChevronDown
@@ -1135,7 +1134,7 @@ function Warnings({ items }: { items: RebalanceWarning[] }) {
         <ul className="divide-y divide-amber-200/60 border-t border-amber-200/70 dark:divide-amber-900/60 dark:border-amber-900/70">
           {items.map((w, i) => (
             <li key={i} className="flex items-start gap-3 px-4 py-2.5">
-              <span className="mt-px shrink-0 whitespace-nowrap rounded border border-amber-300 px-1.5 py-0.5 font-mono text-xs font-medium uppercase tracking-wide text-amber-700 dark:border-amber-700 dark:text-amber-400">
+              <span className="mt-px shrink-0 whitespace-nowrap rounded border border-amber-300 px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide text-amber-700 dark:border-amber-700 dark:text-amber-400">
                 {WARN_LABEL_KEYS[w.kind] ? t(WARN_LABEL_KEYS[w.kind]) : w.kind}
               </span>
               <span className="text-foreground/80 text-xs leading-snug">{w.message}</span>
@@ -1160,7 +1159,7 @@ function TradeActionBadge({ action }: { action: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded px-1.5 py-0.5 font-mono text-xs font-semibold",
+        "inline-flex items-center rounded px-1.5 py-0.5 text-xs font-semibold",
         isSell
           ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
           : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
@@ -1191,33 +1190,33 @@ function TradesTable({ trades, currency }: { trades: SuggestedManualTrade[]; cur
               <div className="min-w-0 flex-1">
                 <div className="flex min-w-0 items-center gap-2">
                   <TradeActionBadge action={trade.action} />
-                  <span className="text-foreground truncate font-mono text-sm font-semibold">
+                  <span className="text-foreground truncate text-sm font-semibold">
                     {trade.symbol ?? t("allocation:trades.trade")}
                   </span>
                 </div>
                 {trade.name && (
                   <div className="text-muted-foreground mt-1 truncate text-xs">{trade.name}</div>
                 )}
-                <div className="text-muted-foreground mt-1 font-mono text-xs">
+                <div className="text-muted-foreground mt-1 text-xs">
                   {trade.categoryName}
                 </div>
                 {trade.accountId && (
-                  <div className="text-muted-foreground mt-1 truncate font-mono text-xs">
+                  <div className="text-muted-foreground mt-1 truncate text-xs">
                     {t("allocation:trades.acct", { account: trade.accountId })}
                   </div>
                 )}
               </div>
               <div className="shrink-0 text-right">
-                <div className="text-foreground font-mono text-sm font-semibold tabular-nums">
+                <div className="text-foreground text-sm font-semibold tabular-nums">
                   {formatting.formatAmount(trade.estimatedAmount, currency)}
                 </div>
-                <div className="text-muted-foreground mt-1 font-mono text-xs tabular-nums">
+                <div className="text-muted-foreground mt-1 text-xs tabular-nums">
                   {t("allocation:trades.sharesLabel", { qty: tradeQuantityLabel(trade.quantity) })}
                 </div>
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-3 font-mono text-xs">
+            <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
               <div>
                 <div className="text-muted-foreground uppercase tracking-[0.14em]">
                   {t("allocation:trades.price")}
@@ -1239,7 +1238,7 @@ function TradesTable({ trades, currency }: { trades: SuggestedManualTrade[]; cur
             </div>
           </div>
         ))}
-        <div className="bg-muted/20 flex items-center justify-between gap-3 px-4 py-3 font-mono text-xs">
+        <div className="bg-muted/20 flex items-center justify-between gap-3 px-4 py-3 text-xs">
           <span className="text-muted-foreground">{countSummary}</span>
           <span className="text-foreground font-semibold tabular-nums">
             {formatting.formatAmount(buyTotal, currency)}
@@ -1259,7 +1258,7 @@ function TradesTable({ trades, currency }: { trades: SuggestedManualTrade[]; cur
             <col className="w-[27%]" />
           </colgroup>
           <thead>
-            <tr className="border-border text-muted-foreground border-b font-mono text-xs uppercase tracking-wider">
+            <tr className="border-border text-muted-foreground border-b text-xs uppercase tracking-wider">
               <th className="py-2.5 pl-5 pr-2 text-left font-medium">
                 {t("allocation:trades.colAction")}
               </th>
@@ -1292,7 +1291,7 @@ function TradesTable({ trades, currency }: { trades: SuggestedManualTrade[]; cur
                 <td className="pr-3">
                   {trade.symbol ? (
                     <>
-                      <div className="text-foreground font-mono text-xs font-medium">
+                      <div className="text-foreground text-xs font-medium">
                         {trade.symbol}
                       </div>
                       {trade.name && (
@@ -1306,7 +1305,7 @@ function TradesTable({ trades, currency }: { trades: SuggestedManualTrade[]; cur
                 <td className="text-muted-foreground pl-14 pr-3 text-xs">
                   <div>{trade.categoryName}</div>
                   {trade.accountId && (
-                    <div className="truncate font-mono">
+                    <div className="truncate">
                       {t("allocation:trades.acct", { account: trade.accountId })}
                     </div>
                   )}
@@ -1333,7 +1332,7 @@ function TradesTable({ trades, currency }: { trades: SuggestedManualTrade[]; cur
           </tbody>
           <tfoot>
             <tr className="text-xs">
-              <td colSpan={3} className="text-muted-foreground py-3 pl-5 font-mono">
+              <td colSpan={3} className="text-muted-foreground py-3 pl-5">
                 {countSummary}
               </td>
               <td className="text-foreground py-3 pr-3 text-right font-semibold tabular-nums">
@@ -1549,7 +1548,7 @@ export function RebalanceTab({
       </Card>
 
       {hasStalePlan && sourceReady && !isCalculating && (
-        <div className="border-border bg-muted/40 text-muted-foreground rounded-lg border px-4 py-3 font-mono text-xs">
+        <div className="border-border bg-muted/40 text-muted-foreground rounded-lg border px-4 py-3 text-xs">
           {t("allocation:rebalance.stalePlan")}
         </div>
       )}
@@ -1566,10 +1565,10 @@ export function RebalanceTab({
           <Card ref={tradesRef}>
             <CardContent className="p-0">
               <div className="px-5 pb-2 pt-4">
-                <h3 className="text-foreground font-mono text-sm font-semibold">
+                <h3 className="text-foreground text-sm font-semibold">
                   {t("allocation:rebalance.proposedTrades")}
                 </h3>
-                <p className="text-muted-foreground mt-1 font-mono text-xs">
+                <p className="text-muted-foreground mt-1 text-xs">
                   {(() => {
                     const buys = plan.trades.filter((trade) => trade.action === "buy").length;
                     const sells = plan.trades.filter((trade) => trade.action === "sell").length;
@@ -1593,7 +1592,7 @@ export function RebalanceTab({
                   <TradesTable trades={plan.trades} currency={currency} />
                 </div>
               ) : (
-                <p className="text-muted-foreground px-6 py-4 font-mono text-xs">
+                <p className="text-muted-foreground px-6 py-4 text-xs">
                   {t("allocation:rebalance.noTrades")}
                 </p>
               )}
@@ -1602,7 +1601,7 @@ export function RebalanceTab({
 
           {/* Footer */}
           <div className="border-border flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-muted-foreground font-mono text-xs leading-relaxed">
+            <span className="text-muted-foreground text-xs leading-relaxed">
               {t("allocation:rebalance.calculatedFooter", {
                 name: profile.name,
                 date: dateFormatting.formatDate(new Date(), {

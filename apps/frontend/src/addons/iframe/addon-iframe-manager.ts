@@ -1216,7 +1216,8 @@ export class AddonIframeManager {
 
     this.themeObserver = new MutationObserver(this.scheduleThemeBroadcast);
     this.themeObserver.observe(document.documentElement, {
-      attributeFilter: ["class", "style"],
+      // money-hub patch: the theme picked for each mode lives on <html> too (components/app-skin.tsx)
+      attributeFilter: ["class", "style", "data-light-skin", "data-dark-skin"],
       attributes: true,
     });
     this.themeObserver.observe(document.body, {

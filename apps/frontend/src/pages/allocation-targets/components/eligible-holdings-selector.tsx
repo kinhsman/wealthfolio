@@ -78,7 +78,7 @@ export function EligibleHoldingsSelector({
 
   return (
     <div className="mt-4">
-      <div className="text-muted-foreground font-mono text-xs uppercase tracking-[0.14em]">
+      <div className="text-muted-foreground text-xs uppercase tracking-[0.14em]">
         {t("allocation:eligibleHoldings.label")}
       </div>
       <Popover>
@@ -88,7 +88,7 @@ export function EligibleHoldingsSelector({
             aria-label={t("allocation:eligibleHoldings.triggerLabel", { label, summary })}
             className="border-border/70 hover:border-foreground/40 mt-1.5 flex w-full items-center justify-between gap-3 rounded-xl border border-dashed px-3 py-2.5 text-left transition-colors"
           >
-            <span className="text-foreground min-w-0 truncate font-mono text-sm font-semibold tabular-nums">
+            <span className="text-foreground min-w-0 truncate text-sm font-semibold tabular-nums">
               {summary}
             </span>
             <Icons.ChevronDown className="text-muted-foreground h-4 w-4 shrink-0" />
@@ -131,7 +131,7 @@ export function EligibleHoldingsSelector({
                       >
                         <SelectionMark selected={selected} />
                         <span className="min-w-0 flex-1">
-                          <span className="block font-mono text-xs font-semibold">
+                          <span className="block text-xs font-semibold">
                             {holding.symbol}
                           </span>
                           {holding.name && (
@@ -139,7 +139,7 @@ export function EligibleHoldingsSelector({
                               {holding.name}
                             </span>
                           )}
-                          <span className="text-muted-foreground/80 block truncate font-mono text-[11px]">
+                          <span className="text-muted-foreground/80 block truncate text-[11px]">
                             {details}
                           </span>
                         </span>
@@ -150,7 +150,7 @@ export function EligibleHoldingsSelector({
               ))}
             </CommandList>
             <CommandSeparator />
-            <div className="text-muted-foreground flex items-center justify-between px-3 py-2 font-mono text-[11px]">
+            <div className="text-muted-foreground flex items-center justify-between px-3 py-2 text-[11px]">
               <span className="tabular-nums">
                 {t("allocation:eligibleHoldings.selectedCount", {
                   selected: selectedCount,
@@ -178,7 +178,7 @@ export function EligibleHoldingsSelector({
         </PopoverContent>
       </Popover>
       {selectedCount === 0 && (
-        <p className="text-destructive mt-2 font-mono text-xs">
+        <p className="text-destructive mt-2 text-xs">
           {t("allocation:eligibleHoldings.emptyGuidance")}
         </p>
       )}

@@ -57,6 +57,7 @@ interface PageProps extends React.HTMLAttributes<HTMLDivElement> {
   containerMode?: boolean;
 }
 
+// money-hub patch: data-page marks the page box, so the theme can show its ground through it (globals.css).
 export function Page({ children, className, containerMode = false, ...props }: PageProps) {
   const [scrollY, setScrollY] = React.useState(0);
   const [isScrolled, setIsScrolled] = React.useState(false);
@@ -81,7 +82,7 @@ export function Page({ children, className, containerMode = false, ...props }: P
   if (containerMode) {
     return (
       <PageContext.Provider value={{ scrollY, isScrolled }}>
-        <div ref={scrollContainerRef} className={cn("relative w-full", "bg-background", className)} {...props}>
+        <div ref={scrollContainerRef} data-page className={cn("relative w-full", "bg-background", className)} {...props}>
           {children}
         </div>
       </PageContext.Provider>
@@ -90,7 +91,7 @@ export function Page({ children, className, containerMode = false, ...props }: P
 
   return (
     <PageContext.Provider value={{ scrollY, isScrolled }}>
-      <div ref={scrollContainerRef} className={cn("relative w-full", "bg-background", className)} {...props}>
+      <div ref={scrollContainerRef} data-page className={cn("relative w-full", "bg-background", className)} {...props}>
         {children}
       </div>
     </PageContext.Provider>

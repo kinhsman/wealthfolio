@@ -5,6 +5,8 @@ import { AddonRuntimeLoader } from "@/addons/addon-runtime-loader";
 import { setAddonQueryClient } from "@/addons/addons-runtime-context";
 import { AssetLogoRegistrySync } from "@/components/asset-logo-registry-sync";
 import { Toaster } from "@/components/sonner";
+// money-hub patch: the theme picked on Settings, Appearance, on the whole app and its pop-ups.
+import { AppSkin } from "@/components/app-skin";
 import { AuthGate, AuthProvider } from "@/context/auth-context";
 import { EventDialogProvider } from "@/features/spending/components/event-dialog-provider";
 // money-hub patch: the Make a rule preview, opened from the rule offer toast.
@@ -49,6 +51,7 @@ function App() {
       <WealthfolioConnectProvider>
         <PrivacyProvider>
           <TooltipProvider>
+            <AppSkin />
             <Toaster mobileOffset={{ top: "68px" }} closeButton expand={false} />
             <AddonRuntimeLoader />
             <EventDialogProvider>

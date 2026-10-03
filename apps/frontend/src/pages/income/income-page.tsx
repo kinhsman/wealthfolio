@@ -201,7 +201,8 @@ export default function IncomePage() {
       {filters}
       <div className="space-y-6">
         <div className="grid gap-6 md:grid-cols-3">
-          <Card className="border-yellow-500/10 bg-yellow-500/10">
+          {/* money-hub patch: the three summary cards are the theme's own cards (were tinted yellow), owner 10-03 */}
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 {selectedPeriod === "ALL"
@@ -268,7 +269,7 @@ export default function IncomePage() {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-yellow-500/10 bg-yellow-500/10">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{t("income:monthly_average")}</CardTitle>
               <Icons.DollarSign className="text-muted-foreground h-4 w-4" />
@@ -289,7 +290,7 @@ export default function IncomePage() {
               </div>
             </CardContent>
           </Card>
-          <Card className="border-yellow-500/10 bg-yellow-500/10">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">{t("income:income_sources")}</CardTitle>
               <Icons.PieChart className="text-muted-foreground h-4 w-4" />

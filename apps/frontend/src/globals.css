@@ -1140,10 +1140,14 @@ summary {
 
 /* money-hub patch: Meadow, the Spending dashboard's look (owner picked design 5, 10-02; the Meadow design
    system in Claude Design). Sand page, white cards, forest + lime actions, one mint hero; Night is warm
-   charcoal. Scoped to `.meadow` so the rest of the app keeps Flexoki: the shadcn tokens are re-pointed
-   inside it, so every `text-muted-foreground`, `bg-card`, `border-border` there turns Meadow. The font is
-   not set: the app's own font setting (body.font-mono / sans / serif) carries through. */
-.meadow {
+   charcoal. The shadcn tokens are re-pointed here, so every `text-muted-foreground`, `bg-card`,
+   `border-border` turns Meadow. The font is not set: the app's own font setting (body.font-mono / sans /
+   serif) carries through. It used to be scoped to `.meadow` pages only (the rest kept Flexoki); since 10-03
+   the page itself (<html>, `mh-skin`, components/app-skin.tsx) carries the same tokens and the picks for
+   both modes, so every page and every pop-up (they open outside the page) wears the theme (owner: "scan the
+   money app to see if any page, widget, modal currently not following the theme setting", then "proceed"). */
+.meadow,
+html.mh-skin {
   --m-page: #f5f0ec;
   --m-surface: #ffffff;
   --m-tile: #f8f5f1;
@@ -1224,7 +1228,8 @@ summary {
   color: var(--m-ink);
   font-variant-numeric: tabular-nums;
 }
-.dark .meadow {
+.dark .meadow,
+html.dark.mh-skin {
   --m-page: #121110;
   --m-surface: #1b1a18;
   --m-tile: #211f1d;
@@ -1350,7 +1355,8 @@ summary {
    own font setting (owner, 10-03: "make the titanium theme follow the app's font config"). Dark is the
    "Deep" level the owner picked on 10-03 ("still a little too bright"): a near-black ground, the bronze glows
    turned well down, glass more solid and a softer bronze fill, here and on the sidebar and bottom bars. */
-.light .meadow[data-light-skin="bronze"] {
+.light .meadow[data-light-skin="bronze"],
+html.light.mh-skin[data-light-skin="bronze"] {
   --m-page: #efe8e0;
   --m-surface: #fbf8f4;
   --m-tile: rgba(255, 255, 255, 0.5);
@@ -1442,15 +1448,17 @@ summary {
     0 16px 36px rgba(140, 95, 50, 0.22);
   --bt-notice: rgba(246, 226, 192, 0.58);
   --bt-notice-line: rgba(176, 122, 30, 0.22);
-  background:
+  --bt-ground:
     linear-gradient(to bottom, #efe8e0 0, rgba(239, 232, 224, 0) 110px),
     radial-gradient(520px 420px at 8% 0%, rgba(214, 164, 108, 0.45), transparent 70%),
     radial-gradient(380px 320px at 100% 22%, rgba(255, 255, 255, 0.75), transparent 70%),
     radial-gradient(460px 400px at 0% 45%, rgba(196, 150, 100, 0.3), transparent 70%),
     radial-gradient(420px 360px at 100% 68%, rgba(214, 180, 140, 0.3), transparent 70%),
     radial-gradient(460px 380px at 0% 88%, rgba(140, 142, 180, 0.24), transparent 70%), #efe8e0;
+  background: var(--bt-ground);
 }
-.dark .meadow[data-dark-skin="bronze"] {
+.dark .meadow[data-dark-skin="bronze"],
+html.dark.mh-skin[data-dark-skin="bronze"] {
   --m-page: #12100f;
   --m-surface: #1e1a18;
   --m-tile: rgba(255, 240, 225, 0.05);
@@ -1541,21 +1549,14 @@ summary {
     inset 0 -1px 0 rgba(0, 0, 0, 0.28), 0 18px 40px rgba(0, 0, 0, 0.55);
   --bt-notice: rgba(60, 45, 24, 0.6);
   --bt-notice-line: rgba(226, 190, 110, 0.2);
-  background:
+  --bt-ground:
     linear-gradient(to bottom, #12100f 0, rgba(18, 16, 15, 0) 110px),
     radial-gradient(520px 420px at 8% 0%, rgba(176, 116, 60, 0.2), transparent 70%),
     radial-gradient(380px 320px at 100% 22%, rgba(214, 196, 170, 0.05), transparent 70%),
     radial-gradient(460px 400px at 0% 45%, rgba(150, 98, 52, 0.11), transparent 70%),
     radial-gradient(420px 360px at 100% 68%, rgba(170, 120, 70, 0.08), transparent 70%),
     radial-gradient(460px 380px at 0% 88%, rgba(78, 80, 124, 0.14), transparent 70%), #12100f;
-}
-/* The dashboard's own header (the tabs above the page) takes the same ground, and the page's glow fades
-   in from it, so there is no edge between them. */
-.light [class~="bg-background"]:has(.meadow[data-light-skin="bronze"]) {
-  background-color: #efe8e0;
-}
-.dark [class~="bg-background"]:has(.meadow[data-dark-skin="bronze"]) {
-  background-color: #12100f;
+  background: var(--bt-ground);
 }
 /* Liquid glass: every card is frosted glass with a lit top edge and a 145deg sheen. */
 :is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
@@ -1606,23 +1607,6 @@ summary {
 [data-mdash] {
   --primary: var(--m-forest);
   --primary-foreground: var(--m-on-forest);
-}
-/* ...and so do the page header's buttons above them (outside the .meadow box), while such a page is open. */
-.light:has([data-mdash][data-light-skin="meadow"]) {
-  --primary: #054e04;
-  --primary-foreground: #cff6ac;
-}
-.dark:has([data-mdash][data-dark-skin="meadow"]) {
-  --primary: #cff6ac;
-  --primary-foreground: #0b2a0a;
-}
-.light:has([data-mdash][data-light-skin="bronze"]) {
-  --primary: #6e4a2a;
-  --primary-foreground: #f7efe4;
-}
-.dark:has([data-mdash][data-dark-skin="bronze"]) {
-  --primary: #c9a27a;
-  --primary-foreground: #211c1b;
 }
 
 /* Investments: the stock Accounts list inside one Meadow card, each account a tile (the canvas design). */
@@ -1915,6 +1899,76 @@ summary {
   font-weight: 500;
 }
 
+/* money-hub patch: the whole app in the theme picked for each mode (owner, 10-03, after the theme check:
+   "proceed"). <html> carries the theme's tokens (the .meadow blocks above), so the stock pages and every
+   pop-up already take its colours; here is the rest of the look. [data-mground] is the app's page area
+   (app-layout.tsx); a page that is a .meadow box (the dashboard, Settings, Taxes...) keeps its own rules. */
+html.mh-skin {
+  --primary: var(--m-forest);
+  --primary-foreground: var(--m-on-forest);
+  --popover: var(--m-surface);
+  --popover-foreground: var(--m-ink);
+  --input-bg: var(--m-tile);
+  --toast-bg: var(--m-surface);
+  --toast-fg: var(--m-ink);
+  --toast-border: var(--m-line);
+}
+html.light.mh-skin[data-light-skin="bronze"] {
+  --bt-pop: rgba(251, 248, 244, 0.9);
+}
+html.dark.mh-skin[data-dark-skin="bronze"] {
+  --bt-pop: rgba(30, 26, 24, 0.92);
+}
+/* Bronze's glows behind the stock pages too: the page area paints them and a stock page's box lets them
+   through (a .meadow page keeps its solid header strip above its own ground, as before). */
+:is(html.light.mh-skin[data-light-skin="bronze"], html.dark.mh-skin[data-dark-skin="bronze"])
+  [data-mground] {
+  background: var(--bt-ground);
+}
+:is(html.light.mh-skin[data-light-skin="bronze"], html.dark.mh-skin[data-dark-skin="bronze"])
+  [data-mground]
+  [data-page]:not(:has(.meadow)) {
+  background: transparent;
+}
+/* The stock pages' cards: Meadow's flat card, Bronze's glass, the same as on Settings. */
+html.mh-skin [data-mground] .bg-card.border:is(.rounded-lg, .rounded-xl, .rounded-2xl):not(.meadow *) {
+  border-color: var(--m-line);
+  border-radius: 20px;
+  background: var(--m-surface);
+  box-shadow: none;
+}
+:is(html.light.mh-skin[data-light-skin="bronze"], html.dark.mh-skin[data-dark-skin="bronze"])
+  [data-mground]
+  .bg-card.border:is(.rounded-lg, .rounded-xl, .rounded-2xl):not(.meadow *) {
+  background: linear-gradient(145deg, var(--bt-sheen) 0.6%, transparent 60%), var(--bt-glass);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid var(--bt-glass-line);
+  box-shadow: var(--bt-glass-edge);
+  border-radius: 14px;
+}
+/* Pop-ups open outside the page (straight under <body>). Bronze makes them its glass, a little more solid
+   than a card so their text stays easy to read over a busy page. */
+:is(html.light.mh-skin[data-light-skin="bronze"], html.dark.mh-skin[data-dark-skin="bronze"])
+  body
+  > :not(#root)
+  :is(.bg-popover, [role="dialog"]:is(.bg-card, .bg-background), [role="alertdialog"].bg-background) {
+  background: linear-gradient(145deg, var(--bt-sheen) 0.6%, transparent 60%), var(--bt-pop);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  border-color: var(--bt-glass-line);
+  box-shadow: var(--bt-glass-edge);
+}
+/* Meadow's type on the stock pages and the pop-ups: labels in sentence case, never bold (hierarchy comes
+   from size and colour), like the redesigned pages. */
+html.mh-skin :is([data-mground], body > :not(#root)) :is(.font-semibold, .font-bold, .font-extrabold) {
+  font-weight: 500;
+}
+html.mh-skin :is([data-mground], body > :not(#root)) .uppercase {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 /* money-hub patch: the mouse light (owner, 10-02). lib/spotlight.ts marks the card under the mouse with
    data-spot-on="1" and keeps --spot-x / --spot-y on it; here a soft pool of light follows the mouse inside
    that card and the card's edge lights up near it. The light sits over the content without touching it
@@ -1932,22 +1986,26 @@ summary {
   --spot-blend: normal;
   --spot-ring: rgba(255, 250, 240, 0.3);
 }
-.meadow {
+.meadow,
+html.mh-skin {
   --spot-glow: var(--m-mint);
   --spot-blend: multiply;
   --spot-ring: color-mix(in srgb, var(--m-forest) 45%, transparent);
 }
-.dark .meadow {
+.dark .meadow,
+html.dark.mh-skin {
   --spot-glow: color-mix(in srgb, var(--m-forest) 14%, transparent);
   --spot-blend: normal;
   --spot-ring: color-mix(in srgb, var(--m-forest) 40%, transparent);
 }
-.light .meadow[data-light-skin="bronze"] {
+.light .meadow[data-light-skin="bronze"],
+html.light.mh-skin[data-light-skin="bronze"] {
   --spot-glow: #f1dcc2;
   --spot-blend: multiply;
   --spot-ring: rgba(165, 123, 79, 0.75);
 }
-.dark .meadow[data-dark-skin="bronze"] {
+.dark .meadow[data-dark-skin="bronze"],
+html.dark.mh-skin[data-dark-skin="bronze"] {
   --spot-glow: rgba(255, 214, 170, 0.2);
   --spot-blend: normal;
   --spot-ring: rgba(232, 210, 178, 0.5);

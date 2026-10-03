@@ -1074,7 +1074,7 @@ function EditStreamDialog({
                 <div className="flex items-start justify-between gap-3 p-3">
                   <div className="min-w-0">
                     <Label htmlFor="edit-send" className="text-sm font-medium">Send the bank&rsquo;s amount to Owly</Label>
-                    <div className={cn("text-xs leading-snug", owly?.error ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground")}>
+                    <div className={cn("text-xs leading-snug", owly?.error ? "text-[var(--m-warn)]" : "text-muted-foreground")}>
                       {owly?.error
                         ? owly.error
                         : owly?.amount != null && owly.from

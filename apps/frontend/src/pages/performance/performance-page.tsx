@@ -427,10 +427,10 @@ function HeaderMetric({
 const STRIP_SECTION_CLASS =
   "border-border/70 flex min-h-[4.75rem] min-w-0 flex-col justify-center border-l pl-5";
 const STRIP_TITLE_CLASS =
-  "text-muted-foreground/70 mb-2.5 font-mono text-[9px] font-semibold uppercase tracking-[0.28em]";
+  "text-muted-foreground/70 mb-2.5 text-[9px] font-semibold uppercase tracking-[0.28em]";
 const STRIP_LABEL_CLASS =
-  "text-muted-foreground truncate font-mono text-[11px] font-medium tracking-[0.02em]";
-const STRIP_VALUE_CLASS = "font-mono text-lg font-semibold leading-none";
+  "text-muted-foreground truncate text-[11px] font-medium tracking-[0.02em]";
+const STRIP_VALUE_CLASS = "text-lg font-semibold leading-none";
 
 function StripSection({
   title,

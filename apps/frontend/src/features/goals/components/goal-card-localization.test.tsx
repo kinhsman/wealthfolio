@@ -51,8 +51,9 @@ describe("GoalCard localization", () => {
           <GoalCard goal={{ ...goal, targetDate: "2026-01-01" }} />
         </MemoryRouter>,
       );
-      expect(screen.queryByText(/DUE/)).not.toBeInTheDocument();
-      expect(screen.getByText(/0M LEFT/)).toBeInTheDocument();
+      // money-hub: the card's labels are sentence case ("Due", "0m left"), owner 10-03
+      expect(screen.queryByText(/\bDue\b/)).not.toBeInTheDocument();
+      expect(screen.getByText(/0m left/)).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

@@ -131,13 +131,13 @@ function TransactionCardImpl({
       data-state={isSelected ? "selected" : undefined}
       className={cn(
         "relative overflow-hidden p-2.5",
-        row.needsReview && "border-amber-500/40 bg-amber-500/5",
+        row.needsReview && "border-[color-mix(in_srgb,var(--m-warn-line)_40%,transparent)] bg-[color-mix(in_srgb,var(--m-warn-line)_6%,transparent)]",
       )}
     >
       {/* Same leading marker the table row uses, so review state costs no width
           in the name and no height in the card. */}
       {row.needsReview && (
-        <span className="absolute inset-y-0 left-0 w-[3px] bg-amber-500" aria-hidden="true" />
+        <span className="absolute inset-y-0 left-0 w-[3px] bg-[var(--m-warn-line)]" aria-hidden="true" />
       )}
       {/* Centred rather than top-aligned: on a two-line card the selection
           control and the row menu read as belonging to the whole row, which is
@@ -161,7 +161,7 @@ function TransactionCardImpl({
                 needs a form that survives both a screen reader and a reader who
                 cannot separate the colours. */}
             {row.needsReview && (
-              <span className="shrink-0 text-amber-600 dark:text-amber-500">
+              <span className="shrink-0 text-[var(--m-warn)]">
                 <Icons.AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="sr-only">{t("spending:transactions.review")}</span>
               </span>

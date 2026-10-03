@@ -79,7 +79,11 @@ const AppLayoutContent = () => {
             shouldUseMobileNavigation ? "overscroll-contain" : undefined,
           )}
         >
-          <main className="relative flex min-h-0 w-full max-w-full flex-1 flex-col overflow-x-hidden">
+          {/* money-hub patch: data-mground = the page area, where the theme paints its ground (globals.css) */}
+          <main
+            data-mground
+            className="relative flex min-h-0 w-full max-w-full flex-1 flex-col overflow-x-hidden"
+          >
             <div
               data-tauri-drag-region="true"
               className="draggable pointer-events-auto absolute inset-x-0 top-0 z-50 h-6 cursor-grab opacity-0"

@@ -48,7 +48,7 @@ export function ReturnsCard({ currency = "USD", className }: { currency?: string
                   <div className="flex items-center gap-1.5">
                     <span className="text-foreground/90 truncate text-xs font-medium">{x.name}</span>
                     {st.tone === "look" ? (
-                      <span className={cn("shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium", "bg-amber-500/10 text-amber-700 dark:text-amber-400")}>{st.label}</span>
+                      <span className={cn("shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium", "bg-[var(--m-warn-soft)] text-[var(--m-warn)]")}>{st.label}</span>
                     ) : null}
                   </div>
                   <div className="text-muted-foreground truncate text-[11px]">{returnLine(x)}</div>

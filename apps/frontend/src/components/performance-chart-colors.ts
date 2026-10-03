@@ -1,10 +1,13 @@
+// money-hub patch: the lines follow the theme picked for each mode on Settings, Appearance (owner, 10-03):
+// the first one (the portfolio) in the theme's chart colour, the ones compared with it in its category colours.
+// They were Flexoki's fixed blue, magenta, cyan... (the theme's tokens live on <html>, so they work anywhere).
 export const PERFORMANCE_CHART_COLORS = [
-  "#4385BE", // blue-400
-  "#CE5D97", // magenta-400
-  "#3AA99F", // cyan-400
-  "#8B7EC8", // purple-400
-  "#879A39", // green-400
-  "#D0A215", // yellow-500
-  "#DA702C", // orange-400
-  "#D14D41", // red-400
+  "var(--m-chart)",
+  "var(--m-chart-2)",
+  "var(--m-cat-5)",
+  "var(--m-cat-9)",
+  "var(--m-cat-4)",
+  "var(--m-cat-1)",
+  "var(--m-cat-6)",
+  "var(--m-cat-8)",
 ] as const;

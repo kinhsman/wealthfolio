@@ -131,11 +131,11 @@ function TransactionRowImpl({
       ref={ref}
       data-index={dataIndex}
       data-state={isSelected ? "selected" : undefined}
-      className={cn("group/row", row.needsReview && "bg-amber-500/5")}
+      className={cn("group/row", row.needsReview && "bg-[color-mix(in_srgb,var(--m-warn-line)_6%,transparent)]")}
     >
       <TableCell className="relative w-10 px-3 py-2">
         {row.needsReview && (
-          <span className="absolute inset-y-0 left-0 w-[3px] bg-amber-500" aria-hidden="true" />
+          <span className="absolute inset-y-0 left-0 w-[3px] bg-[var(--m-warn-line)]" aria-hidden="true" />
         )}
         <Checkbox
           checked={isSelected}
@@ -170,7 +170,7 @@ function TransactionRowImpl({
               nothing to a reader who cannot separate amber from the row behind
               it. An icon costs a line of width and says it in both registers. */}
           {row.needsReview && (
-            <span className="shrink-0 text-amber-600 dark:text-amber-500">
+            <span className="shrink-0 text-[var(--m-warn)]">
               <Icons.AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
               <span className="sr-only">{t("spending:transactions.review")}</span>
             </span>

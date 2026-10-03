@@ -26,9 +26,10 @@ import {
   type ReturnsView,
 } from "../lib/returns";
 
+// money-hub patch: the theme's own good and worth-a-look colours (owner, 10-03: the whole app in the theme)
 const TONE = {
-  fine: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  look: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  fine: "bg-[var(--m-good-soft)] text-[var(--m-up)]",
+  look: "bg-[var(--m-warn-soft)] text-[var(--m-warn)]",
   plain: "bg-muted text-muted-foreground",
   over: "bg-muted text-muted-foreground",
 } as const;

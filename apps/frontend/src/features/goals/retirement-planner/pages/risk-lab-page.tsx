@@ -401,7 +401,7 @@ function PlanResilienceHero({
               <p className="text-muted-foreground text-[9px] font-semibold uppercase tracking-[0.22em]">
                 {t("goals:risk_lab.hero.base_case")}
               </p>
-              <h2 className="mt-2 max-w-[95%] font-serif text-2xl font-normal leading-[1.15] tracking-tight">
+              <h2 className="mt-2 max-w-[95%] text-2xl font-normal leading-[1.15] tracking-tight">
                 {t("goals:risk_lab.hero.your_base_plan_is")}{" "}
                 <span
                   className={cn(
@@ -634,7 +634,7 @@ function StressTestsSection({
           <p className="text-muted-foreground/55 text-[10px] font-normal uppercase leading-none tracking-[0.24em]">
             {t("goals:risk_lab.stress.eyebrow_with_count", { count: sorted.length || 6 })}
           </p>
-          <h2 className="mt-2 font-serif text-[23px] font-normal leading-[1.05] tracking-[-0.02em]">
+          <h2 className="mt-2 text-[23px] font-normal leading-[1.05] tracking-[-0.02em]">
             {t("goals:risk_lab.stress.heading")}
           </h2>
         </div>
@@ -976,7 +976,7 @@ function MonteCarloDistributionSection({
             <p className="text-muted-foreground/60 text-[10px] font-normal uppercase leading-none tracking-[0.24em]">
               {t("goals:risk_lab.montecarlo.eyebrow")}
             </p>
-            <CardTitle className="mt-2 font-serif text-[23px] font-normal leading-[1.05] tracking-[-0.02em]">
+            <CardTitle className="mt-2 text-[23px] font-normal leading-[1.05] tracking-[-0.02em]">
               {t("goals:risk_lab.montecarlo.heading")}
             </CardTitle>
             <p className="text-muted-foreground mt-4 max-w-[900px] text-sm leading-relaxed">
@@ -1525,7 +1525,7 @@ function WhatMovesThePlanSection({
           <p className="text-muted-foreground/55 text-[10px] font-normal uppercase leading-none tracking-[0.24em]">
             {t("goals:risk_lab.moves.eyebrow")}
           </p>
-          <h2 className="mt-2 font-serif text-[23px] font-normal leading-[1.05] tracking-[-0.02em]">
+          <h2 className="mt-2 text-[23px] font-normal leading-[1.05] tracking-[-0.02em]">
             {t("goals:risk_lab.moves.heading")}
           </h2>
           <p className="text-muted-foreground mt-2 max-w-4xl text-sm leading-relaxed xl:whitespace-nowrap">

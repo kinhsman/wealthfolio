@@ -113,12 +113,13 @@ export function AppearanceForm() {
           )}
         />
 
-        {/* money-hub patch: the Spending dashboard's theme for each mode (owner, 10-02). */}
+        {/* money-hub patch: the theme for each mode (owner, 10-02), on the whole app since 10-03. */}
         <div className="space-y-3">
           <div className="space-y-1">
-            <p className="text-base font-medium">Spending dashboard theme</p>
+            <p className="text-base font-medium">App look</p>
             <p className="text-muted-foreground text-sm">
-              Each mode keeps its own look. The theme above decides which mode is showing.
+              Every page and pop-up wears it. Each mode keeps its own look, and the theme above decides
+              which mode is showing.
             </p>
           </div>
           <DashboardSkinPicker />

@@ -329,7 +329,7 @@ function SellProtectionSection({
             {t("allocation:sellProtection.protectedAssets")}
           </span>
           {protectedAssets.length > 0 && (
-            <span className="bg-muted text-muted-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 font-mono text-[10.5px] font-semibold">
+            <span className="bg-muted text-muted-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold">
               {protectedAssets.length}
             </span>
           )}
@@ -342,7 +342,7 @@ function SellProtectionSection({
           {protectedAssets.map((a) => (
             <span
               key={a.assetId}
-              className="border-border bg-background inline-flex items-center gap-1.5 rounded-full border py-1 pl-2 pr-1 font-mono text-[11.5px]"
+              className="border-border bg-background inline-flex items-center gap-1.5 rounded-full border py-1 pl-2 pr-1 text-[11.5px]"
             >
               <span className="bg-muted text-muted-foreground flex h-5 w-5 items-center justify-center rounded-full text-[8.5px] font-bold uppercase">
                 {a.symbol.slice(0, 2)}
@@ -399,11 +399,11 @@ function SellProtectionSection({
                       }}
                       className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left"
                     >
-                      <span className="bg-muted text-muted-foreground flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full font-mono text-[8.5px] font-bold uppercase">
+                      <span className="bg-muted text-muted-foreground flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full text-[8.5px] font-bold uppercase">
                         {a.symbol.slice(0, 2)}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="text-foreground block font-mono text-[12px] font-semibold">
+                        <span className="text-foreground block text-[12px] font-semibold">
                           {a.symbol}
                         </span>
                         <span className="text-muted-foreground block truncate text-[11px]">
@@ -425,7 +425,7 @@ function SellProtectionSection({
             {t("allocation:sellProtection.protectedAccounts")}
           </span>
           {protectedAccounts.length > 0 && (
-            <span className="bg-muted text-muted-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 font-mono text-[10.5px] font-semibold">
+            <span className="bg-muted text-muted-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold">
               {protectedAccounts.length}
             </span>
           )}

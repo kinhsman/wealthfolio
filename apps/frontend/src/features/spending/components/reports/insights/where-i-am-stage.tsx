@@ -426,7 +426,7 @@ function buildLiveNarrative({
             ? "••••"
             : formatting.formatCompactAmount(Math.abs(diffFromPace), currency)}
         </span>{" "}
-        <span className="font-serif">{direction}</span>
+        <span>{direction}</span>
       </div>
       <div className="text-foreground/90 text-sm">
         {t("spending:whereIAm.projectedPrefix")}{" "}
