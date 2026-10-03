@@ -4,6 +4,7 @@ import { ProfileMenu } from "@/features/profiles/profile-menu";
 import { SyncStatusIcon } from "@/features/wealthfolio-connect/components/sync-status-icon";
 import { useAggregatedSyncStatus } from "@/features/wealthfolio-connect/hooks";
 import { cn } from "@/lib/utils";
+import { useDashboardSkins } from "@/features/spending/lib/dashboard-skin";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, Icons } from "@wealthfolio/ui";
 import { motion } from "motion/react";
 import { useCallback, useId, useState, type ReactNode } from "react";
@@ -22,6 +23,8 @@ export function FloatingNavigationBar({ navigation }: FloatingNavigationBarProps
   const navigate = useNavigate();
   const [overflowOpen, setOverflowOpen] = useState(false);
   const uniqueId = useId();
+  // money-hub patch: the bar wears the theme picked for each mode (owner, 10-02); see globals.css [data-mbar].
+  const skins = useDashboardSkins();
   const { status: syncStatus } = useAggregatedSyncStatus();
   const baseButtonClass =
     "text-foreground relative z-10 flex size-11 shrink-0 items-center justify-center rounded-full transition-colors";
@@ -49,7 +52,12 @@ export function FloatingNavigationBar({ navigation }: FloatingNavigationBarProps
   const hasMoreItems = moreItems.length > 0;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40">
+    <div
+      data-mbar=""
+      data-light-skin={skins.light}
+      data-dark-skin={skins.dark}
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-40"
+    >
       <div className="flex justify-center px-4 pb-[var(--mobile-nav-bottom-offset)]">
         <LiquidGlass
           variant="floating"
@@ -76,6 +84,7 @@ export function FloatingNavigationBar({ navigation }: FloatingNavigationBarProps
                 >
                   {isActive && (
                     <motion.div
+                      data-mbar-pill=""
                       layoutId={`floating-nav-indicator-${uniqueId}`}
                       className="absolute inset-0 -z-10 rounded-full border border-black/10 bg-black/5 shadow-sm dark:border-white/10 dark:bg-white/10"
                       initial={false}
@@ -134,6 +143,7 @@ export function FloatingNavigationBar({ navigation }: FloatingNavigationBarProps
             >
               {isPathActive(location.pathname, "/connect") && (
                 <motion.div
+                  data-mbar-pill=""
                   layoutId={`floating-nav-indicator-${uniqueId}`}
                   className="absolute inset-0 -z-10 rounded-full border border-black/10 bg-black/5 shadow-sm dark:border-white/10 dark:bg-white/10"
                   initial={false}
@@ -161,6 +171,7 @@ export function FloatingNavigationBar({ navigation }: FloatingNavigationBarProps
                   >
                     {moreItems.some((item) => isPathActive(location.pathname, item.href)) && (
                       <motion.div
+                        data-mbar-pill=""
                         layoutId={`floating-nav-indicator-${uniqueId}`}
                         className="absolute inset-0 -z-10 rounded-full border border-black/10 bg-black/5 shadow-sm dark:border-white/10 dark:bg-white/10"
                         initial={false}

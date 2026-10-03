@@ -6,6 +6,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useIsCompactTableViewport } from "@/hooks/use-platform";
+import { useDashboardSkins } from "@/features/spending/lib/dashboard-skin";
 import { SidebarNav } from "./sidebar-nav";
 
 export default function SettingsLayout() {
@@ -172,15 +173,30 @@ export default function SettingsLayout() {
   // needs the viewport, because it replaces the index page. Same 1024px
   // breakpoint as `lg`.
   const isCompact = useIsCompactTableViewport();
+  // money-hub patch: Settings wears the theme picked for each mode, like the redesigned pages (owner, 10-02).
+  // `.meadow` re-points the stock colours inside it, data-mdash its buttons; globals.css [data-mset] does the
+  // cards, the section list and the titles.
+  const skins = useDashboardSkins();
+  const themed = {
+    "data-mset": "",
+    "data-mdash": "",
+    "data-light-skin": skins.light,
+    "data-dark-skin": skins.dark,
+  };
 
   if (isCompact && isMainSettingsPage) {
     return (
-      <ApplicationShell className="settings-root app-shell h-screen overflow-x-hidden">
+      <ApplicationShell
+        className="settings-root app-shell meadow h-screen overflow-x-hidden"
+        {...themed}
+      >
         {/* Mobile Settings List View (carded list with dividers) */}
         <div className="scan-hide-target w-full max-w-full overflow-x-hidden">
           <div className="bg-background/95 supports-backdrop-filter:bg-background/60 pt-safe sticky top-0 z-10 border-b backdrop-blur">
             <div className="flex min-h-[60px] items-center justify-center px-4">
-              <h1 className="text-lg font-semibold">{t("settings:title")}</h1>
+              <h1 data-mset-title="" className="text-lg font-semibold">
+                {t("settings:title")}
+              </h1>
             </div>
           </div>
           <div className="space-y-6 p-3 pb-[var(--mobile-nav-total-offset)]">
@@ -228,12 +244,17 @@ export default function SettingsLayout() {
   }
 
   return (
-    <ApplicationShell className="settings-root app-shell h-screen overflow-x-hidden">
+    <ApplicationShell
+      className="settings-root app-shell meadow h-screen overflow-x-hidden"
+      {...themed}
+    >
       <div className="scan-hide-target pt-safe w-full max-w-full overflow-x-hidden scroll-smooth lg:flex lg:justify-start lg:pt-0">
         <div className="flex w-full max-w-full flex-col p-2 pb-[var(--mobile-nav-total-offset)] lg:max-w-6xl lg:px-2 lg:py-8">
           <div className="hidden lg:block">
             <div className="space-y-0.5">
-              <h2 className="text-2xl font-bold tracking-tight">{t("settings:title")}</h2>
+              <h2 data-mset-title="" className="text-2xl font-bold tracking-tight">
+                {t("settings:title")}
+              </h2>
             </div>
             <Separator className="my-6" />
           </div>

@@ -7,6 +7,7 @@ import { SyncStatusIcon } from "@/features/wealthfolio-connect/components/sync-s
 import { useAggregatedSyncStatus } from "@/features/wealthfolio-connect/hooks";
 import { useHapticFeedback } from "@/hooks/use-haptic-feedback";
 import { cn } from "@/lib/utils";
+import { useDashboardSkins } from "@/features/spending/lib/dashboard-skin";
 import { Icons, Sheet, SheetContent, SheetTitle } from "@wealthfolio/ui";
 import { motion } from "motion/react";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
@@ -49,6 +50,8 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
   const closeMenu = () => setMobileMenuOpen(false);
   const { triggerHaptic } = useHapticFeedback();
   const uniqueId = useId();
+  // money-hub patch: the bar wears the theme picked for each mode (owner, 10-02); see globals.css [data-mbar].
+  const skins = useDashboardSkins();
   const { status: syncStatus } = useAggregatedSyncStatus();
 
   const containerClassName = "pointer-events-none fixed inset-x-0 bottom-0 z-50";
@@ -106,7 +109,12 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
   const hasMenu = moreItems.length > 0;
 
   return (
-    <div className={containerClassName}>
+    <div
+      data-mbar=""
+      data-light-skin={skins.light}
+      data-dark-skin={skins.dark}
+      className={containerClassName}
+    >
       {/* Lift off bottom by the design gap while respecting safe area */}
       <div className="flex justify-center px-4 pb-[var(--mobile-nav-bottom-offset)]">
         <LiquidGlass
@@ -154,6 +162,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                 >
                   {isActive && (
                     <motion.div
+                      data-mbar-pill=""
                       layoutId={`mobile-nav-indicator-${uniqueId}`}
                       className="absolute inset-0 -z-10 rounded-full border border-black/10 bg-black/5 shadow-sm dark:border-white/10 dark:bg-white/10"
                       initial={false}
@@ -186,6 +195,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
               >
                 {moreItems.some((item) => isPathActive(location.pathname, item.href)) && (
                   <motion.div
+                    data-mbar-pill=""
                     layoutId={`mobile-nav-indicator-${uniqueId}`}
                     className="absolute inset-0 -z-10 rounded-full border border-black/10 bg-black/5 shadow-sm dark:border-white/10 dark:bg-white/10"
                     initial={false}
@@ -212,6 +222,10 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
         <SheetContent
           side="bottom"
           showCloseButton={false}
+          data-mbar=""
+          data-mbar-sheet=""
+          data-light-skin={skins.light}
+          data-dark-skin={skins.dark}
           className="bg-background inset-x-4 bottom-4 flex max-h-[min(82dvh,720px)] flex-col gap-0 overflow-hidden rounded-[2rem] border-0 px-0 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-0 shadow-2xl"
         >
           <div className="bg-muted mx-auto mt-4 h-1.5 w-14 shrink-0 rounded-full" />

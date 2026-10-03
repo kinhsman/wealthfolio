@@ -1730,13 +1730,14 @@ summary {
   color: var(--m-down);
 }
 
-/* money-hub patch: the sidebar in the theme picked for each mode (owner, 10-02: "make the side bar design
-   match the theme configured"). Like the design systems' BottomNav: Meadow is a flat card-coloured bar with
-   a line edge and the current page in a solid forest (Day) or lime (Night) tile; Bronze Titanium is frosted
-   glass over the same bronze glows as the page, the current page in the glossy bronze fill. Its own scope
-   (not .meadow): the app frame holding it is bg-background, and the Bronze page-ground rule above would then
-   recolour every page. */
-[data-mside] {
+/* money-hub patch: the app's navigation in the theme picked for each mode (owner, 10-02: "make the side
+   bar design match the theme configured", then "theme the bottom bar ... too"). Like the design systems'
+   BottomNav: Meadow is a flat card-coloured bar with a line edge and the current page in a solid forest
+   (Day) or lime (Night) tile; Bronze Titanium is frosted glass over the same bronze glows as the page, the
+   current page in the glossy bronze fill. [data-mside] = the sidebar, [data-mbar] = the floating bottom bars
+   and the phone's More sheet. Their own scope (not .meadow): the app frame holding them is bg-background,
+   and the Bronze page-ground rule above would then recolour every page. */
+:is([data-mside], [data-mbar]) {
   --ms-ground: #ffffff;
   --ms-line: #e4dccf;
   --ms-ink: #2b2925;
@@ -1744,9 +1745,15 @@ summary {
   --ms-muted: #6e675d;
   --ms-hover: #f5f0ec;
   --ms-page: #f5f0ec;
+  --ms-accent: #054e04;
   --ms-fill: #054e04;
   --ms-on-fill: #cff6ac;
   --ms-fill-shadow: none;
+  --ms-bar: #ffffff;
+  --ms-bar-line: #e4dccf;
+  --ms-bar-edge: 0 6px 20px rgba(43, 41, 37, 0.08);
+  --ms-bar-blur: none;
+  --ms-sheet: #ffffff;
   --background: var(--ms-page);
   --foreground: var(--ms-ink-2);
   --muted: var(--ms-hover);
@@ -1756,11 +1763,10 @@ summary {
   --secondary: var(--ms-hover);
   --secondary-foreground: var(--ms-ink);
   --border: var(--ms-line);
-  background: var(--ms-ground);
-  border-right: 1px solid var(--ms-line);
-  color: var(--ms-ink-2);
+  --primary: var(--ms-accent);
+  --primary-foreground: var(--ms-on-fill);
 }
-.dark [data-mside] {
+.dark :is([data-mside], [data-mbar]) {
   --ms-ground: #1b1a18;
   --ms-line: #36332e;
   --ms-ink: #f2efea;
@@ -1768,48 +1774,85 @@ summary {
   --ms-muted: #a39d93;
   --ms-hover: #24221f;
   --ms-page: #121110;
+  --ms-accent: #cff6ac;
   --ms-fill: #cff6ac;
   --ms-on-fill: #0b2a0a;
+  --ms-bar: #1b1a18;
+  --ms-bar-line: #36332e;
+  --ms-bar-edge: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --ms-sheet: #1b1a18;
 }
-.light [data-mside][data-light-skin="bronze"] {
+.light :is([data-mside], [data-mbar])[data-light-skin="bronze"] {
   --ms-line: #d8cfc5;
   --ms-ink: #2e2623;
   --ms-ink-2: #4b3a30;
   --ms-muted: #6d584b;
   --ms-hover: rgba(255, 255, 255, 0.6);
   --ms-page: #efe8e0;
+  --ms-accent: #6e4a2a;
   --ms-fill: linear-gradient(180deg, #7a5332, #5b3c20);
   --ms-on-fill: #f7efe4;
   --ms-fill-shadow:
     inset 0 1px 0 rgba(255, 226, 190, 0.4), inset 0 -1px 0 rgba(0, 0, 0, 0.25),
     0 4px 12px rgba(91, 60, 32, 0.25);
-  background:
+  --ms-bar:
     linear-gradient(145deg, rgba(255, 255, 255, 0.6) 0.6%, transparent 60%),
-    linear-gradient(rgba(255, 252, 248, 0.55), rgba(255, 252, 248, 0.55)),
-    radial-gradient(360px 420px at 100% 0%, rgba(214, 164, 108, 0.45), transparent 70%),
-    radial-gradient(300px 380px at 100% 88%, rgba(140, 142, 180, 0.24), transparent 70%), #efe8e0;
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.95);
+    rgba(251, 248, 244, 0.72);
+  --ms-bar-line: rgba(255, 255, 255, 0.78);
+  --ms-bar-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(91, 60, 32, 0.08),
+    0 0 0 1px rgba(91, 60, 32, 0.06), 0 10px 28px rgba(91, 60, 32, 0.14);
+  --ms-bar-blur: blur(24px) saturate(160%);
+  --ms-sheet:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.6) 0.6%, transparent 60%),
+    rgba(251, 248, 244, 0.92);
   font-family: var(--font-sans);
 }
-.dark [data-mside][data-dark-skin="bronze"] {
+.dark :is([data-mside], [data-mbar])[data-dark-skin="bronze"] {
   --ms-line: rgba(237, 226, 214, 0.13);
   --ms-ink: #f0e9e1;
   --ms-ink-2: #cdc0b3;
   --ms-muted: #b5aa9f;
   --ms-hover: rgba(255, 240, 225, 0.07);
   --ms-page: #1e1918;
+  --ms-accent: #c9a27a;
   --ms-fill: linear-gradient(180deg, #dfbe96, #c59b6e);
   --ms-on-fill: #211c1b;
   --ms-fill-shadow:
     inset 0 1px 0 rgba(255, 246, 232, 0.65), inset 0 -1px 0 rgba(90, 55, 25, 0.35),
     0 4px 14px rgba(150, 100, 55, 0.3);
+  --ms-bar:
+    linear-gradient(145deg, rgba(255, 240, 222, 0.16) 0.6%, transparent 60%), rgba(46, 38, 35, 0.72);
+  --ms-bar-line: rgba(237, 226, 214, 0.13);
+  --ms-bar-edge:
+    inset 0 2px 4px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 236, 214, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22), 0 10px 28px rgba(0, 0, 0, 0.32);
+  --ms-bar-blur: blur(24px) saturate(160%);
+  --ms-sheet:
+    linear-gradient(145deg, rgba(255, 240, 222, 0.16) 0.6%, transparent 60%), rgba(46, 38, 35, 0.92);
+  font-family: var(--font-sans);
+}
+/* The sidebar: a card-coloured column (Meadow), glass over the bronze glows (Bronze). */
+[data-mside] {
+  background: var(--ms-ground);
+  border-right: 1px solid var(--ms-line);
+  color: var(--ms-ink-2);
+}
+.light [data-mside][data-light-skin="bronze"] {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.6) 0.6%, transparent 60%),
+    linear-gradient(rgba(255, 252, 248, 0.55), rgba(255, 252, 248, 0.55)),
+    radial-gradient(360px 420px at 100% 0%, rgba(214, 164, 108, 0.45), transparent 70%),
+    radial-gradient(300px 380px at 100% 88%, rgba(140, 142, 180, 0.24), transparent 70%), #efe8e0;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.95);
+}
+.dark [data-mside][data-dark-skin="bronze"] {
   background:
     linear-gradient(145deg, rgba(255, 240, 222, 0.16) 0.6%, transparent 60%),
     linear-gradient(rgba(46, 38, 35, 0.5), rgba(46, 38, 35, 0.5)),
     radial-gradient(360px 420px at 100% 0%, rgba(176, 116, 60, 0.55), transparent 70%),
     radial-gradient(300px 380px at 100% 88%, rgba(78, 80, 124, 0.4), transparent 70%), #1e1918;
   box-shadow: inset -1px 0 0 rgba(255, 236, 214, 0.06);
-  font-family: var(--font-sans);
 }
 /* Rows: Meadow's tile corners; the current page (and Add-ons while one is open) in the fill. */
 [data-mside] :is([data-mside-row], [data-mside-search].rounded-md) {
@@ -1830,6 +1873,88 @@ summary {
   font-family: "Cormorant Garamond", Georgia, serif;
   font-weight: 600;
   font-size: 22px;
+}
+/* The floating bottom bars (phone, and the computer's bottom-bar mode): the bar in the theme's surface or
+   glass, the stock sheen layers off, the current page's pill in the fill. */
+[data-mbar] .liquid-glass {
+  background: var(--ms-bar);
+  border: 1px solid var(--ms-bar-line);
+  box-shadow: var(--ms-bar-edge);
+  -webkit-backdrop-filter: var(--ms-bar-blur);
+  backdrop-filter: var(--ms-bar-blur);
+}
+[data-mbar] .liquid-glass::before,
+[data-mbar] .liquid-glass > div:last-child {
+  display: none;
+}
+[data-mbar] [data-mbar-pill] {
+  border-color: transparent;
+  background: var(--ms-fill);
+  box-shadow: var(--ms-fill-shadow);
+}
+[data-mbar] :is(a, button):has(> [data-mbar-pill]) {
+  color: var(--ms-on-fill);
+}
+/* The phone's More sheet. */
+[data-mbar][data-mbar-sheet] {
+  background: var(--ms-sheet);
+  color: var(--ms-ink);
+  -webkit-backdrop-filter: var(--ms-bar-blur);
+  backdrop-filter: var(--ms-bar-blur);
+}
+
+/* money-hub patch: Settings in the theme picked for each mode (owner, 10-02: "theme ... the settings page
+   itself too"). The page is a .meadow box (data-mset), so the stock colours inside it are already the
+   theme's; here its stock cards become the theme's cards (Meadow flat, Bronze glass), the section list gets
+   the current-page fill, and the titles the theme's type. */
+[data-mset] .bg-card.border:is(.rounded-lg, .rounded-xl, .rounded-2xl) {
+  border-color: var(--m-line);
+  border-radius: 20px;
+  background: var(--m-surface);
+  box-shadow: none;
+}
+:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])[data-mset]
+  .bg-card.border:is(.rounded-lg, .rounded-xl, .rounded-2xl) {
+  background: linear-gradient(145deg, var(--bt-sheen) 0.6%, transparent 60%), var(--bt-glass);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid var(--bt-glass-line);
+  box-shadow: var(--bt-glass-edge);
+  border-radius: 14px;
+}
+[data-mset] aside nav a {
+  border-radius: 12px;
+}
+[data-mset] aside nav a[aria-current="page"] {
+  background: var(--m-forest);
+  color: var(--m-on-forest);
+}
+:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])[data-mset]
+  aside
+  nav
+  a[aria-current="page"] {
+  background: linear-gradient(180deg, var(--bt-fill-top), var(--bt-fill-bottom));
+  box-shadow: var(--bt-fill-shine);
+}
+[data-mset] [data-mset-title] {
+  color: var(--m-ink);
+  font-weight: 500;
+}
+:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])[data-mset]
+  [data-mset-title] {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+}
+@media (min-width: 1024px) {
+  :is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])[data-mset]
+    h2[data-mset-title] {
+    font-size: 32px;
+  }
+  :is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])[data-mset]
+    h1[data-mset-title] {
+    font-size: 26px;
+  }
 }
 
 /* money-hub patch: the mouse light (owner, 10-02). lib/spotlight.ts marks the card under the mouse with

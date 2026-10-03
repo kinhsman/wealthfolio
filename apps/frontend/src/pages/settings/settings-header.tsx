@@ -66,7 +66,10 @@ export function SettingsHeader({
           </Button>
         )}
         <div className="grid min-w-0 gap-1">
-          <h1 className="font-heading break-words text-base font-bold sm:text-lg lg:text-xl">
+          <h1
+            data-mset-title=""
+            className="font-heading break-words text-base font-bold sm:text-lg lg:text-xl"
+          >
             {heading}
           </h1>
           {text && (
