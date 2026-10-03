@@ -11,6 +11,7 @@ import {
   Icons,
   IntervalSelector,
   useDateFormatting,
+  useDisplayCurrency,
   useNumberFormatting,
 } from "@wealthfolio/ui";
 import {
@@ -470,6 +471,8 @@ const AlternativeAssetDetailCard: React.FC<AlternativeAssetDetailCardProps> = ({
 
   const { t } = useTranslation();
   const { isBalanceHidden } = useBalancePrivacy();
+  const display = useDisplayCurrency();
+  const shownCurrency = display.currency ?? holding.currency;
 
   const metadata = holding.metadata || {};
   const kind = holding.kind.toLowerCase();
@@ -529,7 +532,7 @@ const AlternativeAssetDetailCard: React.FC<AlternativeAssetDetailCardProps> = ({
                 />
               </div>
               <div className="text-muted-foreground text-right text-sm font-normal">
-                {holding.currency}
+                {shownCurrency}
               </div>
             </div>
           </CardTitle>
@@ -563,7 +566,7 @@ const AlternativeAssetDetailCard: React.FC<AlternativeAssetDetailCardProps> = ({
                 />
               </div>
               <div className="text-muted-foreground text-right text-sm font-normal">
-                {holding.currency}
+                {shownCurrency}
               </div>
             </div>
           </CardTitle>

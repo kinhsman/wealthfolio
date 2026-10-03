@@ -23,21 +23,19 @@ export function useAppCurrency() {
   return [currency, setCurrency] as const;
 }
 
-/** The setting for the formatters: null shows each amount in its own currency (USD, the app as it was). */
+/** The setting for the formatters: shows every amount in the chosen currency (USD or VND). */
 export function useAppCurrencySetting(baseCurrency: string | undefined): DisplayCurrencySetting | null {
   const [currency] = useAppCurrency();
-  const on = currency === "VND";
   const { data: rates } = useQuery({
     // The same latest rates the per-account "Show in USD" reads (lib/display-currency.ts).
     queryKey: ["money-hub", "latest-exchange-rates"],
     queryFn: getExchangeRates,
     staleTime: 10 * 60_000,
-    enabled: on,
   });
   const base = (baseCurrency || "USD").toUpperCase();
 
   const setting = useMemo<DisplayCurrencySetting | null>(() => {
-    if (!on || !rates) return null;
+    if (!rates) return null;
     const cache = new Map<string, number | null>();
     return {
       currency,
@@ -52,7 +50,7 @@ export function useAppCurrencySetting(baseCurrency: string | undefined): Display
         return cache.get(from) ?? null;
       },
     };
-  }, [on, rates, currency, base]);
+  }, [rates, currency, base]);
 
   // The Rental add-on runs in its own frame: it reads these with the app's colours.
   const usdRate = setting?.rate("USD") ?? null;

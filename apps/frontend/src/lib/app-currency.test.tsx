@@ -82,11 +82,22 @@ describe("app-wide display currency", () => {
     expect(screen.getByText("$100.00")).toBeInTheDocument();
   });
 
-  it("changes nothing on USD (no setting)", () => {
+  it("changes nothing on null setting", () => {
     const { result } = renderHook(() => useAmountFormatting(), { wrapper: wrap(null) });
     expect(result.current.formatAmount(100, "USD")).toBe("$100.00");
     expect(result.current.formatAmount(50_000, "VND")).toBe("₫50,000");
     const display = renderHook(() => useDisplayCurrency(), { wrapper: wrap(null) });
     expect(display.result.current.currency).toBeNull();
+  });
+
+  it("converts dong to dollars when USD is the display currency", () => {
+    const USD: DisplayCurrencySetting = {
+      currency: "USD",
+      rate: (from) => (from === "VND" ? 1 / 25_984 : null),
+    };
+    const { result } = renderHook(() => useAmountFormatting(), { wrapper: wrap(USD) });
+    expect(result.current.formatAmount(25_984, "VND")).toBe("$1.00");
+    expect(result.current.formatAmount(100, "USD")).toBe("$100.00");
+    expect(result.current.formatAmount(18_956_000_000, "VND")).toBe("$729,525.86");
   });
 });
