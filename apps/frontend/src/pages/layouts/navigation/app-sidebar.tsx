@@ -1,5 +1,6 @@
 import { isWeb } from "@/adapters";
 import { CONNECT_HIDDEN } from "@/lib/money-hub";
+import { NotificationsBell } from "@/features/notifications/notifications-bell";
 import { isAppleDevice } from "@/lib/device-utils";
 import { useAuth } from "@/context/auth-context";
 import { ProfileMenu } from "@/features/profiles/profile-menu";
@@ -134,6 +135,9 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                     </kbd>
                   )}
                 </Button>
+
+                {/* money-hub patch: the bell, every alert sent (features/notifications). */}
+                <NotificationsBell variant="sidebar" collapsed={collapsed} className="mb-3" />
 
                 {navigation?.primary?.map((item) => (
                   <NavItem key={item.title} item={item} collapsed={collapsed} />

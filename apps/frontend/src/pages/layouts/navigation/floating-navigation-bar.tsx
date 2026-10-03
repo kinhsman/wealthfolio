@@ -1,5 +1,6 @@
 import { LiquidGlass } from "@/components/liquid-glass";
 import { CONNECT_HIDDEN } from "@/lib/money-hub";
+import { NotificationsBell } from "@/features/notifications/notifications-bell";
 import { ProfileMenu } from "@/features/profiles/profile-menu";
 import { SyncStatusIcon } from "@/features/wealthfolio-connect/components/sync-status-icon";
 import { useAggregatedSyncStatus } from "@/features/wealthfolio-connect/hooks";
@@ -130,6 +131,8 @@ export function FloatingNavigationBar({ navigation }: FloatingNavigationBarProps
                 <Icons.Search2 className="size-6" />
               </span>
             </button>
+            {/* money-hub patch: the bell, every alert sent (features/notifications). */}
+            <NotificationsBell variant="floating" className={baseButtonClass} />
             {/* Connect with status icon (money-hub patch: hidden, see lib/money-hub.ts) */}
             {!CONNECT_HIDDEN && (
             <Link

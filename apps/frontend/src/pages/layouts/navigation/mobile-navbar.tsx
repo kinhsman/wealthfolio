@@ -1,5 +1,6 @@
 import { LiquidGlass } from "@/components/liquid-glass";
 import { CONNECT_HIDDEN } from "@/lib/money-hub";
+import { NotificationsBell } from "@/features/notifications/notifications-bell";
 import { ProfileAvatar } from "@/features/profiles/profile-avatar";
 import { useProfile } from "@/features/profiles/profile-context";
 import { MobileProfileMenu } from "@/features/profiles/mobile-profile-menu";
@@ -182,6 +183,9 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                 </Link>
               );
             })}
+
+            {/* money-hub patch: the bell, every alert sent (features/notifications). */}
+            <NotificationsBell variant="mobile" className={buttonClassName} />
 
             {hasMenu && (
               <button

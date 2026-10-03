@@ -28,6 +28,22 @@ import {
 import { RETURN_ALERT_LABELS, RETURNS_KEY, returnsApi, useReturns, type ReturnAlertKind } from "@/features/spending/lib/returns";
 import { BILL_DAYS, FREE_CASH_ALERT_LABELS, FREE_CASH_KEY, freeCashApi, useFreeCash, type FreeCashAlertKind } from "@/features/spending/lib/free-cash";
 import { TAX_ALERT_LABELS, taxesApi, taxesKey, useTaxes, type TaxAlertKind } from "@/features/taxes/lib/taxes";
+import {
+  BIG_ALERT_LABELS,
+  BUDGET_ALERT_LABELS,
+  CONNECTION_ALERT_LABELS,
+  MONEY_ALERTS_KEY,
+  NEAR_STEPS,
+  RECAP_ALERT_LABELS,
+  moneyAlertsApi,
+  useMoneyAlerts,
+  type BigAlertKind,
+  type BudgetAlertKind,
+  type ConnectionAlertKind,
+  type MoneyAlertGroup,
+  type RecapAlertKind,
+} from "@/features/spending/lib/money-alerts";
+import { cn } from "@/lib/utils";
 import { SettingsHeader } from "../settings-header";
 
 const BASE = "/api/money-hub/alerts";
@@ -184,25 +200,44 @@ function GroupAlerts<K extends string>({
   );
 }
 
-/** Free cash's cushion: an amount kept aside on top of the cards and the bills (owner, 10-01). Saved on
- *  Enter or on leaving the box; empty = none. */
-function CushionField({ value, disabled, onSave }: { value: number; disabled: boolean; onSave: (amount: number) => void }) {
+/** An amount saved on Enter or on leaving the box (Free cash's cushion, owner 10-01; the big money
+ *  amounts, 10-02). Empty = 0 where that is allowed (`min` 0), else the old amount comes back. */
+function AmountField({
+  value,
+  disabled,
+  onSave,
+  before,
+  after,
+  label: aria,
+  min = 0,
+  beforeClass,
+}: {
+  value: number;
+  disabled: boolean;
+  onSave: (amount: number) => void;
+  before: string;
+  after?: string;
+  label: string;
+  min?: number;
+  /** A width for the words before the box, so boxes on the lines below each other line up. */
+  beforeClass?: string;
+}) {
   const shown = (v: number) => (v > 0 ? String(v) : "");
   const [text, setText] = useState(shown(value));
   useEffect(() => setText(shown(value)), [value]);
   const commit = () => {
     const n = text.trim() === "" ? 0 : Number(text.replace(/[$,\s]/g, ""));
-    if (!Number.isFinite(n) || n < 0) return setText(shown(value));
+    if (!Number.isFinite(n) || n < min) return setText(shown(value));
     if (Math.round(n * 100) !== Math.round(value * 100)) onSave(Math.round(n * 100) / 100);
   };
   return (
     <label className="flex flex-wrap items-center gap-2">
-      <span className="text-muted-foreground">Keep a cushion of</span>
+      <span className={cn("text-muted-foreground", beforeClass)}>{before}</span>
       <span className="relative">
         <span className="text-muted-foreground pointer-events-none absolute left-2 top-1/2 -translate-y-1/2">$</span>
         <input
           inputMode="decimal"
-          aria-label="Cushion"
+          aria-label={aria}
           value={text}
           placeholder="0"
           disabled={disabled}
@@ -212,7 +247,7 @@ function CushionField({ value, disabled, onSave }: { value: number; disabled: bo
           className="h-8 w-28 rounded-md border bg-background pl-5 pr-2 text-xs tabular-nums text-foreground focus:border-primary focus:outline-none disabled:opacity-50"
         />
       </span>
-      <span className="text-muted-foreground">on top of the cards and bills</span>
+      {after ? <span className="text-muted-foreground">{after}</span> : null}
     </label>
   );
 }
@@ -312,6 +347,13 @@ export default function AlertsSettingsPage() {
   };
   const testBackup = () => run("test-backup", api.testBackup, (s) => sentTo(s.went));
 
+  // Big money moves, budget, bank connections, weekly recap (money-hub lib/moneyAlerts.js): one view.
+  const { data: more } = useMoneyAlerts();
+  const setMore = (group: MoneyAlertGroup, patch: Record<string, boolean | number>) =>
+    runGroup(`${group}-set`, MONEY_ALERTS_KEY, () => moneyAlertsApi.set(group, patch));
+  const testMore = (group: MoneyAlertGroup, kind: string) =>
+    runGroup(`${group}-test-${kind}`, MONEY_ALERTS_KEY, () => moneyAlertsApi.test(group, kind), (v) => sentTo(v.went, v.sample));
+
   const ntfyOn = !!status?.ntfy.on;
   const ntfyDirty = !!status && (server !== status.ntfy.server || topic !== status.ntfy.topic || priority !== status.ntfy.priority || token !== "");
   const saveNtfy = () =>
@@ -319,7 +361,7 @@ export default function AlertsSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <SettingsHeader heading="Alerts" text="Where the money app tells you things: Discord, and your phone through ntfy. Every alert goes to each place set up here." />
+      <SettingsHeader heading="Alerts" text="Where the money app tells you things: the bell in the app, Discord, and your phone through ntfy. Every alert goes to each place set up here." />
       <Separator />
 
       {loadError && <p className="text-destructive text-sm">{loadError}</p>}
@@ -595,7 +637,10 @@ export default function AlertsSettingsPage() {
                     ))}
                   </select>
                 </label>
-                <CushionField
+                <AmountField
+                  label="Cushion"
+                  before="Keep a cushion of"
+                  after="on top of the cards and bills"
                   value={freeCash.totals.cushion ?? 0}
                   disabled={!!busy}
                   onSave={(amount) => runGroup("cash-cushion", FREE_CASH_KEY, () => freeCashApi.setCushion(amount))}
@@ -618,6 +663,86 @@ export default function AlertsSettingsPage() {
               onSwitch={(patch) => runGroup("taxes-set", taxesKey(null), () => taxesApi.setAlerts(patch))}
               onTest={(k) => runGroup(`taxes-test-${k}`, taxesKey(null), () => taxesApi.testAlert(k), (v) => sentTo(v.went, v.sample))}
             />
+          ) : null}
+          {more ? (
+            <>
+              <GroupAlerts<BigAlertKind>
+                icon={<Icons.ArrowLeftRight className="text-muted-foreground size-4 shrink-0" />}
+                title="Big money moves"
+                to="/activities"
+                text="Money in or out over an amount you pick"
+                on={more.big.alerts.on !== false}
+                kinds={more.big.alerts}
+                labels={BIG_ALERT_LABELS}
+                busyKey="big"
+                busy={busy}
+                onSwitch={(patch) => setMore("big", patch)}
+                onTest={(k) => testMore("big", k)}
+                extra={
+                  <>
+                    <AmountField label="Money out from" before="Money out from" beforeClass="w-24" value={more.big.outMin} min={1} disabled={!!busy}
+                      onSave={(outMin) => setMore("big", { outMin })} />
+                    <AmountField label="Money in from" before="Money in from" beforeClass="w-24" value={more.big.inMin} min={1} disabled={!!busy}
+                      onSave={(inMin) => setMore("big", { inMin })} />
+                  </>
+                }
+              />
+              <GroupAlerts<BudgetAlertKind>
+                icon={<Icons.PieChart className="text-muted-foreground size-4 shrink-0" />}
+                title="Budget"
+                to="/spending/budget"
+                text="How much of the month's budget is spent, once each a month"
+                on={more.budget.alerts.on !== false}
+                kinds={more.budget.alerts}
+                labels={BUDGET_ALERT_LABELS}
+                busyKey="budget"
+                busy={busy}
+                onSwitch={(patch) => setMore("budget", patch)}
+                onTest={(k) => testMore("budget", k)}
+                extra={
+                  <label className="flex flex-wrap items-center gap-2">
+                    <span className="text-muted-foreground">Warn at</span>
+                    <select
+                      value={more.budget.nearPct}
+                      disabled={!!busy}
+                      onChange={(e) => setMore("budget", { nearPct: Number(e.target.value) })}
+                      className="h-8 rounded-md border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+                    >
+                      {[...new Set([...NEAR_STEPS, more.budget.nearPct])].sort((a, b) => a - b).map((p) => (
+                        <option key={p} value={p}>{p}%</option>
+                      ))}
+                    </select>
+                    <span className="text-muted-foreground">used</span>
+                  </label>
+                }
+              />
+              <GroupAlerts<ConnectionAlertKind>
+                icon={<Icons.Unlink className="text-muted-foreground size-4 shrink-0" />}
+                title="Bank connections"
+                to="/settings/banks"
+                text="A bank or Gmail that stopped bringing transactions in"
+                on={more.connections.alerts.on !== false}
+                kinds={more.connections.alerts}
+                labels={CONNECTION_ALERT_LABELS}
+                busyKey="connections"
+                busy={busy}
+                onSwitch={(patch) => setMore("connections", patch)}
+                onTest={(k) => testMore("connections", k)}
+              />
+              <GroupAlerts<RecapAlertKind>
+                icon={<Icons.Calendar className="text-muted-foreground size-4 shrink-0" />}
+                title="Weekly recap"
+                to="/dashboard?tab=spending"
+                text="Your week in one message"
+                on={more.recap.alerts.on !== false}
+                kinds={more.recap.alerts}
+                labels={RECAP_ALERT_LABELS}
+                busyKey="recap"
+                busy={busy}
+                onSwitch={(patch) => setMore("recap", patch)}
+                onTest={(k) => testMore("recap", k)}
+              />
+            </>
           ) : null}
           <div className="px-4 py-3">
             <div className="flex items-center gap-3">
