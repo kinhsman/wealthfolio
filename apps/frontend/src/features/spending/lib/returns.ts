@@ -15,6 +15,8 @@ export interface RefundRow {
   accountId: string | null;
   date: string;
   amount: number;
+  /** Not the base currency (owner, 10-03: ACB and MB are in dong): the amount is in this one. */
+  currency?: string;
   notes: string;
 }
 
@@ -58,6 +60,10 @@ export interface ReturnItem {
   /** Days from the return to the last of the money. */
   tookDays: number | null;
   createdAt: string;
+  /** Paid in another currency than the base one (dong from ACB or MB): its amounts and refunds are in
+   *  it; `inBase` is one unit's worth in dollars now (the totals count it so). */
+  currency?: string;
+  inBase?: number | null;
 }
 
 export interface ReturnsView {
@@ -75,7 +81,18 @@ export interface PurchaseOption {
   accountId: string;
   date: string;
   amount: number;
+  /** Not the base currency: the amount is in this one. */
+  currency?: string;
   notes: string;
+}
+
+/** How many decimals a currency's amounts have: 2 for dollars, none for dong. */
+export function currencyDigits(currency: string): number {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  } catch {
+    return 2;
+  }
 }
 
 export interface ReturnTerms {
@@ -247,7 +264,7 @@ export const trackReturnStore = {
 };
 
 /** A transaction as the window needs it. */
-export function purchaseOf(a: { id: string; accountId: string; activityDate: string | Date; amount?: string | number | null; notes?: string | null }): PurchaseOption {
+export function purchaseOf(a: { id: string; accountId: string; activityDate: string | Date; amount?: string | number | null; currency?: string | null; notes?: string | null }): PurchaseOption {
   const date = a.activityDate instanceof Date ? a.activityDate.toISOString() : String(a.activityDate);
-  return { id: a.id, accountId: a.accountId, date: date.slice(0, 10), amount: Math.abs(Number(a.amount) || 0), notes: a.notes ?? "" };
+  return { id: a.id, accountId: a.accountId, date: date.slice(0, 10), amount: Math.abs(Number(a.amount) || 0), ...(a.currency ? { currency: a.currency } : {}), notes: a.notes ?? "" };
 }

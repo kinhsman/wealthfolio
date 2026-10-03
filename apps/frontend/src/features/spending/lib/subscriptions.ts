@@ -67,8 +67,9 @@ export interface Stream {
   owlyTotal?: { chargeId: string; amount: number | null; from: string | null; at: string; error: string | null } | null;
   /** Every charge in it. */
   /** `extra`: brought in by a rule but not this kind of charge (a fee, a credit): listed and counted, not
-   *  in its rhythm or price. `credit`: money back. */
-  charges?: { id: string; date: string; amount: number; notes?: string; accountId?: string | null; extra?: boolean; credit?: boolean }[];
+   *  in its rhythm or price. `credit`: money back. `native`: what the bank charged, in the stream's
+   *  `currency`, when that is not the base one (`amount` is then its worth in dollars that day). */
+  charges?: { id: string; date: string; amount: number; native?: number; notes?: string; accountId?: string | null; extra?: boolean; credit?: boolean }[];
   /** Charges the owner took out by hand: in no subscription, whatever words or rules say (owner, 10-01). */
   excluded?: ExcludedCharge[];
   /** The charges the owner put in it by hand (owner, 10-01). */
@@ -82,6 +83,10 @@ export interface Stream {
   /** Paid from a mortgage's escrow (home insurance, property tax), from the Rental page: already in
    *  the mortgage payment, so the totals leave it out (owner, 10-01). */
   escrow?: EscrowInfo;
+  /** Charged in another currency than the base one (owner, 10-03: ACB and MB are in dong). Its amounts
+   *  above are dollars like every other stream's, so totals add up; `native` is what the bank charges. */
+  currency?: string;
+  native?: { usual: number; last: number | null; previous: number | null };
 }
 
 export interface EscrowInfo {
@@ -135,6 +140,9 @@ export interface ExcludedCharge {
   id: string;
   date: string;
   amount: number;
+  /** In `currency` when that is not the base one; `amount` is then dollars. */
+  native?: number;
+  currency?: string;
   notes: string;
   accountId: string | null;
 }
@@ -219,7 +227,7 @@ export const subscriptionsApi = {
   testAlert: (kind: AlertKind) =>
     call<SubscriptionsView & { went: { discord: boolean; ntfy: boolean }; sample: string }>("POST", "/alerts/test", { kind }),
   /** For a charge just filed as a subscription or a bill: the one it is in or looks like. */
-  which: (charge: { id: string; notes: string; amount: number; date: string }) => call<WhichOne>("POST", "/which", charge),
+  which: (charge: { id: string; notes: string; amount: number; date: string; currency?: string | null }) => call<WhichOne>("POST", "/which", charge),
   /** Put a charge in a stream by hand (null: back to where its words put it). */
   link: (activityId: string, key: string | null) => call<SubscriptionsView>("PUT", `/links/${encodeURIComponent(activityId)}`, { key }),
   /** Take charges out of a subscription by hand (no word or rule brings them back), or put them back. */

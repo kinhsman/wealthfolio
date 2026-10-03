@@ -301,7 +301,7 @@ export default function SpendingSubscriptionsPage() {
                             <StreamLogo s={s} className="h-7 w-7 text-[10px]" />
                             <span className="min-w-0 flex-1 truncate text-sm">{s.name}</span>
                             <span className="text-muted-foreground text-xs tabular-nums">
-                              <PrivacyAmount value={s.usual} currency={currency} /> {s.everyLabel}
+                              <OwnAmount s={s} currency={currency} /> {s.everyLabel}
                             </span>
                             <Button variant="outline" size="sm" className="h-7 text-xs" disabled={busy !== null} onClick={() => act(s.key, () => subscriptionsApi.update(s.key, { hidden: false }))}>
                               Put back
@@ -331,7 +331,11 @@ export default function SpendingSubscriptionsPage() {
                               <span className="text-muted-foreground block text-xs">{day(c.date)}</span>
                             </span>
                             <span className="text-muted-foreground text-xs tabular-nums">
-                              <PrivacyAmount value={Math.abs(c.amount)} currency={currency} />
+                              {c.native != null && c.currency ? (
+                                <PrivacyAmount value={Math.abs(c.native)} currency={c.currency} />
+                              ) : (
+                                <PrivacyAmount value={Math.abs(c.amount)} currency={currency} />
+                              )}
                             </span>
                             <Button variant="outline" size="sm" className="h-7 text-xs" disabled={busy !== null} onClick={() => act(c.id, () => subscriptionsApi.exclusions(c.key, { include: [c.id] }), "Put back.")}>
                               Put back
@@ -537,6 +541,12 @@ function Section({
   );
 }
 
+/** What one charge of it usually costs, in what the bank charges it in: dong for one paid from ACB or MB
+ *  (owner, 10-03), with no cents; the dollars, which the totals add up, then sit under it on the row. */
+function OwnAmount({ s, currency }: { s: Stream; currency: string }) {
+  return s.native && s.currency ? <PrivacyAmount value={s.native.usual} currency={s.currency} /> : <PrivacyAmount value={s.usual} currency={currency} />;
+}
+
 function StreamRow({
   s,
   currency,
@@ -665,7 +675,11 @@ function StreamRow({
         <div className="shrink-0 text-right">
           <div className="text-sm font-medium tabular-nums">
             {s.variable && !s.sharedOn ? <span className="text-muted-foreground font-normal">about </span> : null}
-            <PrivacyAmount value={s.sharedOn && s.shared?.latest ? s.shared.latest.mine : s.usual} currency={currency} />
+            {s.sharedOn && s.shared?.latest ? (
+              <PrivacyAmount value={s.shared.latest.mine} currency={currency} />
+            ) : (
+              <OwnAmount s={s} currency={currency} />
+            )}
           </div>
           {s.sharedOn && s.shared?.latest ? (
             <div className="text-muted-foreground text-[11px] tabular-nums">
@@ -679,7 +693,11 @@ function StreamRow({
             </div>
           ) : (s.status === "price-up" || s.status === "price-down") && s.previousAmount != null ? (
             <div className="text-muted-foreground text-[11px] tabular-nums">
-              was <PrivacyAmount value={s.previousAmount} currency={currency} />
+              was {s.native?.previous != null && s.currency ? <PrivacyAmount value={s.native.previous} currency={s.currency} /> : <PrivacyAmount value={s.previousAmount} currency={currency} />}
+            </div>
+          ) : s.native ? (
+            <div className="text-muted-foreground text-[11px] tabular-nums">
+              <PrivacyAmount value={s.usual} currency={currency} />
             </div>
           ) : null}
         </div>
@@ -761,8 +779,8 @@ function EditStreamDialog({
   // the rest (owner, 10-01: "see all linked transactions in the subscription and a check box to
   // manually exclude (will by pass all rules)").
   const charges = [
-    ...(s.charges ?? []).map((c) => ({ ...c, notes: c.notes ?? "", accountId: c.accountId ?? null, wasOut: false })),
-    ...(s.excluded ?? []).map((c) => ({ ...c, wasOut: true })),
+    ...(s.charges ?? []).map((c) => ({ ...c, notes: c.notes ?? "", accountId: c.accountId ?? null, wasOut: false, own: c.native != null && s.currency ? { amount: c.native, currency: s.currency } : null })),
+    ...(s.excluded ?? []).map((c) => ({ ...c, wasOut: true, own: c.native != null && c.currency ? { amount: c.native, currency: c.currency } : null })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const [out, setOut] = useState<Set<string>>(() => new Set((s.excluded ?? []).map((c) => c.id)));
   const toExclude = charges.filter((c) => !c.wasOut && out.has(c.id)).map((c) => c.id);
@@ -1007,7 +1025,7 @@ function EditStreamDialog({
                           </span>
                         </span>
                         <span className="shrink-0 text-sm tabular-nums">
-                          <PrivacyAmount value={Math.abs(c.amount)} currency={currency} />
+                          {c.own ? <PrivacyAmount value={Math.abs(c.own.amount)} currency={c.own.currency} /> : <PrivacyAmount value={Math.abs(c.amount)} currency={currency} />}
                         </span>
                         <Checkbox
                           checked={!isOut}

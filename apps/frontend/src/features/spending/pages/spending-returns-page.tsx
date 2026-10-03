@@ -180,7 +180,9 @@ function Section({ title, blurb, aside, children }: { title: string; blurb?: str
   );
 }
 
-function ReturnRow({ x, currency, busy, act }: { x: ReturnItem; currency: string; busy: string | null; act: Act }) {
+function ReturnRow({ x, currency: base, busy, act }: { x: ReturnItem; currency: string; busy: string | null; act: Act }) {
+  // Its own currency (dong for one paid from ACB or MB); the page's totals stay in the base one.
+  const currency = x.currency ?? base;
   const st = returnStatus(x);
   const { accounts } = useAccounts({ filterActive: false });
   const accountName = new Map((accounts ?? []).map((a) => [a.id, a.name]));

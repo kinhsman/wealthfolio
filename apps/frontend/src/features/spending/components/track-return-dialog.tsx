@@ -33,6 +33,7 @@ import {
   offerHint,
   returnLine,
   returnsApi,
+  currencyDigits,
   shortDay,
   trackReturnStore,
   useReturns,
@@ -152,7 +153,7 @@ function PickPurchase({ currency, onPick, onClose }: { currency: string; onPick:
                 <span className="text-muted-foreground block truncate text-xs">{[shortDay(p.date), accountName.get(p.accountId)].filter(Boolean).join(" · ")}</span>
               </span>
               <span className="shrink-0 text-sm tabular-nums">
-                <PrivacyAmount value={p.amount} currency={currency} />
+                <PrivacyAmount value={p.amount} currency={p.currency ?? currency} />
               </span>
             </button>
           ))
@@ -170,7 +171,7 @@ function PickPurchase({ currency, onPick, onClose }: { currency: string; onPick:
 function ReturnForm({
   item,
   purchase,
-  currency,
+  currency: base,
   busy,
   setBusy,
   onClose,
@@ -188,9 +189,12 @@ function ReturnForm({
 }) {
   const set = useSetReturns();
   const bought = item ? { ...item.purchase, accountId: item.accountId } : purchase!;
+  // What it was paid in (dong from ACB or MB): its amounts, and the refund, are in that, with its decimals.
+  const currency = (item ? item.currency : purchase?.currency) ?? base;
+  const digits = currencyDigits(currency);
   const { accounts } = useAccounts({ filterActive: false });
   const accountName = new Map((accounts ?? []).map((a) => [a.id, a.name]));
-  const [expected, setExpected] = useState((item?.expected ?? bought.amount).toFixed(2));
+  const [expected, setExpected] = useState((item?.expected ?? bought.amount).toFixed(digits));
   const [returnedOn, setReturnedOn] = useState(item?.returnedOn ?? (today() < bought.date ? bought.date : today()));
   const [within, setWithin] = useState(String(item?.within ?? 14));
   const [note, setNote] = useState(item?.note ?? "");
@@ -263,7 +267,7 @@ function ReturnForm({
           htmlFor="return-amount"
           foot={amountError ? <span className="text-destructive">{amountError}</span> : "Lower it when only part goes back."}
         >
-          <Input id="return-amount" type="number" inputMode="decimal" step="0.01" min="0" value={expected} onChange={(e) => setExpected(e.target.value)} />
+          <Input id="return-amount" type="number" inputMode={digits ? "decimal" : "numeric"} step={digits ? "0.01" : "1"} min="0" value={expected} onChange={(e) => setExpected(e.target.value)} />
         </Field>
         <Field label="Sent back on" htmlFor="return-date" foot={dateError ? <span className="text-destructive">{dateError}</span> : "The day you dropped it off or handed it in."}>
           <Input id="return-date" type="date" value={returnedOn} min={bought.date} onChange={(e) => setReturnedOn(e.target.value)} />
@@ -392,7 +396,7 @@ export function MoneyInRow({ row, currency, account, hint, look, children }: { r
         <div className="text-muted-foreground text-xs leading-snug">{[shortDay(row.date), account, hint].filter(Boolean).join(" · ")}</div>
       </div>
       <span className="shrink-0 text-sm tabular-nums" style={{ color: "#16a34a" }}>
-        +<PrivacyAmount value={row.amount} currency={currency} />
+        +<PrivacyAmount value={row.amount} currency={row.currency ?? currency} />
       </span>
       {children ? <div className="flex shrink-0 items-center gap-1.5">{children}</div> : null}
     </div>

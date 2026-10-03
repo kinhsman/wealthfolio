@@ -1,7 +1,7 @@
 // money-hub patch: Returns wording and ordering (lib/returns.ts).
 import { describe, expect, it } from "vitest";
 
-import { closedReturns, marksOf, openReturns, purchaseOf, returnLine, returnStatus, type ReturnItem } from "./returns";
+import { closedReturns, currencyDigits, marksOf, openReturns, purchaseOf, returnLine, returnStatus, type ReturnItem } from "./returns";
 
 const year = new Date().getFullYear();
 const item = (over: Partial<ReturnItem>): ReturnItem => ({
@@ -86,5 +86,17 @@ describe("returns ordering and marks", () => {
       amount: 31.97,
       notes: "",
     });
+  });
+});
+
+// Dong (owner, 10-03: the ACB and MB accounts are kept in VND).
+describe("a return paid in dong", () => {
+  it("starts from the charge in its own currency, and dong has no cents", () => {
+    expect(purchaseOf({ id: "t2", accountId: "acb", activityDate: "2026-10-03T17:00:00+00:00", amount: "-520000", currency: "VND", notes: "SHOPEE" })).toEqual({
+      id: "t2", accountId: "acb", date: "2026-10-03", amount: 520000, currency: "VND", notes: "SHOPEE",
+    });
+    expect(currencyDigits("VND")).toBe(0);
+    expect(currencyDigits("USD")).toBe(2);
+    expect(currencyDigits("not a code")).toBe(2);
   });
 });

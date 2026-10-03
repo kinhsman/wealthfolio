@@ -46,8 +46,9 @@ export function trackGroupFor(categoryId: string, categories: CategoryLike[]): S
 export interface TrackCharge {
   id: string;
   notes: string;
-  /** Money out, as a positive number. */
+  /** Money out, as a positive number, in `currency` (the charge's own; ACB and MB are in dong). */
   amount: number;
+  currency?: string | null;
   /** YYYY-MM-DD. */
   date: string;
   accountId: string;
@@ -92,7 +93,7 @@ export function askWhichOne({
   categoryName,
   after,
 }: {
-  activity: { id: string; notes?: string | null; amount?: string | number | null; activityDate: string | Date; accountId: string; activityType?: string | null } | undefined;
+  activity: { id: string; notes?: string | null; amount?: string | number | null; currency?: string | null; activityDate: string | Date; accountId: string; activityType?: string | null } | undefined;
   categoryId: string;
   categories: CategoryLike[];
   categoryName: string;
@@ -106,6 +107,7 @@ export function askWhichOne({
     id: activity.id,
     notes: activity.notes ?? "",
     amount: Math.abs(Number(activity.amount) || 0),
+    currency: activity.currency ?? null,
     date: date.slice(0, 10),
     accountId: activity.accountId,
     activityType: activity.activityType,
@@ -126,7 +128,7 @@ export function askWhichOne({
 export const canLinkCharge = (activityType?: string | null) => activityType === "WITHDRAWAL" || activityType === "FEE";
 
 export function linkCharge(row: {
-  activity: { id: string; notes?: string | null; amount?: string | number | null; activityDate: string | Date; accountId: string; activityType?: string | null };
+  activity: { id: string; notes?: string | null; amount?: string | number | null; currency?: string | null; activityDate: string | Date; accountId: string; activityType?: string | null };
   category: { id: string; name: string } | null;
 }): void {
   const a = row.activity;
@@ -135,6 +137,7 @@ export function linkCharge(row: {
     id: a.id,
     notes: a.notes ?? "",
     amount: Math.abs(Number(a.amount) || 0),
+    currency: a.currency ?? null,
     date: date.slice(0, 10),
     accountId: a.accountId,
     activityType: a.activityType,

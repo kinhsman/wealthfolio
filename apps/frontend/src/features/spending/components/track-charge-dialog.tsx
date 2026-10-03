@@ -60,8 +60,9 @@ export function TrackChargeHost() {
 function TrackChargeDialog({ charge, onClose }: { charge: TrackCharge; onClose: () => void }) {
   const list = useSubscriptions();
   const which = useQuery({
-    queryKey: ["money-hub", "subscriptions", "which", charge.id, charge.notes, charge.amount, charge.date],
-    queryFn: () => subscriptionsApi.which({ id: charge.id, notes: charge.notes, amount: charge.amount, date: charge.date }),
+    queryKey: ["money-hub", "subscriptions", "which", charge.id, charge.notes, charge.amount, charge.date, charge.currency],
+    // The charge's currency too: a new one made from a dong charge gets its amount in dollars, like the list.
+    queryFn: () => subscriptionsApi.which({ id: charge.id, notes: charge.notes, amount: charge.amount, date: charge.date, currency: charge.currency }),
     retry: false,
     staleTime: 0,
   });
@@ -95,7 +96,7 @@ function TrackChargeDialog({ charge, onClose }: { charge: TrackCharge; onClose: 
             </div>
           </div>
           <div className="shrink-0 text-sm font-medium tabular-nums">
-            <PrivacyAmount value={charge.amount} currency={currency} />
+            <PrivacyAmount value={charge.amount} currency={charge.currency || currency} />
           </div>
         </div>
 
@@ -158,7 +159,9 @@ function Choose({
   const draft = w?.draft;
   const [name, setName] = useState(draft?.name ?? charge.notes.slice(0, 60));
   const [words, setWords] = useState((draft?.words.length ? draft.words : [rulePatternFrom(charge.notes) ?? charge.notes.slice(0, 40)]).join(", "));
-  const [amount, setAmount] = useState(String(draft?.amount || charge.amount || ""));
+  // A charge in another currency: only the service's dollar figure (none without a rate: left to type).
+  const foreign = !!charge.currency && charge.currency !== currency;
+  const [amount, setAmount] = useState(String(draft?.amount || (foreign ? "" : charge.amount) || ""));
   const [every, setEvery] = useState<Every>(draft?.every ?? "month");
   const [nextDate, setNextDate] = useState(draft?.nextDate ?? "");
   const [group, setGroup] = useState<StreamGroup>(charge.group);
@@ -234,10 +237,15 @@ function Choose({
             </span>
           </span>
         </span>
-        {/* A shared bill: the whole bank charge, the amount the charge above is compared with. */}
+        {/* A shared bill: the whole bank charge, the amount the charge above is compared with. One in
+            another currency: what the bank charges in it (dong), like the charge above. */}
         <span className="shrink-0 text-sm tabular-nums">
           {s.variable ? <span className="text-muted-foreground">about </span> : null}
-          <PrivacyAmount value={s.sharedOn && s.billUsual ? s.billUsual : s.usual} currency={currency} />
+          {s.native && s.currency ? (
+            <PrivacyAmount value={s.native.usual} currency={s.currency} />
+          ) : (
+            <PrivacyAmount value={s.sharedOn && s.billUsual ? s.billUsual : s.usual} currency={currency} />
+          )}
         </span>
         <span
           aria-hidden

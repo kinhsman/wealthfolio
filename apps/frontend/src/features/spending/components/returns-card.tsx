@@ -54,7 +54,7 @@ export function ReturnsCard({ currency = "USD", className }: { currency?: string
                   <div className="text-muted-foreground truncate text-[11px]">{returnLine(x)}</div>
                 </div>
                 <span className="shrink-0 text-xs tabular-nums">
-                  <PrivacyAmount value={x.remaining} currency={currency} />
+                  <PrivacyAmount value={x.remaining} currency={x.currency ?? currency} />
                 </span>
               </button>
             );
