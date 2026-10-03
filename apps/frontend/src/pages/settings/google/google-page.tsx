@@ -3,8 +3,10 @@
 // amazon orders, in the future road map we can expand it to track other things"). The Google accounts the
 // money app reads (Gmail, read only), and what reads each one: banks that email each transaction
 // (Settings, Banks, Email alerts) and Amazon orders, which reads the account the owner picks here
-// ("allow user to switch to whatever google account they connected"). The money-hub service keeps the
-// links (/api/money-hub/email, lib/emailAlerts.js) and Amazon (/api/money-hub/amazon, lib/amazon.js).
+// ("allow user to switch to whatever google account they connected"), and Return emails (owner, 10-03: the
+// Returns timeline's Accepted and Received from the store's emails, "an option to turn on"). The money-hub
+// service keeps the links (/api/money-hub/email, lib/emailAlerts.js), Amazon (/api/money-hub/amazon,
+// lib/amazon.js) and Return emails (/api/money-hub/return-emails, lib/returnEmails.js).
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
@@ -15,6 +17,7 @@ import { SettingsHeader } from "../settings-header";
 
 const EMAIL = "/api/money-hub/email";
 const AMAZON = "/api/money-hub/amazon";
+const RETURN_EMAILS = "/api/money-hub/return-emails";
 
 interface Mailbox { id: string; email: string; linkedAt: string; error: string | null }
 interface EmailBank { id: string; bankName: string; accountName: string; mailboxId: string; enabled: boolean }
@@ -32,6 +35,14 @@ interface AmazonStatus {
   kinds?: { kind: string; charges: number; last: string | null; categoryId: string | null }[];
   /** How many charges took their kind's category so far. */
   categorized?: number;
+}
+
+interface ReturnEmailsStatus {
+  on: boolean;
+  busy: boolean;
+  mailboxId: string | null;
+  mailboxes: { id: string; email: string }[];
+  last: { at: string; read: number; emails: number; matched: number; returns: number; errors: string[] } | null;
 }
 
 async function call<T>(base: string, method: string, path: string, body?: unknown): Promise<T> {
@@ -164,6 +175,7 @@ function AmazonCategories({ amazon, busy, onPick }: { amazon: AmazonStatus; busy
 export default function GoogleSettingsPage() {
   const [email, setEmail] = useState<EmailStatus | null>(null);
   const [amazon, setAmazon] = useState<AmazonStatus | null>(null);
+  const [returnEmails, setReturnEmails] = useState<ReturnEmailsStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [confirmUnlink, setConfirmUnlink] = useState<string | null>(null);
@@ -171,6 +183,7 @@ export default function GoogleSettingsPage() {
   useEffect(() => {
     call<EmailStatus>(EMAIL, "GET", "/status").then(setEmail).catch((e) => setNote({ tone: "bad", text: e instanceof Error ? e.message : String(e) }));
     call<AmazonStatus>(AMAZON, "GET", "").then(setAmazon).catch(() => setAmazon(null));
+    call<ReturnEmailsStatus>(RETURN_EMAILS, "GET", "").then(setReturnEmails).catch(() => setReturnEmails(null));
   }, []);
 
   const run = async <T,>(what: string, fn: () => Promise<T>, take: (v: T) => void, ok?: string) => {
@@ -185,15 +198,20 @@ export default function GoogleSettingsPage() {
       setBusy(null);
     }
   };
-  const refreshAmazon = () => call<AmazonStatus>(AMAZON, "GET", "").then(setAmazon).catch(() => {});
+  const refreshAmazon = () => {
+    call<AmazonStatus>(AMAZON, "GET", "").then(setAmazon).catch(() => {});
+    call<ReturnEmailsStatus>(RETURN_EMAILS, "GET", "").then(setReturnEmails).catch(() => {});
+  };
 
   // What reads each account: its banks, and Amazon orders (the picked account, or every one).
   const usedBy = (m: Mailbox) => {
     const banks = (email?.banks ?? []).filter((b) => b.mailboxId === m.id).map((b) => b.accountName || b.bankName);
     const amazonHere = amazon?.on && (!amazon.mailboxId || amazon.mailboxId === m.id);
-    return [banks.length ? `Bank emails: ${banks.join(", ")}` : null, amazonHere ? "Amazon orders" : null].filter(Boolean).join(" · ") || "Nothing reads it yet";
+    const returnsHere = returnEmails?.on && (!returnEmails.mailboxId || returnEmails.mailboxId === m.id);
+    return [banks.length ? `Bank emails: ${banks.join(", ")}` : null, amazonHere ? "Amazon orders" : null, returnsHere ? "Return emails" : null].filter(Boolean).join(" · ") || "Nothing reads it yet";
   };
   const amazonErrors = amazon?.last?.errors?.length ?? 0;
+  const returnErrors = returnEmails?.last?.errors?.length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -295,6 +313,52 @@ export default function GoogleSettingsPage() {
                 onPick={(kind, categoryId) => run(`amazon-cat:${kind}`, () => call<AmazonStatus>(AMAZON, "PUT", "", { kind, categoryId }), setAmazon,
                   categoryId ? `Saved. ${kind} charges are being filed now.` : `${kind} left as it is.`)} />
             ) : null}
+          </div>
+        ) : null}
+
+        {returnEmails ? (
+          <div className="bg-card rounded-xl border">
+            <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <Logo><Icons.Undo className="text-primary size-5" /></Logo>
+              <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
+                <div className="truncate text-sm font-semibold">Return emails</div>
+                <div className="text-muted-foreground truncate text-xs">
+                  {returnEmails.on
+                    ? [returnEmails.last ? `${returnEmails.last.matched} store ${returnEmails.last.matched === 1 ? "email" : "emails"} on your returns` : "Not read yet", returnEmails.last?.at && `checked ${when(returnEmails.last.at)}`].filter(Boolean).join(" · ")
+                    : "Off"}
+                </div>
+              </div>
+              <div className="ml-auto flex items-center gap-3">
+                {returnEmails.on ? <Pill tone={returnErrors ? "warn" : "ok"} text={returnErrors ? "Needs a look" : "Reading"} /> : <Pill tone="off" text="Off" />}
+                <Switch checked={returnEmails.on} disabled={!!busy || !returnEmails.mailboxes.length} aria-label="Read the store's return emails"
+                  onCheckedChange={(on) => run("returns-on", () => call<ReturnEmailsStatus>(RETURN_EMAILS, "PUT", "", { on }), setReturnEmails, on ? "On. Reading your return emails now." : undefined)} />
+              </div>
+            </div>
+            <div className="space-y-2.5 border-t px-4 py-3 text-xs">
+              {returnEmails.on ? (
+                <label className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted-foreground">Read from</span>
+                  <select value={returnEmails.mailboxId ?? ""} disabled={!!busy || !returnEmails.mailboxes.length} className={field}
+                    onChange={(e) => run("returns-box", () => call<ReturnEmailsStatus>(RETURN_EMAILS, "PUT", "", { mailboxId: e.target.value || null }), setReturnEmails, "Saved. Reading that account now.")}>
+                    <option value="">Every linked account</option>
+                    {returnEmails.mailboxes.map((m) => <option key={m.id} value={m.id}>{m.email}</option>)}
+                  </select>
+                </label>
+              ) : null}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-muted-foreground">
+                  Fills each return&apos;s timeline on{" "}
+                  <Link to="/spending/returns" className="text-foreground underline-offset-4 hover:underline">Returns</Link>: accepted, received, refund sent.
+                </span>
+                {returnEmails.on ? (
+                  <button type="button" className={`${btn} h-7`} disabled={!!busy || returnEmails.busy}
+                    onClick={() => run("returns-run", () => call<ReturnEmailsStatus>(RETURN_EMAILS, "POST", "/run"), setReturnEmails, "Checked.")}>
+                    {busy === "returns-run" || returnEmails.busy ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.RefreshCw className="size-3.5" />} Check now
+                  </button>
+                ) : null}
+              </div>
+              {returnErrors ? <p className="text-warning">{returnEmails.last?.errors.join(" · ")}</p> : null}
+            </div>
           </div>
         ) : null}
 

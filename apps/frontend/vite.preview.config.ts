@@ -29,6 +29,7 @@ export default defineConfig({
         taxes: path.resolve(__dirname, "preview/taxes.html"),
         "email-banks": path.resolve(__dirname, "preview/email-banks.html"),
         pending: path.resolve(__dirname, "preview/pending.html"),
+        returns: path.resolve(__dirname, "preview/returns.html"),
       },
     },
   },

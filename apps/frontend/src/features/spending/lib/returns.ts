@@ -33,6 +33,40 @@ export interface RefundOffer extends RefundRow {
   store: "same" | "like" | null;
 }
 
+/** The timeline's steps (owner, 2026-10-03: "Return initiated > Vendor accepted > vendor received item >
+ *  payment returned"). */
+export type ReturnStepKey = "started" | "accepted" | "received" | "refunded";
+/** done: with its day. passed: a later step came, this one sent no email. now: the one waited on. declined:
+ *  the store said no. The money step also: sent (the store says it sent it, the bank shows nothing yet), part,
+ *  late, settled. */
+export type ReturnStepState = "done" | "passed" | "now" | "todo" | "declined" | "sent" | "part" | "late" | "settled";
+
+/** The store's word on a step: one of its emails (Settings, Google, Return emails), or Amazon's. */
+export interface ReturnEmail {
+  key: string;
+  source: "email" | "amazon";
+  kind: "accepted" | "declined" | "dropped" | "received" | "refunded";
+  date: string;
+  subject: string;
+  from: string;
+  /** The email in Gmail, or the order on Amazon. */
+  url: string;
+  /** A day the store gave: drop it off by, the refund by. */
+  by?: string | null;
+  /** How the email was tied to this return: the sender is the store, an order number, or the amount. */
+  how?: "store" | "order" | "amount";
+}
+
+export interface ReturnStep {
+  key: ReturnStepKey;
+  state: ReturnStepState;
+  date: string | null;
+  /** Who told it: the day typed on the return, the store's email, Amazon, or the refund in the bank. */
+  via: "you" | "email" | "amazon" | "bank" | null;
+  event: ReturnEmail | null;
+  note: { kind: "dropOffBy" | "dropped" | "due"; date: string } | null;
+}
+
 export interface ReturnItem {
   id: string;
   purchaseId: string;
@@ -64,6 +98,10 @@ export interface ReturnItem {
    *  it; `inBase` is one unit's worth in dollars now (the totals count it so). */
   currency?: string;
   inBase?: number | null;
+  /** The store's emails about it, oldest first. */
+  emails?: ReturnEmail[];
+  /** Where it stands, step by step (the timeline). */
+  steps?: ReturnStep[];
 }
 
 export interface ReturnsView {
@@ -137,11 +175,33 @@ export const returnsApi = {
   candidates: (id: string) => call<RefundOffer[]>("GET", `${one(id)}/candidates`),
   /** Recent purchases, by the words typed. */
   purchases: (q: string) => call<PurchaseOption[]>("GET", `/purchases?q=${encodeURIComponent(q)}`),
+  /** "Not this one": a store email that is not about this return. */
+  notEmail: (id: string, key: string) => call<ReturnsView>("POST", `${one(id)}/not-email`, { key }),
   setAlerts: (alerts: Partial<Record<ReturnAlertKind | "on", boolean>>) => call<ReturnsView>("PUT", "/alerts", alerts),
   /** A sample of one kind of alert, sent the way the real one goes. */
   testAlert: (kind: ReturnAlertKind) =>
     call<ReturnsView & { went: { discord: boolean; ntfy: boolean }; sample: string }>("POST", "/alerts/test", { kind }),
 };
+
+/** Settings, Google, Return emails: whether the store's emails are read for the timeline. */
+export interface ReturnEmailsStatus {
+  on: boolean;
+  busy: boolean;
+  mailboxId: string | null;
+  mailboxes: { id: string; email: string }[];
+  last: { at: string; read: number; emails: number; matched: number; returns: number; errors: string[] } | null;
+}
+export const RETURN_EMAILS_KEY = ["money-hub", "return-emails"] as const;
+export const returnEmailsApi = {
+  get: () => fetch("/api/money-hub/return-emails", { credentials: "include" }).then(async (res) => {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as { error?: string }).error || `The money app helper said ${res.status}`);
+    return data as ReturnEmailsStatus;
+  }),
+};
+export function useReturnEmails() {
+  return useQuery({ queryKey: RETURN_EMAILS_KEY, queryFn: returnEmailsApi.get, staleTime: 60 * 1000, retry: false });
+}
 
 export function useReturns() {
   return useQuery({ queryKey: RETURNS_KEY, queryFn: returnsApi.get, staleTime: 60 * 1000 });
@@ -193,10 +253,12 @@ export function shortDay(iso: string): string {
 const days = (n: number) => `${n} day${n === 1 ? "" : "s"}`;
 
 /** The status in words. `tone`: green for done, amber for a look, plain while it is just waiting. */
-export function returnStatus(x: Pick<ReturnItem, "status" | "suggestions">): { label: string; tone: "fine" | "look" | "plain" | "over" } {
+export function returnStatus(x: Pick<ReturnItem, "status" | "suggestions" | "steps">): { label: string; tone: "fine" | "look" | "plain" | "over" } {
   if (x.status === "back") return { label: "Refunded", tone: "fine" };
   if (x.status === "settled") return { label: "Settled", tone: "over" };
   if (x.suggestions.length) return { label: "Is this it?", tone: "look" };
+  // The store's email said no (the timeline's Accepted step).
+  if (x.steps?.some((s) => s.state === "declined")) return { label: "Declined", tone: "look" };
   if (x.status === "late") return { label: "Late", tone: "look" };
   if (x.status === "part") return { label: "Part back", tone: "plain" };
   return { label: "Waiting", tone: "plain" };
@@ -220,6 +282,50 @@ export function returnLine(x: Pick<ReturnItem, "status" | "returnedOn" | "dueOn"
   if (x.dueInDays < 0) return `${sent} · expected ${shortDay(x.dueOn)}, ${days(-x.dueInDays)} ago`;
   if (x.dueInDays === 0) return `${sent} · expected today`;
   return `${sent} · expected by ${shortDay(x.dueOn)}, in ${days(x.dueInDays)}`;
+}
+
+/** A step's name, in a word or two. */
+export function stepLabel(step: Pick<ReturnStep, "key" | "state">): string {
+  if (step.key === "started") return "Started";
+  if (step.key === "accepted") return step.state === "declined" ? "Declined" : "Accepted";
+  if (step.key === "received") return "Received";
+  if (step.state === "settled") return "Settled";
+  if (step.state === "part") return "Part back";
+  return "Refunded";
+}
+
+/** Under a step: its day, or what it waits on ("Drop off by Oct 21", "By Oct 17", "Sent Oct 5"). Short: a
+ *  phone shows four of these side by side. */
+export function stepCaption(step: ReturnStep): string {
+  const day = step.date ? shortDay(step.date) : "";
+  switch (step.state) {
+    case "done":
+    case "declined":
+    case "settled":
+    case "part":
+      return day;
+    case "passed":
+      return "";
+    case "sent":
+      return `Sent ${day}`;
+    case "late":
+      return step.note ? `Due ${shortDay(step.note.date)}` : "Late";
+    default:
+      if (step.note?.kind === "dropOffBy") return `Drop by ${shortDay(step.note.date)}`;
+      if (step.note?.kind === "dropped") return `Dropped ${shortDay(step.note.date)}`;
+      if (step.note?.kind === "due" && step.state === "now") return `By ${shortDay(step.note.date)}`;
+      return step.state === "now" ? "Waiting" : "";
+  }
+}
+
+/** Who said so, for the window's timeline. */
+export function stepSource(step: ReturnStep): string {
+  if (step.via === "you") return "the day you set";
+  if (step.via === "bank") return "in your bank";
+  if (step.via === "amazon") return "Amazon's email";
+  if (step.via === "email") return step.event?.from ? `${step.event.from}'s email` : "the store's email";
+  if (step.state === "passed") return "no email";
+  return "";
 }
 
 /** The open returns that need the owner first: one to confirm, then late, then the longest wait. */

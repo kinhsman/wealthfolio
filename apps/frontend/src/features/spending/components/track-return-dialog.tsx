@@ -36,6 +36,7 @@ import {
   currencyDigits,
   shortDay,
   trackReturnStore,
+  useReturnEmails,
   useReturns,
   useSetReturns,
   type PurchaseOption,
@@ -46,6 +47,7 @@ import {
   type TrackReturnTarget,
 } from "../lib/returns";
 import { MerchantLogo } from "./merchant-logo";
+import { ReturnSteps } from "./return-timeline";
 import { StreamLogo } from "./stream-logo";
 
 const caps = "text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.08em]";
@@ -200,6 +202,7 @@ function ReturnForm({
   const [note, setNote] = useState(item?.note ?? "");
   const [confirmStop, setConfirmStop] = useState(false);
   const [picking, setPicking] = useState(false);
+  const { data: storeEmails } = useReturnEmails();
 
   const amount = Number(expected);
   const amountError = !(amount > 0) ? "How much is coming back?" : Math.round(amount * 100) > Math.round(bought.amount * 100) ? "That is more than you paid." : null;
@@ -260,6 +263,30 @@ function ReturnForm({
           <PrivacyAmount value={bought.amount} currency={currency} />
         </div>
       </div>
+
+      {item?.steps?.length ? (
+        <div className="space-y-2 rounded-lg border p-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className={caps}>Where it stands</span>
+            {storeEmails && !storeEmails.on ? (
+              <a
+                href="/settings/google"
+                className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+                onClick={(e) => {
+                  // The window sits outside the app's router: move the page the way the browser's Back does.
+                  e.preventDefault();
+                  onClose();
+                  window.history.pushState({}, "", "/settings/google");
+                  window.dispatchEvent(new PopStateEvent("popstate"));
+                }}
+              >
+                Store emails off
+              </a>
+            ) : null}
+          </div>
+          <ReturnSteps item={item} busy={busy} onNotIt={(key) => act(() => returnsApi.notEmail(item.id, key), "Taken off. That email stays off this return.")} />
+        </div>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field

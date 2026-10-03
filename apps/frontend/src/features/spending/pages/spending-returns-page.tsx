@@ -10,6 +10,7 @@ import { Button, Icons, Page, PageContent, PageHeader, PrivacyAmount } from "@we
 import { useAccounts } from "@/hooks/use-accounts";
 import { cn } from "@/lib/utils";
 
+import { ReturnTimeline } from "../components/return-timeline";
 import { StreamLogo } from "../components/stream-logo";
 import { MoneyInRow } from "../components/track-return-dialog";
 import {
@@ -20,6 +21,7 @@ import {
   returnStatus,
   returnsApi,
   trackReturnStore,
+  useReturnEmails,
   useReturns,
   useSetReturns,
   type ReturnItem,
@@ -43,6 +45,7 @@ type Act = (label: string, fn: () => Promise<ReturnsView>, done?: string) => Pro
 export default function SpendingReturnsPage() {
   const navigate = useNavigate();
   const { data, isLoading, isError, error } = useReturns();
+  const { data: storeEmails } = useReturnEmails();
   const currency = data?.currency || "USD";
   const set = useSetReturns();
   const [busy, setBusy] = useState<string | null>(null);
@@ -142,6 +145,15 @@ export default function SpendingReturnsPage() {
             {/* Which alerts go out, and their tests, live on Settings, Alerts with every other alert (owner, 10-01). */}
             <div className="text-muted-foreground space-y-1 text-xs">
               {data.last ? <p>Last checked {new Date(data.last.at).toLocaleString()}. It checks every hour, and nothing in your transactions is changed.</p> : null}
+              {/* The timeline's middle steps come from the store's emails, read only when the owner turned it on. */}
+              {storeEmails ? (
+                <p>
+                  {storeEmails.on ? "Accepted and Received come from the store's emails: " : "Accepted and Received come from the store's emails, off now: "}
+                  <Link to="/settings/google" className="text-foreground underline-offset-4 hover:underline">
+                    Settings, Google
+                  </Link>
+                </p>
+              ) : null}
               <p>
                 {data.alerts.on === false ? "Alerts for these are off. " : "Which alerts go out, and where: "}
                 <Link to="/settings/alerts" className="text-foreground underline-offset-4 hover:underline">
@@ -250,6 +262,8 @@ function ReturnRow({ x, currency: base, busy, act }: { x: ReturnItem; currency: 
           <Icons.Pencil className="h-4 w-4" />
         </Button>
       </div>
+      {/* Where it stands, step by step, while it is open (a closed one says it in its line). */}
+      {!x.closedAt && x.steps?.length ? <ReturnTimeline steps={x.steps} className="mt-2.5 sm:max-w-md sm:pl-12" /> : null}
       {x.suggestions.length ? (
         <div className="mt-2 space-y-1.5 sm:pl-12" onClick={(e) => e.stopPropagation()}>
           {x.suggestions.map((c) => (

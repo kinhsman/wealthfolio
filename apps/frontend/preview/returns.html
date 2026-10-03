@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" class="overflow-x-hidden">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Preview: Returns timeline</title>
+  </head>
+  <body class="overflow-x-hidden">
+    <script>
+      // ?theme=dark|light, ?skin=meadow|bronze: the app look, as components/app-skin.tsx puts it on <html>.
+      (function () {
+        var p = new URLSearchParams(location.search);
+        var html = document.documentElement;
+        html.classList.add(p.get("theme") === "dark" ? "dark" : "light");
+        html.classList.add("mh-skin");
+        html.dataset.lightSkin = p.get("skin") || "meadow";
+        html.dataset.darkSkin = p.get("skin") || "meadow";
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/preview/returns.tsx"></script>
+  </body>
+</html>
