@@ -3,9 +3,12 @@
 // from the liability's original amount, rate, start date, term and how it is paid back (lib/loans.js):
 // the payoff date, this month's payment and the interest still to come; with "Balance follows the
 // schedule" on, it also steps the balance down on each payment day.
-import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
 import { AmountDisplay } from "@wealthfolio/ui";
 import { Separator } from "@wealthfolio/ui/components/ui/separator";
+import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@wealthfolio/ui/components/ui/table";
 
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
@@ -33,6 +36,7 @@ export interface LoanView {
     maturity: string | null;
     method: "annuity" | "equal_principal" | "interest_only";
     follow: boolean;
+    autoBills: boolean;
     paymentDay: number | null;
     renewalFeePct: number | null;
   };
@@ -260,10 +264,34 @@ export function LoanLinesTable({ id, currency }: { id: string; currency: string 
 /** The rows under the loan's details: term, payoff, the next payment, interest to come. */
 export function LoanScheduleSection({ id, currency }: { id: string; currency: string }) {
   const { isBalanceHidden } = useBalancePrivacy();
+  const qc = useQueryClient();
   const { data } = useLoan(id);
+  const [toggling, setToggling] = useState(false);
   if (!data || data.keptBy) return null;
   const s = data.schedule;
   const t = data.terms;
+
+  const handleToggleAutoBills = async (enabled: boolean) => {
+    setToggling(true);
+    try {
+      await call("POST", `/${encodeURIComponent(id)}/auto-bills`, { enabled });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: LOAN_KEY(id) }),
+        qc.invalidateQueries({ queryKey: [QueryKeys.ALTERNATIVE_HOLDINGS] }),
+        qc.invalidateQueries({ queryKey: ["money-hub", "subscriptions"] }),
+      ]);
+      toast.success(
+        enabled
+          ? `${data.name} imported to bills tracking.`
+          : `${data.name} removed from bills tracking.`
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update bills tracking");
+    } finally {
+      setToggling(false);
+    }
+  };
+
   // A loan in lines (owner, 10-03): renewed line by line, never paid off in one last payment.
   const lined = data.lines.length > 0;
   const feesMonthly = lined && data.feesTotal != null && t.termMonths ? data.feesTotal / t.termMonths : null;
@@ -350,6 +378,20 @@ export function LoanScheduleSection({ id, currency }: { id: string; currency: st
             )}
           </>
         )}
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <div className="space-y-0.5">
+            <span className="font-medium text-sm">Import to bills tracking</span>
+            <span className="text-muted-foreground block text-xs leading-snug">
+              Monthly interest and {t.termMonths ? `${t.termMonths}-month ` : ""}renewal fee automatically imported into bills
+            </span>
+          </div>
+          <Switch
+            checked={!!t.autoBills}
+            disabled={toggling}
+            onCheckedChange={handleToggleAutoBills}
+            aria-label="Import to bills tracking"
+          />
+        </div>
         {/* The lines show whatever else is still missing. */}
         <LoanLinesSummary data={data} amount={amount} />
       </div>

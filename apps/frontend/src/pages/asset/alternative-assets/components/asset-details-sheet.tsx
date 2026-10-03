@@ -884,6 +884,24 @@ function LiabilityFields({
         )}
       />
 
+      <FormField
+        control={form.control}
+        name="autoBills"
+        render={({ field }) => (
+          <FormItem className="flex items-start justify-between gap-4 rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <FormLabel>Import to bills tracking</FormLabel>
+              <p className="text-muted-foreground text-xs leading-snug">
+                Automatically import monthly interest and renewal fee into bills and subscriptions tracking.
+              </p>
+            </div>
+            <FormControl>
+              <Switch checked={!!field.value} onCheckedChange={field.onChange} aria-label="Import to bills tracking" />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+
       {/* money-hub: one loan drawn in lines (owner, 10-03: split by the bank's limit per line). */}
       <FormField
         control={form.control}

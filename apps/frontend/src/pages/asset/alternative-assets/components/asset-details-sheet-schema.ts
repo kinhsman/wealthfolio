@@ -159,6 +159,7 @@ export const liabilityDetailsSchema = baseSchema.extend({
     .optional()
     .nullable(),
   followSchedule: z.boolean().optional().nullable(),
+  autoBills: z.boolean().optional().nullable(),
 });
 
 // Other asset schema (generic)
@@ -266,6 +267,7 @@ export function getDefaultDetailsFormValues(
             ? metadata.repayment
             : "annuity",
         followSchedule: metadata?.follow_schedule === "true",
+        autoBills: metadata?.auto_bills === "true",
         maturityDate: metadata?.maturity_date ? parseLocalDate(metadata.maturity_date as string) : null,
         paymentDay: metadata?.payment_day ? parseInt(metadata.payment_day as string, 10) : null,
         renewalFeePct: metadata?.renewal_fee_pct ? parseFloat(metadata.renewal_fee_pct as string) : null,
@@ -338,6 +340,7 @@ export function formValuesToMetadata(values: AssetDetailsFormValues): Record<str
       metadata.term_months = values.termMonths != null ? values.termMonths.toString() : "";
       metadata.repayment = values.repayment ?? "annuity";
       metadata.follow_schedule = values.followSchedule ? "true" : "false";
+      metadata.auto_bills = values.autoBills ? "true" : "false";
       metadata.maturity_date = values.maturityDate ? formatDateToISO(values.maturityDate) : "";
       metadata.payment_day = values.paymentDay != null ? values.paymentDay.toString() : "";
       metadata.renewal_fee_pct = values.renewalFeePct != null ? values.renewalFeePct.toString() : "";
