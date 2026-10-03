@@ -28,23 +28,28 @@ export interface Merchant {
   source?: "owly" | "bank";
   /** On a "bank" one: the owner's merchant that asked for the bank's logo (none: built in). */
   from?: Merchant;
+  /** On a "bank" one: shown only because no merchant matched (a bank read from its emails). */
+  fallback?: boolean;
 }
 
 type AccountLike = Pick<Account, "id" | "name" | "group" | "meta"> & { accountType?: string };
 
-/** The bank holding the account, as a merchant: its name and logo. Bank accounts only
- *  (meta.source "plaid"), so Owly's "Owed to me" keeps its usual look. */
-function bankOf(account: AccountLike | null | undefined, id: string, pattern: string): Merchant | null {
-  if (!account) return null;
-  let source: unknown;
+function sourceOf(account: AccountLike): unknown {
   try {
     const meta = typeof account.meta === "string" ? JSON.parse(account.meta) : account.meta;
-    source = (meta as { source?: unknown } | null)?.source;
+    return (meta as { source?: unknown } | null)?.source;
   } catch {
     return null;
   }
+}
+
+/** The bank holding the account, as a merchant: its name and logo. Bank accounts only (meta.source
+ *  "plaid", or "email" for a bank read from its alert emails), so Owly's "Owed to me" keeps its usual look. */
+function bankOf(account: AccountLike | null | undefined, id: string, pattern: string): Merchant | null {
+  if (!account) return null;
+  const source = sourceOf(account);
   const logoUrl = accountLogoUrl(account);
-  if (source !== "plaid" || !logoUrl) return null;
+  if ((source !== "plaid" && source !== "email") || !logoUrl) return null;
   const name = account.group || account.name;
   return { id: `bank:${account.id}:${id}`, name, pattern, patterns: [pattern], logoUrl, source: "bank" };
 }
@@ -61,6 +66,15 @@ export function bankFor(account?: AccountLike | null, activityType?: string | nu
   }
   if (activityType === "INTEREST") return bankOf(account, "interest", "Interest");
   return null;
+}
+
+/** A bank read from its alert emails (ACB, MB) names people and transfers, never a shop's logo, so
+ *  what no merchant matches shows that bank (owner, 10-02: "transactions from ACB and MB are missing
+ *  its icon"). Plaid banks keep no logo there: Plaid names the shop, and a bank logo would pass for it. */
+function emailBankOf(account?: AccountLike | null): Merchant | null {
+  if (!account || sourceOf(account) !== "email") return null;
+  const bank = bankOf(account, "bank", "Bank");
+  return bank && { ...bank, fallback: true };
 }
 
 const BASE = "/api/money-hub/merchants";
@@ -135,7 +149,8 @@ export function matchLength(text: string | null | undefined, words: string[]): n
 /** The merchant with any of its words in the text (any case); the longest matching words win, so
  *  "Costco Gas" beats "Costco". Card payments and interest show the account's bank (bankFor) first;
  *  a merchant with "Use the bank's logo" shows the bank of the transaction's account (skipped where
- *  that account has none), unless a merchant with its own picture matches too: that one wins. */
+ *  that account has none), unless a merchant with its own picture matches too: that one wins. On a
+ *  bank read from its emails, no match shows the bank (emailBankOf), once the merchants are loaded. */
 export function merchantFor(
   notes: string | null | undefined,
   merchants: Merchant[] | undefined,
@@ -147,7 +162,7 @@ export function merchantFor(
   if (bank) return bank;
   // money-hub patch: the payee's merchant first; else one named anywhere in what the bank wrote
   // (owner, 2026-10-01: "widen all three"; lib/bank-lines.ts).
-  return matchIn(notes, merchants, account) ?? matchIn(bankWords, merchants, account);
+  return matchIn(notes, merchants, account) ?? matchIn(bankWords, merchants, account) ?? (merchants ? emailBankOf(account) : null);
 }
 
 function matchIn(

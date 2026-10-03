@@ -21,6 +21,12 @@ describe("rulePatternFrom", () => {
     ).toBe("LAM THANH SANG CHUYEN TIEN GD");
   });
 
+  it("drops a dangling dash before the number (MB)", () => {
+    expect(rulePatternFrom("LAM THANH SANG chuyen tien (LAM THANH SANG - 48438917)")).toBe(
+      "LAM THANH SANG chuyen tien (LAM THANH SANG",
+    );
+  });
+
   it("leaves a short glued prefix out, as before", () => {
     expect(rulePatternFrom("AMZN Mktp US*2K4AB1C2")).toBe("AMZN Mktp");
   });

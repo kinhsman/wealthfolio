@@ -61,6 +61,24 @@ describe("merchantFor", () => {
   });
 });
 
+describe("merchantFor on a bank read from its emails", () => {
+  const acb = { id: "a", name: "ACB", group: "ACB", accountType: "CASH", meta: JSON.stringify({ source: "email", logoUrl: "https://x/acb.png" }) };
+  const chase = { id: "c", name: "Chase Checking", group: "Chase", accountType: "CASH", meta: JSON.stringify({ source: "plaid", logoUrl: "https://x/chase.webp" }) };
+  const shop: Merchant = { id: "h", name: "Highlands", pattern: "HIGHLANDS", logoUrl: "https://x/h.png" };
+  const own: Merchant = { id: "o", name: "Own transfers", pattern: "CHUYEN TIEN", logoUrl: null, useBank: true };
+  it("shows the bank when no merchant matches, a merchant when one does", () => {
+    const hit = merchantFor("FAMILY-031026-10:03:04 6276ASCB02EQFHSU .", [shop], acb, "WITHDRAWAL");
+    expect([hit?.name, hit?.logoUrl, hit?.source, hit?.fallback]).toEqual(["ACB", "https://x/acb.png", "bank", true]);
+    expect(merchantFor("THANH TOAN HIGHLANDS COFFEE", [shop], acb, "WITHDRAWAL")?.name).toBe("Highlands");
+    expect(merchantFor("FAMILY-031026", undefined, acb, "WITHDRAWAL")).toBeNull();      // merchants not loaded yet
+    expect(merchantFor("Foremost Liquor Center", [shop], chase, "WITHDRAWAL")).toBeNull(); // Plaid banks as before
+  });
+  it("lets a merchant with the bank's logo show it", () => {
+    const hit = merchantFor("LAM THANH SANG CHUYEN TIEN GD 6276MSCBD2PGWQKG", [own], acb, "TRANSFER_IN");
+    expect([hit?.name, hit?.from?.id, hit?.fallback]).toEqual(["ACB", "o", undefined]);
+  });
+});
+
 describe("merchantFor with the bank's words", () => {
   const water = { id: "w", name: "Water", pattern: "WATER BILL", logoUrl: "x" } as Merchant;
   const city = { id: "c", name: "City", pattern: "CITY OF CHICAGO", logoUrl: "y" } as Merchant;

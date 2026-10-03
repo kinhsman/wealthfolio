@@ -34,7 +34,8 @@ export function rulePatternFrom(notes?: string | null): string | null {
     if (head.length >= 3) words.push(head);
     break;
   }
-  const pattern = words.join(" ").trim();
+  // No dangling dash or bracket before the number ("chuyen tien (LAM THANH SANG - 48438917)").
+  const pattern = words.join(" ").replace(/[\s([{\-–—:;,.\/#*&+]+$/u, "");
   return pattern.length >= 3 ? pattern : null;
 }
 

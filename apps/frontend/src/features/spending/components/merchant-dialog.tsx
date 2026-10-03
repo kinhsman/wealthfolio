@@ -71,8 +71,20 @@ export function MerchantShortcut({
           <span className="truncate">{merchant.name}</span>
           {merchant.source === "owly" ? (
             <span>· photo from Owly</span>
+          ) : merchant.fallback ? (
+            <span className="truncate">· your bank&rsquo;s logo</span>
           ) : merchant.source === "bank" ? (
             <span className="truncate">· {merchant.pattern}, your bank&rsquo;s logo</span>
+          ) : null}
+          {/* The bank's logo standing in for a missing merchant: a logo of its own can still be added. */}
+          {merchant.fallback && words ? (
+            <button
+              type="button"
+              className="text-foreground shrink-0 underline-offset-4 hover:underline"
+              onClick={() => setDraft({ name: words, pattern: words })}
+            >
+              Add a logo
+            </button>
           ) : null}
           {merchant.source !== "owly" && (merchant.source !== "bank" || merchant.from) ? (
             <button
