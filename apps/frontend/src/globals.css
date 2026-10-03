@@ -361,9 +361,9 @@
 
   /* Custom sizes */
   --spacing-sidebar: 220px;
-  --spacing-sidebar-collapsed: 70px;
+  --spacing-sidebar-collapsed: 84px; /* money-hub: WheelTradr's rail, room for a name under each icon */
   --grid-template-columns-sidebar: 200px auto;
-  --grid-template-columns-sidebar-collapsed: 70px auto;
+  --grid-template-columns-sidebar-collapsed: 84px auto;
 }
 
 :root {

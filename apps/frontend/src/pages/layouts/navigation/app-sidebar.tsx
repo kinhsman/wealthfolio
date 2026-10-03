@@ -15,7 +15,7 @@ import {
 } from "@wealthfolio/ui";
 import { Button } from "@wealthfolio/ui/components/ui/button";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "react-router-dom";
 import { type NavLink, type NavigationProps, isPathActive } from "./app-navigation";
@@ -33,7 +33,24 @@ const modKey = isAppleDevice() ? "⌘" : "Ctrl";
 // and the collapse button share the top row (a column when collapsed); pages are 36px rows in 15px type.
 const ROW =
   "text-foreground [&_svg]:size-[18px]! mb-0.5 h-9 gap-3 rounded-md text-[15px] transition-all duration-300";
-const rowAlign = (collapsed: boolean) => (collapsed ? "justify-center px-0" : "justify-start px-3");
+// money-hub patch: collapsed, a row is its icon over its name in 10px type, like WheelTradr's rail (owner,
+// 10-02: "even in collapsed mode it still shows the name of the menu item"); the rail is 84px for it.
+const rowAlign = (collapsed: boolean) =>
+  collapsed ? "h-auto w-full flex-col justify-center gap-1 px-0.5 py-2 [&_svg]:size-5!" : "justify-start px-3";
+/** The row's name: beside the icon, or under it in small type when collapsed. */
+function RowLabel({ collapsed, children }: { collapsed: boolean; children: ReactNode }) {
+  return (
+    <span
+      className={
+        collapsed
+          ? "w-full truncate text-center text-[10px] font-medium leading-[11px]"
+          : "block truncate"
+      }
+    >
+      {children}
+    </span>
+  );
+}
 /** The top row's buttons: 32px squares, full-width rows when the sidebar is narrow. */
 const headButton = (collapsed: boolean) =>
   cn(
@@ -76,7 +93,7 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
               <nav
                 data-tauri-drag-region="true"
                 aria-label={t("common:layout.sidebar")}
-                className="flex shrink-0 flex-col px-2 pb-2"
+                className={cn("flex shrink-0 flex-col pb-2", collapsed ? "px-1" : "px-2")}
               >
                 <div
                   data-tauri-drag-region="true"
@@ -198,7 +215,7 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
               </nav>
             </div>
 
-            <div className="flex shrink-0 flex-col p-2">
+            <div className={cn("flex shrink-0 flex-col py-2", collapsed ? "px-1" : "px-2")}>
               {!CONNECT_HIDDEN && <ConnectNavItem collapsed={collapsed} />}
               {isWeb && requiresAuth && (
                 <Button
@@ -212,15 +229,7 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                   <span aria-hidden="true">
                     <Icons.LogOut />
                   </span>
-                  <span
-                    className={cn({
-                      "transition-opacity delay-100 duration-300 ease-in-out": true,
-                      "sr-only opacity-0": collapsed,
-                      "block opacity-100": !collapsed,
-                    })}
-                  >
-                    {t("common:layout.logout")}
-                  </span>
+                  <RowLabel collapsed={collapsed}>{t("common:layout.logout")}</RowLabel>
                 </Button>
               )}
               <div className={cn("flex pt-1", collapsed && "justify-center")}>
@@ -302,15 +311,7 @@ function NavItem({ item, collapsed, className, ...props }: NavItemProps) {
       >
         <span aria-hidden="true">{resolveNavigationIcon(item.icon, "size-[18px]")}</span>
 
-        <span
-          className={cn({
-            "truncate transition-opacity delay-100 duration-300 ease-in-out": true,
-            "sr-only opacity-0": collapsed,
-            "block opacity-100": !collapsed,
-          })}
-        >
-          {item.title}
-        </span>
+        <RowLabel collapsed={collapsed}>{item.title}</RowLabel>
       </Link>
     </Button>
   );
@@ -340,15 +341,7 @@ function AddonsMenu({ addons, collapsed, onSetPinned }: AddonsMenuProps) {
           <span aria-hidden="true">
             <Icons.Addons />
           </span>
-          <span
-            className={cn({
-              "transition-opacity delay-100 duration-300 ease-in-out": true,
-              "sr-only opacity-0": collapsed,
-              "block opacity-100": !collapsed,
-            })}
-          >
-            {t("common:addons")}
-          </span>
+          <RowLabel collapsed={collapsed}>{t("common:addons")}</RowLabel>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
