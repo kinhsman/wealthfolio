@@ -138,7 +138,7 @@ export const liabilityDetailsSchema = baseSchema.extend({
     .max(600, "The term must be 50 years or less")
     .optional()
     .nullable(),
-  repayment: z.enum(["annuity", "equal_principal"]).optional().nullable(),
+  repayment: z.enum(["annuity", "equal_principal", "interest_only"]).optional().nullable(),
   followSchedule: z.boolean().optional().nullable(),
 });
 
@@ -242,7 +242,10 @@ export function getDefaultDetailsFormValues(
         interestRate: metadata?.interest_rate ? parseFloat(metadata.interest_rate as string) : null,
         linkedAssetId: (metadata?.linked_asset_id as string) ?? null,
         termMonths: metadata?.term_months ? parseInt(metadata.term_months as string, 10) : null,
-        repayment: metadata?.repayment === "equal_principal" ? "equal_principal" : "annuity",
+        repayment:
+          metadata?.repayment === "equal_principal" || metadata?.repayment === "interest_only"
+            ? metadata.repayment
+            : "annuity",
         followSchedule: metadata?.follow_schedule === "true",
       };
 

@@ -764,20 +764,12 @@ function LiabilityFields({
           name="termMonths"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Term in months</FormLabel>
+              <FormLabel>Term</FormLabel>
               <FormControl>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  step={1}
-                  placeholder="240"
-                  value={field.value ?? ""}
-                  onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                />
+                <TermInput value={field.value ?? null} onChange={field.onChange} />
               </FormControl>
               <p className="text-muted-foreground text-xs">
-                {field.value && field.value > 0 ? termLabel(field.value) : "240 is 20 years"}
+                {field.value && field.value > 0 ? `${termLabel(field.value)}, ${field.value} payments` : "How long the loan runs"}
               </p>
               <FormMessage />
             </FormItem>
@@ -796,6 +788,7 @@ function LiabilityFields({
                   options={[
                     { value: "annuity", label: "Same every month" },
                     { value: "equal_principal", label: "Goes down each month" },
+                    { value: "interest_only", label: "Interest only" },
                   ]}
                   sheetTitle="Payment"
                 />
@@ -803,7 +796,9 @@ function LiabilityFields({
               <p className="text-muted-foreground text-xs">
                 {field.value === "equal_principal"
                   ? "Same principal each month, interest on what is left. Most Vietnamese banks."
-                  : "One amount each month, like a US mortgage."}
+                  : field.value === "interest_only"
+                    ? "Interest each month, the whole principal with the last payment."
+                    : "One amount each month, like a US mortgage."}
               </p>
               <FormMessage />
             </FormItem>
@@ -861,6 +856,47 @@ function LiabilityFields({
           </FormItem>
         )}
       />
+    </div>
+  );
+}
+
+/** money-hub: a loan's term in years or months, kept in months (owner 10-03 typed 5 into a months-only box). */
+function TermInput({ value, onChange }: { value: number | null; onChange: (months: number | null) => void }) {
+  const [unit, setUnit] = useState<"years" | "months">(value && value % 12 !== 0 ? "months" : "years");
+  const per = unit === "years" ? 12 : 1;
+  const [text, setText] = useState(value ? String(value / per) : "");
+  const toMonths = (t: string, p: number) => (t.trim() === "" || !(Number(t) > 0) ? null : Math.round(Number(t) * p));
+  return (
+    <div className="flex gap-2">
+      <Input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step="any"
+        placeholder={unit === "years" ? "20" : "240"}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          onChange(toMonths(e.target.value, per));
+        }}
+        className="min-w-0"
+      />
+      {/* The number stays and the unit changes: 5 months picked as years is 60 months. */}
+      <div className="w-[7rem] shrink-0">
+        <ResponsiveSelect
+          value={unit}
+          onValueChange={(u) => {
+            const next = u === "months" ? "months" : "years";
+            setUnit(next);
+            onChange(toMonths(text, next === "years" ? 12 : 1));
+          }}
+          options={[
+            { value: "years", label: "Years" },
+            { value: "months", label: "Months" },
+          ]}
+          sheetTitle="Term in"
+        />
+      </div>
     </div>
   );
 }

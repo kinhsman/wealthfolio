@@ -23,13 +23,18 @@ export interface LoanView {
   id: string;
   name: string;
   currency: string;
-  terms: { original: number | null; rate: number | null; termMonths: number | null; start: string | null; method: "annuity" | "equal_principal"; follow: boolean };
+  terms: { original: number | null; rate: number | null; termMonths: number | null; start: string | null; method: "annuity" | "equal_principal" | "interest_only"; follow: boolean };
   missing: string[];
+  /** No start date: counted from the first balance typed, the term from then. */
+  countedFrom?: { date: string; balance: number } | null;
   /** The Rental page keeps this one's balance (its mortgage). */
   keptBy: "rental" | null;
   schedule?: {
     anchor: { date: string; balance: number; typed: boolean };
     rows: LoanRow[];
+    /** What is paid each month (interest only: the interest; the principal comes with `finalPayment`). */
+    regular: number | null;
+    finalPayment: number | null;
     paidCount: number;
     balanceToday: number;
     next: LoanRow | null;
@@ -80,6 +85,13 @@ const monthYear = (iso: string) =>
   new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { month: "short", year: "numeric", timeZone: "UTC" });
 const shortDay = (iso: string) =>
   new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
+const fullDay = (iso: string) =>
+  new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const STYLE = {
+  annuity: "Same payment every month",
+  equal_principal: "Payment goes down each month",
+  interest_only: "Interest only, principal at the end",
+} as const;
 
 /** The rows under the loan's details: term, payoff, the next payment, interest to come. */
 export function LoanScheduleSection({ id, currency }: { id: string; currency: string }) {
@@ -109,18 +121,32 @@ export function LoanScheduleSection({ id, currency }: { id: string; currency: st
           </p>
         ) : (
           <>
-            {t.termMonths ? row("Term", termLabel(t.termMonths), t.method === "equal_principal" ? "Payment goes down each month" : "Same payment every month") : null}
+            {t.termMonths ? row("Term", termLabel(t.termMonths), STYLE[t.method] ?? STYLE.annuity) : null}
             {s.payoff ? row("Pays off", monthYear(s.payoff), `${s.monthsLeft} payment${s.monthsLeft === 1 ? "" : "s"} left`) : null}
-            {s.next
+            {s.next && s.regular != null
               ? row(
-                  "Next payment",
-                  amount(s.next.payment),
-                  <>
-                    {shortDay(s.next.date)}: {amount(s.next.principal)} principal, {amount(s.next.interest)} interest
-                  </>,
+                  "Monthly payment",
+                  amount(s.regular),
+                  t.method === "interest_only" ? (
+                    <>Interest only, next {shortDay(s.next.date)}</>
+                  ) : (
+                    <>
+                      {shortDay(s.next.date)}: {amount(s.next.principal)} principal, {amount(s.next.interest)} interest
+                    </>
+                  ),
                 )
               : null}
+            {/* Interest only: the principal comes back in one payment at the end. */}
+            {t.method === "interest_only" && s.payoff && s.finalPayment != null && s.monthsLeft > 0
+              ? row("Last payment", amount(s.finalPayment), `${fullDay(s.payoff)}: the principal plus that month's interest`)
+              : null}
             {s.monthsLeft > 0 ? row("Interest still to pay", amount(s.interestLeft)) : null}
+            {data.countedFrom ? (
+              <p className="text-muted-foreground text-xs leading-snug">
+                Counted from your balance on {fullDay(data.countedFrom.date)}. Add the start date and original amount in Edit details to
+                count from when the loan began.
+              </p>
+            ) : null}
             <p className="text-muted-foreground text-xs leading-snug">
               {t.follow
                 ? `The balance steps down on each payment day. Type the balance your bank shows (Update value) and it carries on from there.`

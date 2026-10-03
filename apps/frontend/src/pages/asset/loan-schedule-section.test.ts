@@ -20,5 +20,8 @@ describe("a loan's term and schedule settings (money-hub, owner 10-03)", () => {
     const old = getDefaultDetailsFormValues(AlternativeAssetKind.LIABILITY, "US Bank", { original_amount: "400000" }, null);
     expect(old).toMatchObject({ termMonths: null, repayment: "annuity", followSchedule: false });
     expect(formValuesToMetadata({ ...v, termMonths: null, followSchedule: false } as typeof v)).toMatchObject({ term_months: "", follow_schedule: "false" });
+    // Interest only is kept as it is.
+    const io = getDefaultDetailsFormValues(AlternativeAssetKind.LIABILITY, "Vietin", { ...md, repayment: "interest_only" }, null);
+    expect(formValuesToMetadata(io)).toMatchObject({ repayment: "interest_only" });
   });
 });
