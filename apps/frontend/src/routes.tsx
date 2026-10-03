@@ -56,6 +56,7 @@ import SpendingBudgetPage from "./features/spending/pages/spending-budget-page";
 import SpendingSubscriptionsPage from "./features/spending/pages/spending-subscriptions-page";
 import SpendingPendingChangesPage from "./features/spending/pages/spending-pending-changes-page";
 import SpendingReturnsPage from "./features/spending/pages/spending-returns-page";
+import SpendingReceiptsPage from "./features/spending/pages/spending-receipts-page";
 import SpendingDrillPage from "./features/spending/pages/spending-drill-page";
 import TaxesPage from "./features/taxes/pages/taxes-page";
 import SpendingSettingsPage from "./pages/settings/spending/spending-settings-page";
@@ -144,6 +145,7 @@ export function AppRoutes() {
           <Route path="spending/subscriptions" element={<SpendingSubscriptionsPage />} />
           <Route path="spending/pending-changes" element={<SpendingPendingChangesPage />} />
           <Route path="spending/returns" element={<SpendingReturnsPage />} />
+          <Route path="spending/receipts" element={<SpendingReceiptsPage />} />
           <Route path="spending/merchant/:id" element={<SpendingDrillPage kind="merchant" />} />
           <Route path="spending/category/:id" element={<SpendingDrillPage kind="category" />} />
           <Route path="taxes" element={<TaxesPage />} />

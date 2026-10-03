@@ -44,6 +44,7 @@ import {
   resolveActivityTabFromUrlFilters,
   resolveActivityUrlFilters,
 } from "./utils/url-filters";
+import { SnapReceiptButton } from "@/features/spending/components/receipt-panel";
 
 interface ActivityDateRangeFilter {
   from?: string;
@@ -667,6 +668,13 @@ const ActivityPage = () => {
             testId: "import-activities-action",
             onClick: () => navigate("/import"),
           },
+          // money-hub patch: every receipt snapped (lib/receipts.ts).
+          {
+            icon: Icons.Receipt,
+            label: "Receipts",
+            testId: "receipts-action",
+            onClick: () => navigate("/spending/receipts"),
+          },
         ],
       },
     ],
@@ -676,6 +684,8 @@ const ActivityPage = () => {
   const spendingActions = (
     <div className="flex flex-wrap items-center gap-2">
       <SyncButton />
+      {/* money-hub patch: snap a store receipt; its lines file the card charge (lib/receipts.ts). */}
+      <SnapReceiptButton size="icon" seeOnPage />
       {/* Ask AI to categorize uncategorized transactions */}
       <Button
         asChild

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -18,6 +18,8 @@ import { offerRule } from "../lib/rule-offer";
 import { askWhichOne } from "../lib/track-charge";
 import { BankDescription } from "./bank-description";
 import { AmazonOrderDetails } from "./amazon-order";
+import { ReceiptFor } from "./receipt-panel";
+import type { ReceiptAnswer } from "../lib/receipts";
 import { useAmazonLinks } from "../lib/amazon";
 import { MerchantShortcut } from "./merchant-dialog";
 import { Link } from "react-router-dom";
@@ -295,6 +297,19 @@ export function CashActivityForm({
     form.setValue("memo", notesById?.[activity.id] ?? "");
   }, [open, activity?.id, notesById, form]);
 
+  // money-hub patch: a receipt filed from this window set the category (or split the charge): Save then
+  // leaves it as the receipt put it and offers no rule (a Costco charge is not always one category).
+  const receiptCategory = useRef<string | null>(null);
+  useEffect(() => {
+    receiptCategory.current = null;
+  }, [open, activity?.id]);
+  const onReceiptFiled = (r: ReceiptAnswer) => {
+    if (r.status !== "filed" || !r.filed) return;
+    const value = r.filed.how === "category" ? `spending_categories:${r.filed.lines[0].categoryId}` : "";
+    receiptCategory.current = value;
+    form.setValue("category", value);
+  };
+
   const watchType = form.watch("activityType");
   const watchAccountId = form.watch("accountId");
   const selectedAccount = spendingAccounts.find((a) => a.id === watchAccountId);
@@ -416,7 +431,7 @@ export function CashActivityForm({
         activity?.categoryTaxonomyId && activity?.categoryId
           ? `${activity.categoryTaxonomyId}:${activity.categoryId}`
           : "";
-      if (newCategory !== oldCategory) {
+      if (newCategory !== oldCategory && newCategory !== receiptCategory.current) {
         if (oldCategory) {
           const [oldTax] = oldCategory.split(":");
           await unassignActivityCategory(saved.id, oldTax);
@@ -451,7 +466,7 @@ export function CashActivityForm({
           ? `${activity.categoryTaxonomyId}:${activity.categoryId}`
           : "";
       // A subscription or bill category first asks which one it is (lib/track-charge.ts).
-      if (isEditing && values.category && values.category !== oldCategory) {
+      if (isEditing && values.category && values.category !== oldCategory && values.category !== receiptCategory.current) {
         const [taxonomyId, categoryId] = values.category.split(":");
         const categoryName = allCategoriesById.get(categoryId)?.name ?? "that category";
         const rule = () => void offerRule({ notes: values.notes, taxonomyId, categoryId, categoryName });
@@ -918,6 +933,10 @@ export function CashActivityForm({
                     {isEditing ? <BankDescription activityId={activity?.id} /> : null}
                     {/* money-hub patch: an Amazon charge's order (lib/amazon.ts). */}
                     {isEditing && activity?.id ? <AmazonOrderFor activityId={activity.id} /> : null}
+                    {/* money-hub patch: this charge's receipt, or add one (lib/receipts.ts). */}
+                    {isEditing && activity?.id && watchType === "WITHDRAWAL" ? (
+                      <ReceiptFor activityId={activity.id} activityDate={isoDayOf(activity.activityDate)} onFiled={onReceiptFiled} />
+                    ) : null}
 
                     {/* Collapsed by default, so the everyday case — a charge in
                         the account's own currency — never sees it. Open, it
@@ -1013,6 +1032,9 @@ export function CashActivityForm({
     </Sheet>
   );
 }
+
+/** money-hub patch: a date's day, YYYY-MM-DD. */
+const isoDayOf = (d: string | Date | undefined | null) => (d ? (typeof d === "string" ? d.slice(0, 10) : d.toISOString().slice(0, 10)) : undefined);
 
 /** money-hub patch: the Amazon order a charge was for, when the service matched one (lib/amazon.ts). */
 function AmazonOrderFor({ activityId }: { activityId: string }) {
