@@ -11,6 +11,12 @@ vi.mock("@tanstack/react-query", () => ({
   useQuery: vi.fn(() => ({ data: undefined })),
   useQueryClient: vi.fn(() => ({ setQueryData: vi.fn() })),
 }));
+// money-hub patch: each amount goes through useShownAmount (lib/display-currency.ts), which reads
+// the base currency from settings. The accounts it checks for Show in USD come through the mocked
+// useQuery above, so there are none and every amount keeps its own currency.
+vi.mock("@/lib/settings-provider", () => ({
+  useSettingsContext: () => ({ settings: { baseCurrency: "USD" } }),
+}));
 
 function renderRecentActivityCard(activities: Activity[] = []) {
   return render(

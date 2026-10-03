@@ -23,9 +23,13 @@ import AccountPage from "./account-page";
 
 vi.mock("@/adapters", () => ({
   getContributionLimit: vi.fn(),
+  // money-hub patch: Show in USD (lib/display-currency.ts) reads the latest rates, and its switch
+  // saves the account.
+  getExchangeRates: vi.fn(),
   getHoldingsList: vi.fn(),
   getSnapshots: vi.fn(),
   searchActivities: vi.fn(),
+  updateAccount: vi.fn(),
 }));
 
 vi.mock("@/components/action-palette", () => ({
@@ -153,6 +157,8 @@ vi.mock("@/pages/performance/hooks/use-performance-data", () => ({
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: vi.fn(),
+  // money-hub patch: the Show in USD switch refreshes the accounts after it saves.
+  useQueryClient: vi.fn(() => ({ invalidateQueries: vi.fn() })),
 }));
 
 vi.mock("@wealthfolio/ui", async () => {

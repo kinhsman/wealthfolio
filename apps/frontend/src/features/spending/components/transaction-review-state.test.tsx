@@ -21,6 +21,13 @@ vi.mock("../hooks/use-spending-events", () => ({
 vi.mock("./event-dialog-provider", () => ({
   useEventDialog: () => ({ openEventDialog: vi.fn(), openEventTypeDialog: vi.fn() }),
 }));
+// money-hub patch: the amount goes through useShownAmount (lib/display-currency.ts), which reads
+// the base currency from settings and which accounts have Show in USD on. No account has it on
+// here, so every amount shows as it is.
+vi.mock("@/lib/settings-provider", () => ({
+  useSettingsContext: () => ({ settings: { baseCurrency: "USD" } }),
+}));
+vi.mock("@/hooks/use-accounts", () => ({ useAccounts: () => ({ accounts: [] }) }));
 // Anything these rows reach for goes through Tauri's IPC bridge, which does not
 // exist under jsdom: the call rejects, the failure is logged, and the logger is
 // itself an IPC call that rejects unhandled. A stub bridge keeps that noise out
