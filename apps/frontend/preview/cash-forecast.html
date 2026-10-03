@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" class="overflow-x-hidden">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Preview: Cash forecast</title>
+  </head>
+  <body class="overflow-x-hidden font-mono">
+    <script>
+      // ?theme=dark|light picks the look, like the app's own first-paint script.
+      (function () {
+        var theme = new URLSearchParams(location.search).get("theme") || "light";
+        document.documentElement.classList.add(theme === "dark" ? "dark" : "light");
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/preview/cash-forecast.tsx"></script>
+  </body>
+</html>

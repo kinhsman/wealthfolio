@@ -4,6 +4,12 @@
 // (/api/money-hub/cash-forecast, server/drive-backup/lib/cashForecast.js).
 import { useQuery } from "@tanstack/react-query";
 
+import { accountLogoUrl } from "@/lib/account-logo";
+import type { Account } from "@/lib/types";
+
+import { cardName } from "./credit-cards";
+import { merchantFor, type Merchant } from "./merchants";
+
 export interface ForecastEvent {
   date: string;
   name: string;
@@ -15,6 +21,14 @@ export interface ForecastEvent {
   /** One payment split over several deposits (a paycheck in three accounts). */
   parts?: number;
   card?: string;
+  /** The account it is on (a card: the card's own), for its logo and name (owner, 10-03: "some of the
+   *  bank icons are missing"). Missing on a forecast worked out before the service carried it. */
+  accountId?: string | null;
+  /** A repeating payment's latest entry type: interest shows its bank (lib/merchants.ts bankFor). */
+  activityType?: string | null;
+  /** A card's last four and its bank's logo (when the account has none). */
+  mask?: string | null;
+  bankLogo?: string | null;
 }
 
 export interface CashForecast {
@@ -65,6 +79,39 @@ export function plainName(name: string): string {
   const letters = n.replace(/[^\p{L}]/gu, "");
   if (letters && letters.replace(/[^\p{Lu}]/gu, "").length / letters.length > 0.7) n = titleCase(n);
   return n.length > 36 ? `${n.slice(0, 35).trim()}…` : n;
+}
+
+export interface ForecastLogo {
+  url: string | null;
+  name: string;
+  /** A bank's picture, drawn edge to edge like everywhere else (MerchantLogo `whole`). */
+  whole: boolean;
+}
+
+/** A payment's name and logo the same way everywhere (owner, 10-03: "some of the bank icons are missing"):
+ *  a card as the Credit cards card shows it, its name and its bank's logo; else the merchant a transaction
+ *  row would show, read with the payment's account and type (interest shows its bank, a "Use the bank's
+ *  logo" merchant the account's bank), named by the owner's merchant, else by the plain words. */
+export function forecastLabel(
+  e: ForecastEvent,
+  merchants: Merchant[] | undefined,
+  accounts: Account[] | undefined,
+): { label: string; logo: ForecastLogo | null } {
+  const account = e.accountId ? accounts?.find((a) => a.id === e.accountId) : undefined;
+  if (e.card) {
+    const url = accountLogoUrl(account) ?? e.bankLogo ?? null;
+    const label = cardName({ name: e.name, mask: e.mask ?? null }, account?.name);
+    return { label, logo: url ? { url, name: account?.group || label, whole: true } : null };
+  }
+  const m = merchantFor(e.name, merchants, account, e.activityType);
+  if (!m) return { label: plainName(e.name), logo: null };
+  const logo = { url: m.logoUrl, name: m.name, whole: m.source === "bank" };
+  if (m.source !== "bank") return { label: m.name, logo };
+  // The bank's logo: the owner's merchant that asked for it names it; a bank read from its emails names
+  // people and transfers, so its words do; the bank's own interest is "Fidelity interest".
+  if (m.from) return { label: m.from.name, logo };
+  if (m.fallback) return { label: plainName(e.name), logo };
+  return { label: `${m.name} ${m.pattern.toLowerCase()}`, logo };
 }
 
 /** What a card payment is, in a few words. */

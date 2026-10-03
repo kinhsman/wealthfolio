@@ -4,6 +4,7 @@
 // says the day's balance and what happens that day. Under it, what is coming up. lib/cash-forecast.ts.
 import { useMemo, useRef, useState } from "react";
 import { DashboardCard } from "@/components/dashboard-card";
+import { useAccounts } from "@/hooks/use-accounts";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
@@ -12,26 +13,20 @@ import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import {
   FORECAST_HORIZONS,
   cardWhy,
+  forecastLabel,
   niceScale,
-  plainName,
   shortDay,
   stepPath,
   useCashForecast,
   type CashForecast,
   type ForecastEvent,
 } from "../lib/cash-forecast";
-import { merchantFor, useMerchants, type Merchant } from "../lib/merchants";
+import { useMerchants } from "../lib/merchants";
 import { MerchantLogo } from "./merchant-logo";
 import { PhoneFold } from "./phone-fold";
 
 const LINE = "var(--m-chart, var(--m-forest, hsl(73 84% 27%)))";
 
-/** A payment's name the same way everywhere: the owner's merchant, else the plain words; a card by its name. */
-function labelOf(e: ForecastEvent, merchants: Merchant[] | undefined): { label: string; merchant: Merchant | null } {
-  if (e.card) return { label: e.name, merchant: null };
-  const m = merchantFor(e.name, merchants);
-  return { label: m?.name ?? plainName(e.name), merchant: m };
-}
 const W = 600;
 const H = 140;
 
@@ -147,6 +142,7 @@ function money(v: number, currency: string, hidden: boolean, whole = false) {
 function Chart({ f, currency, isMobile }: { f: CashForecast; currency: string; isMobile: boolean }) {
   const { isBalanceHidden } = useBalancePrivacy();
   const { data: merchants } = useMerchants();
+  const { accounts } = useAccounts({ filterActive: false });
   const box = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<number | null>(null);
   const balances = f.days.map((d) => d.balance);
@@ -227,7 +223,7 @@ function Chart({ f, currency, isMobile }: { f: CashForecast; currency: string; i
                 <div className="text-foreground font-medium tabular-nums">{money(h.balance, currency, isBalanceHidden)}</div>
                 {hEvents.map((e, i) => (
                   <div key={i} className="flex justify-between gap-3 tabular-nums">
-                    <span className="truncate">{labelOf(e, merchants).label}</span>
+                    <span className="truncate">{forecastLabel(e, merchants, accounts).label}</span>
                     <span className={e.amount > 0 ? "text-[var(--m-up,#15803d)]" : ""}>{e.amount > 0 ? "+" : ""}{money(e.amount, currency, isBalanceHidden)}</span>
                   </div>
                 ))}
@@ -247,6 +243,7 @@ function Chart({ f, currency, isMobile }: { f: CashForecast; currency: string; i
 
 function Upcoming({ f, currency, isMobile }: { f: CashForecast; currency: string; isMobile: boolean }) {
   const { data: merchants } = useMerchants();
+  const { accounts } = useAccounts({ filterActive: false });
   const [open, setOpen] = useState(false);
   const keep = isMobile ? 6 : 8;
   const shown = open ? f.events : f.events.slice(0, keep);
@@ -255,13 +252,13 @@ function Upcoming({ f, currency, isMobile }: { f: CashForecast; currency: string
     <div className="space-y-0.5">
       <div className="text-muted-foreground pb-1 text-xs">Coming up</div>
       {shown.map((e, i) => {
-        const { label, merchant: m } = labelOf(e, merchants);
+        const { label, logo } = forecastLabel(e, merchants, accounts);
         const sub = e.card ? cardWhy(e.why) : [e.parts && e.parts > 1 ? `${e.parts} deposits` : null, e.every === "biweekly" ? "every 2 weeks" : "monthly", "estimated"].filter(Boolean).join(", ");
         return (
           <div key={`${e.date}-${i}`} className="flex items-center gap-2.5 rounded-lg px-1 py-1">
             <span className="text-muted-foreground w-12 shrink-0 text-[11.5px] tabular-nums">{shortDay(e.date)}</span>
-            {m ? (
-              <MerchantLogo url={m.logoUrl} name={m.name} whole={m.source === "bank"} className="h-6 w-6" />
+            {logo ? (
+              <MerchantLogo url={logo.url} name={logo.name} whole={logo.whole} className="h-6 w-6" />
             ) : (
               <span className="bg-muted flex h-6 w-6 shrink-0 items-center justify-center rounded-full" aria-hidden>
                 {e.card ? <Icons.CreditCard className="text-muted-foreground h-3.5 w-3.5" /> : e.amount > 0 ? <Icons.ArrowDown className="text-muted-foreground h-3.5 w-3.5" /> : <Icons.ArrowUp className="text-muted-foreground h-3.5 w-3.5" />}
