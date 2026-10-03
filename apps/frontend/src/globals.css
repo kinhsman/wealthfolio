@@ -1346,7 +1346,8 @@ summary {
    Claude Design: warm espresso and cream, bronze for actions, champagne edges, liquid glass over soft
    glows). Chosen per mode on Settings, Appearance; the .meadow page carries data-light-skin and
    data-dark-skin, so each mode switches on its own. Only the Meadow tokens and the card surfaces change:
-   layout, sizes and behaviour are the Meadow page's. */
+   layout, sizes, behaviour and type are the Meadow page's, so the text, titles and money follow the app's
+   own font setting (owner, 10-03: "make the titanium theme follow the app's font config"). */
 .light .meadow[data-light-skin="bronze"] {
   --m-page: #efe8e0;
   --m-surface: #fbf8f4;
@@ -1554,68 +1555,6 @@ summary {
 .dark [class~="bg-background"]:has(.meadow[data-dark-skin="bronze"]) {
   background-color: #1e1918;
 }
-/* Type: Inter for text; Cormorant Garamond (lining figures) for card titles and headline money. */
-:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"]) {
-  font-family: var(--font-sans);
-}
-:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
-  :is(
-    [data-dash-card-title],
-    [data-m="hero"] h2,
-    [data-m="card"] h2,
-    [data-meadow-card] h3,
-    [data-m="notice"] h3
-  ) {
-  font-family: "Cormorant Garamond", Georgia, serif;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.005em;
-  line-height: 1.2;
-}
-:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"]) [data-m-num] {
-  font-family: "Cormorant Garamond", Georgia, serif;
-  font-variant-numeric: lining-nums;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-}
-:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
-  [data-m-unit] {
-  font-family: var(--font-sans);
-  font-weight: 400;
-  letter-spacing: 0;
-}
-:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
-  [data-m-num="hero"] {
-  font-size: 46px;
-  line-height: 0.95;
-}
-:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
-  [data-m-num="big"] {
-  font-size: 38px;
-}
-:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
-  [data-m-num="verdict"] {
-  font-size: 32px;
-}
-:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
-  [data-m-num="card"] {
-  font-size: 30px;
-}
-:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
-  [data-m-num="tile"] {
-  font-size: 23px;
-  line-height: 1.15;
-}
-:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
-  [data-m-num="side"] {
-  font-size: 21px;
-}
-@media (max-width: 767.98px) {
-  :is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
-    [data-m-num="verdict"] {
-    font-size: 28px;
-  }
-}
 /* Liquid glass: every card is frosted glass with a lit top edge and a 145deg sheen. */
 :is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])
   :is([data-dash-card], [data-meadow-card], [data-m="card"]) {
@@ -1817,7 +1756,6 @@ summary {
   --ms-sheet:
     linear-gradient(145deg, rgba(255, 255, 255, 0.6) 0.6%, transparent 60%),
     rgba(251, 248, 244, 0.92);
-  font-family: var(--font-sans);
 }
 .dark :is([data-mside], [data-mbar])[data-dark-skin="bronze"] {
   --ms-line: rgba(237, 226, 214, 0.13);
@@ -1841,7 +1779,6 @@ summary {
   --ms-bar-blur: blur(24px) saturate(160%);
   --ms-sheet:
     linear-gradient(145deg, rgba(255, 240, 222, 0.16) 0.6%, transparent 60%), rgba(46, 38, 35, 0.92);
-  font-family: var(--font-sans);
 }
 /* The sidebar: a card-coloured column (Meadow), glass over the bronze glows (Bronze). */
 [data-mside] {
@@ -1931,7 +1868,7 @@ summary {
 /* money-hub patch: Settings in the theme picked for each mode (owner, 10-02: "theme ... the settings page
    itself too"). The page is a .meadow box (data-mset), so the stock colours inside it are already the
    theme's; here its stock cards become the theme's cards (Meadow flat, Bronze glass), the section list gets
-   the current-page fill, and the titles the theme's type. */
+   the current-page fill; the titles keep the app's own font. */
 [data-mset] .bg-card.border:is(.rounded-lg, .rounded-xl, .rounded-2xl) {
   border-color: var(--m-line);
   border-radius: 20px;
@@ -1974,22 +1911,6 @@ summary {
 [data-mset] [data-mset-title] {
   color: var(--m-ink);
   font-weight: 500;
-}
-:is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])[data-mset]
-  [data-mset-title] {
-  font-family: "Cormorant Garamond", Georgia, serif;
-  font-weight: 600;
-  letter-spacing: 0.005em;
-}
-@media (min-width: 1024px) {
-  :is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])[data-mset]
-    h2[data-mset-title] {
-    font-size: 32px;
-  }
-  :is(.light .meadow[data-light-skin="bronze"], .dark .meadow[data-dark-skin="bronze"])[data-mset]
-    h1[data-mset-title] {
-    font-size: 26px;
-  }
 }
 
 /* money-hub patch: the mouse light (owner, 10-02). lib/spotlight.ts marks the card under the mouse with

@@ -17,13 +17,8 @@ interface Look {
   card: string;
   cardLine: string;
   accent: string;
-  numFont: string;
-  numSize: number;
   heroRadius: number;
 }
-
-const MONO = '"JetBrains Mono", ui-monospace, monospace';
-const SERIF = '"Cormorant Garamond", Georgia, serif';
 
 const LOOKS: Record<"light" | "dark", Record<DashboardSkin, Look>> = {
   light: {
@@ -36,8 +31,6 @@ const LOOKS: Record<"light" | "dark", Record<DashboardSkin, Look>> = {
       card: "#ffffff",
       cardLine: "#e4dccf",
       accent: "#054e04",
-      numFont: MONO,
-      numSize: 13,
       heroRadius: 8,
     },
     bronze: {
@@ -49,8 +42,6 @@ const LOOKS: Record<"light" | "dark", Record<DashboardSkin, Look>> = {
       card: "rgba(255,252,248,0.8)",
       cardLine: "#ffffff",
       accent: "#5b3c20",
-      numFont: SERIF,
-      numSize: 17,
       heroRadius: 11,
     },
   },
@@ -64,8 +55,6 @@ const LOOKS: Record<"light" | "dark", Record<DashboardSkin, Look>> = {
       card: "#1b1a18",
       cardLine: "#36332e",
       accent: "#cff6ac",
-      numFont: MONO,
-      numSize: 13,
       heroRadius: 8,
     },
     bronze: {
@@ -77,8 +66,6 @@ const LOOKS: Record<"light" | "dark", Record<DashboardSkin, Look>> = {
       card: "rgba(46,38,35,0.8)",
       cardLine: "rgba(237,226,214,0.16)",
       accent: "#c9a27a",
-      numFont: SERIF,
-      numSize: 17,
       heroRadius: 11,
     },
   },
@@ -168,12 +155,10 @@ function Thumb({ look, on }: { look: Look; on: boolean }) {
       >
         <span
           style={{
-            fontFamily: look.numFont,
-            fontSize: look.numSize,
+            fontSize: 13,
             fontWeight: 600,
             color: look.heroInk,
             lineHeight: 1,
-            fontVariantNumeric: "lining-nums",
           }}
         >
           $1,586
