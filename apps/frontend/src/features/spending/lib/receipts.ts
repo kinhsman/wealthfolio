@@ -96,6 +96,28 @@ export function useReceiptFor(activityId: string | null | undefined) {
 
 export type ReceiptAnswer = Receipt & { categories: ReceiptCategory[] };
 
+/** A charge the owner may pick for a receipt that found none itself. */
+export interface ChargeChoice {
+  id: string;
+  date: string;
+  amount: number;
+  name: string;
+  account: string;
+  /** Its total is the receipt's. */
+  sameTotal: boolean;
+  /** The store's name is in the bank text. */
+  store: boolean;
+}
+
+export function useChargeChoices(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: [...RECEIPTS_KEY, "candidates", id],
+    queryFn: () => call<{ from: string; to: string; items: ChargeChoice[] }>("GET", `/${id}/candidates`),
+    enabled,
+    staleTime: 60 * 1000,
+  });
+}
+
 export const receiptsApi = {
   /** Photos of one receipt; for one transaction when `activityId` is given. */
   add: (files: File[], opts: { activityId?: string; activityDate?: string } = {}) => {

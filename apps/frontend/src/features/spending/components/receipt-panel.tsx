@@ -19,7 +19,9 @@ import {
   refreshAfterReceipt,
   shortCategory,
   storeName,
+  useChargeChoices,
   useReceiptFor,
+  type ChargeChoice,
   type Receipt,
   type ReceiptAnswer,
   type ReceiptCategory,
@@ -158,8 +160,11 @@ export function ReceiptDetails({
   const qc = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
   const [sure, setSure] = useState(false);
+  const [picking, setPicking] = useState(false);
   const st = receiptState(r);
   const split = receiptSplit(r);
+  // No charge found by itself yet: the owner can pick it (a gift card paid part, or two alike).
+  const canPick = !compact && !r.activityId && (r.status === "waiting" || r.status === "unmatched" || r.status === "read");
 
   const act = async (what: string, fn: () => Promise<ReceiptAnswer | { ok: true }>) => {
     setBusy(what);
@@ -223,7 +228,7 @@ export function ReceiptDetails({
       {r.held ? <p className="text-[var(--m-warn)]">{r.held}</p> : null}
       {r.status === "waiting" ? <p className="text-muted-foreground">It files itself when the card charge comes in, usually in 1 to 3 days.</p> : null}
       {r.status === "unmatched" ? (
-        <p className="text-muted-foreground">No card charge of {r.total != null ? usd(r.total) : "this total"} came in. Open the charge in Transactions and add the receipt there.</p>
+        <p className="text-muted-foreground">No card charge of {r.total != null ? usd(r.total) : "this total"} came in. Pick the charge it was.</p>
       ) : null}
       {r.check ? <p className="text-muted-foreground">{r.check}</p> : null}
       {r.filed && r.total != null && Math.abs(r.filed.charge - r.total) > 0.005 ? (
@@ -285,7 +290,28 @@ export function ReceiptDetails({
         </ul>
       ) : null}
 
+      {canPick && picking ? (
+        <ChargePicker
+          receipt={r}
+          busy={busy !== null}
+          onPick={(c) =>
+            void act("pick", async () => {
+              const out = await receiptsApi.setCharge(r.id, c.id, c.date);
+              receiptToast(out);
+              setPicking(false);
+              return out;
+            })
+          }
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t pt-2">
+        {canPick ? (
+          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy !== null} onClick={() => setPicking(!picking)} aria-expanded={picking}>
+            {busy === "pick" ? <Icons.Spinner className="mr-1.5 size-3.5 animate-spin" /> : null}
+            {picking ? "Close the list" : "Pick the charge"}
+          </Button>
+        ) : null}
         {r.status === "held" && r.activityId ? (
           <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy !== null} onClick={() => void act("file", () => receiptsApi.fileAnyway(r.id))}>
             {busy === "file" ? <Icons.Spinner className="mr-1.5 size-3.5 animate-spin" /> : null}
@@ -322,6 +348,53 @@ export function ReceiptDetails({
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** The charges a receipt may be for, most likely first; a click files the receipt on that one. */
+function ChargePicker({ receipt: r, busy, onPick }: { receipt: Receipt; busy: boolean; onPick: (c: ChargeChoice) => void }) {
+  const { data, isLoading, isError, error } = useChargeChoices(r.id, true);
+  if (isLoading) {
+    return (
+      <div className="text-muted-foreground flex items-center gap-1.5">
+        <Icons.Spinner className="size-3.5 animate-spin" />
+        Looking for charges…
+      </div>
+    );
+  }
+  if (isError) return <p className="text-[var(--m-warn)]">{errorText(error)}</p>;
+  const items = data?.items ?? [];
+  if (!items.length) {
+    return (
+      <p className="text-muted-foreground">
+        No {storeName(r.store)} charge{r.total != null ? ` and none of ${usd(r.total)}` : ""}
+        {data ? ` from ${day(data.from)} to ${day(data.to)}` : ""}. Open the charge in Transactions and add the receipt there.
+      </p>
+    );
+  }
+  return (
+    <div className="rounded-lg border">
+      <div className="text-muted-foreground border-b px-3 py-1.5">Which charge is it? The parts are scaled to it.</div>
+      <ul className="divide-border/60 divide-y">
+        {items.map((c) => (
+          <li key={c.id}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => onPick(c)}
+              className="hover:bg-muted/40 flex w-full items-center gap-2 px-3 py-2 text-left transition-colors disabled:opacity-50"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-foreground truncate">{c.name || "Charge"}</div>
+                <div className="text-muted-foreground truncate text-[11px]">{[day(c.date), c.account].filter(Boolean).join(" · ")}</div>
+              </div>
+              {c.sameTotal ? <span className={cn("shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium", STATE_TONE.fine)}>Same total</span> : null}
+              <span className="text-foreground shrink-0 tabular-nums">{usd(c.amount)}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
