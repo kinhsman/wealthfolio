@@ -10,25 +10,36 @@ import { toast } from "sonner";
 
 import { listCategorizationRules } from "../adapters/rules";
 
+/** Text the bank import labelled itself ("Friend (Nga): ...", "Rent received: ..."): rules leave it alone. */
+const importLabelled = (text: string) => /^[^:]{1,40}:\s/.test(text);
+
 /**
  * The words a rule should look for: the bank's text up to its first reference number
  * ("ATM CASH DEPOSIT 09/23 5831 N MILWAUKEE AVE" gives "ATM CASH DEPOSIT", "Costco" stays
- * "Costco"). Null for text the bank import labelled itself ("Friend (Nga): ...",
- * "Rent received: ..."), which rules leave alone.
+ * "Costco"). A word with a date or code glued on keeps its letters when there are 3 or more
+ * (ACB's "FAMILY-031026-10:03:04 6276ASCB02EQFHSU" gives "FAMILY"; owner, 10-02: no offer
+ * came for it). Null for text the bank import labelled itself, and for text with no such words.
  */
 export function rulePatternFrom(notes?: string | null): string | null {
   const text = (notes ?? "").trim();
-  if (!text || /^[^:]{1,40}:\s/.test(text)) return null;
+  if (!text || importLabelled(text)) return null;
   const words: string[] = [];
   for (const w of text.split(/\s+/)) {
-    if (/\d/.test(w)) break;
-    words.push(w);
+    const digit = w.search(/\d/);
+    if (digit < 0) {
+      words.push(w);
+      continue;
+    }
+    const head = w.slice(0, digit).replace(/[^\p{L}]+$/u, "");
+    if (head.length >= 3) words.push(head);
+    break;
   }
   const pattern = words.join(" ").trim();
   return pattern.length >= 3 ? pattern : null;
 }
 
 export interface RuleOffer {
+  /** The words to start with; empty when the text gave none (the owner types them). */
   pattern: string;
   taxonomyId: string;
   categoryId: string;
@@ -57,7 +68,10 @@ export const ruleOfferStore = {
   },
 };
 
-/** Shows the offer as a toast with a Make a rule button, unless a rule for these words exists. */
+/**
+ * Shows the offer as a toast with a Make a rule button, unless a rule for these words exists.
+ * Text with no words to pick (a reference number first) still gets it, with the words left to type.
+ */
 export async function offerRule({
   notes,
   taxonomyId,
@@ -69,11 +83,15 @@ export async function offerRule({
   categoryId: string;
   categoryName: string;
 }): Promise<void> {
-  const pattern = rulePatternFrom(notes);
-  if (!pattern) return;
-  const rules = await listCategorizationRules().catch(() => []);
-  if (rules.some((r) => !r.presetId && r.pattern.trim().toLowerCase() === pattern.toLowerCase())) return;
-  toast(`Always file "${pattern}" as ${categoryName}?`, {
+  const text = (notes ?? "").trim();
+  if (!text || importLabelled(text)) return;
+  const pattern = rulePatternFrom(text) ?? "";
+  if (pattern) {
+    const rules = await listCategorizationRules().catch(() => []);
+    if (rules.some((r) => !r.presetId && r.pattern.trim().toLowerCase() === pattern.toLowerCase())) return;
+  }
+  const title = pattern ? `Always file "${pattern}" as ${categoryName}?` : `Always file transactions like this as ${categoryName}?`;
+  toast(title, {
     duration: 15000,
     action: { label: "Make a rule", onClick: () => ruleOfferStore.open({ pattern, taxonomyId, categoryId }) },
     // Sonner's action button is a small chip; this one is the point of the toast.

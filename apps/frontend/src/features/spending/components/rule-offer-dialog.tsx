@@ -78,7 +78,7 @@ export function RuleOfferHost() {
 function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => void }) {
   const qc = useQueryClient();
   const [step, setStep] = useState<"rule" | "review">("rule");
-  const [words, setWords] = useState<string[]>([offer.pattern]);
+  const [words, setWords] = useState<string[]>(offer.pattern ? [offer.pattern] : []);
   const [typing, setTyping] = useState("");
   const all = withTyped(words, typing);
   const key = all.join("\u0001");
@@ -106,6 +106,8 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
   }, [spending.data?.categories, income.data?.categories, savings.data?.categories]);
   const { accounts } = useAccounts({ filterActive: false });
   const accountName = useMemo(() => new Map((accounts ?? []).map((a) => [a.id, a.name])), [accounts]);
+  // Each match in its account's money (ACB and MB are VND).
+  const accountCurrency = useMemo(() => new Map((accounts ?? []).map((a) => [a.id, a.currency])), [accounts]);
 
   const preview = useQuery({
     queryKey: ["money-hub", "rule-preview", debounced, target.taxonomyId, target.categoryId],
@@ -193,7 +195,7 @@ function RuleOfferDialog({ offer, onClose }: { offer: RuleOffer; onClose: () => 
               </span>
             </span>
             <span className="shrink-0 text-sm tabular-nums">
-              <PrivacyAmount value={Math.abs(it.amount)} currency="USD" />
+              <PrivacyAmount value={Math.abs(it.amount)} currency={accountCurrency.get(it.accountId) || "USD"} />
             </span>
             {withTicks && !it.already ? (
               <Checkbox
