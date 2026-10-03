@@ -3,6 +3,7 @@ import { CONNECT_HIDDEN } from "@/lib/money-hub";
 import { isAppleDevice } from "@/lib/device-utils";
 import { useAuth } from "@/context/auth-context";
 import { ProfileMenu } from "@/features/profiles/profile-menu";
+import { useDashboardSkins } from "@/features/spending/lib/dashboard-skin";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { cn } from "@/lib/utils";
 import {
@@ -33,9 +34,15 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
   const [collapsed, setCollapsed] = usePersistentState("sidebar-collapsed", true);
   const { logout, requiresAuth } = useAuth();
   const addonMenuItems = navigation?.addonMenuItems ?? navigation?.addons ?? [];
+  // money-hub patch: the sidebar wears the theme picked for each mode on Settings, Appearance (Meadow or
+  // Bronze Titanium; owner, 10-02). globals.css styles it by these attributes.
+  const skins = useDashboardSkins();
 
   return (
     <div
+      data-mside=""
+      data-light-skin={skins.light}
+      data-dark-skin={skins.dark}
       className={cn({
         "light:bg-secondary/50 hidden h-full border-r pt-12 transition-[width] duration-300 ease-in-out md:flex md:flex-shrink-0 md:overflow-hidden": true,
         "md:w-sidebar": !collapsed,
@@ -70,6 +77,7 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                   </Link>
 
                   <span
+                    data-mside-brand=""
                     className={cn(
                       "text-md text-foreground/90 ml-2 font-serif text-xl font-bold transition-opacity delay-100 duration-300 ease-in-out",
                       {
@@ -99,6 +107,7 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                     });
                     document.dispatchEvent(event);
                   }}
+                  data-mside-search=""
                   className={cn(
                     "text-foreground [&_svg]:size-5! mb-4 h-12 transition-all duration-300",
                     collapsed
@@ -159,6 +168,7 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                   type="button"
                   variant="ghost"
                   onClick={logout}
+                  data-mside-row=""
                   className={cn(
                     "text-foreground [&_svg]:size-5! mb-1 h-12 rounded-md transition-all duration-300",
                     collapsed ? "justify-center" : "justify-start",
@@ -270,6 +280,7 @@ function NavItem({ item, collapsed, className, ...props }: NavItemProps) {
       key={item.title}
       variant={isActive ? "secondary" : "ghost"}
       asChild
+      data-mside-row=""
       className={cn(
         "text-foreground [&_svg]:size-5! mb-1 h-12 rounded-md transition-all duration-300",
         collapsed ? "justify-center" : "justify-start",
@@ -316,6 +327,8 @@ function AddonsMenu({ addons, collapsed, onSetPinned }: AddonsMenuProps) {
       <DropdownMenuTrigger asChild>
         <Button
           variant={hasActiveAddon ? "secondary" : "ghost"}
+          data-active={hasActiveAddon ? "" : undefined}
+          data-mside-row=""
           className={cn(
             "text-foreground [&_svg]:size-5! mb-1 h-12 rounded-md transition-all duration-300",
             collapsed ? "justify-center" : "justify-start",

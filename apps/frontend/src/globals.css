@@ -1730,6 +1730,108 @@ summary {
   color: var(--m-down);
 }
 
+/* money-hub patch: the sidebar in the theme picked for each mode (owner, 10-02: "make the side bar design
+   match the theme configured"). Like the design systems' BottomNav: Meadow is a flat card-coloured bar with
+   a line edge and the current page in a solid forest (Day) or lime (Night) tile; Bronze Titanium is frosted
+   glass over the same bronze glows as the page, the current page in the glossy bronze fill. Its own scope
+   (not .meadow): the app frame holding it is bg-background, and the Bronze page-ground rule above would then
+   recolour every page. */
+[data-mside] {
+  --ms-ground: #ffffff;
+  --ms-line: #e4dccf;
+  --ms-ink: #2b2925;
+  --ms-ink-2: #4d473e;
+  --ms-muted: #6e675d;
+  --ms-hover: #f5f0ec;
+  --ms-page: #f5f0ec;
+  --ms-fill: #054e04;
+  --ms-on-fill: #cff6ac;
+  --ms-fill-shadow: none;
+  --background: var(--ms-page);
+  --foreground: var(--ms-ink-2);
+  --muted: var(--ms-hover);
+  --muted-foreground: var(--ms-muted);
+  --accent: var(--ms-hover);
+  --accent-foreground: var(--ms-ink);
+  --secondary: var(--ms-hover);
+  --secondary-foreground: var(--ms-ink);
+  --border: var(--ms-line);
+  background: var(--ms-ground);
+  border-right: 1px solid var(--ms-line);
+  color: var(--ms-ink-2);
+}
+.dark [data-mside] {
+  --ms-ground: #1b1a18;
+  --ms-line: #36332e;
+  --ms-ink: #f2efea;
+  --ms-ink-2: #d6d1c8;
+  --ms-muted: #a39d93;
+  --ms-hover: #24221f;
+  --ms-page: #121110;
+  --ms-fill: #cff6ac;
+  --ms-on-fill: #0b2a0a;
+}
+.light [data-mside][data-light-skin="bronze"] {
+  --ms-line: #d8cfc5;
+  --ms-ink: #2e2623;
+  --ms-ink-2: #4b3a30;
+  --ms-muted: #6d584b;
+  --ms-hover: rgba(255, 255, 255, 0.6);
+  --ms-page: #efe8e0;
+  --ms-fill: linear-gradient(180deg, #7a5332, #5b3c20);
+  --ms-on-fill: #f7efe4;
+  --ms-fill-shadow:
+    inset 0 1px 0 rgba(255, 226, 190, 0.4), inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 4px 12px rgba(91, 60, 32, 0.25);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.6) 0.6%, transparent 60%),
+    linear-gradient(rgba(255, 252, 248, 0.55), rgba(255, 252, 248, 0.55)),
+    radial-gradient(360px 420px at 100% 0%, rgba(214, 164, 108, 0.45), transparent 70%),
+    radial-gradient(300px 380px at 100% 88%, rgba(140, 142, 180, 0.24), transparent 70%), #efe8e0;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.95);
+  font-family: var(--font-sans);
+}
+.dark [data-mside][data-dark-skin="bronze"] {
+  --ms-line: rgba(237, 226, 214, 0.13);
+  --ms-ink: #f0e9e1;
+  --ms-ink-2: #cdc0b3;
+  --ms-muted: #b5aa9f;
+  --ms-hover: rgba(255, 240, 225, 0.07);
+  --ms-page: #1e1918;
+  --ms-fill: linear-gradient(180deg, #dfbe96, #c59b6e);
+  --ms-on-fill: #211c1b;
+  --ms-fill-shadow:
+    inset 0 1px 0 rgba(255, 246, 232, 0.65), inset 0 -1px 0 rgba(90, 55, 25, 0.35),
+    0 4px 14px rgba(150, 100, 55, 0.3);
+  background:
+    linear-gradient(145deg, rgba(255, 240, 222, 0.16) 0.6%, transparent 60%),
+    linear-gradient(rgba(46, 38, 35, 0.5), rgba(46, 38, 35, 0.5)),
+    radial-gradient(360px 420px at 100% 0%, rgba(176, 116, 60, 0.55), transparent 70%),
+    radial-gradient(300px 380px at 100% 88%, rgba(78, 80, 124, 0.4), transparent 70%), #1e1918;
+  box-shadow: inset -1px 0 0 rgba(255, 236, 214, 0.06);
+  font-family: var(--font-sans);
+}
+/* Rows: Meadow's tile corners; the current page (and Add-ons while one is open) in the fill. */
+[data-mside] :is([data-mside-row], [data-mside-search].rounded-md) {
+  border-radius: 12px;
+}
+[data-mside] :is([aria-current="page"], [data-active]) {
+  background: var(--ms-fill);
+  box-shadow: var(--ms-fill-shadow);
+  color: var(--ms-on-fill);
+}
+/* The name beside the logo: Meadow never goes bold; Bronze sets it in its display serif. */
+[data-mside] [data-mside-brand] {
+  font-weight: 500;
+  color: var(--ms-ink);
+}
+:is(.light [data-mside][data-light-skin="bronze"], .dark [data-mside][data-dark-skin="bronze"])
+  [data-mside-brand] {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-weight: 600;
+  font-size: 22px;
+}
+
 /* money-hub patch: the mouse light (owner, 10-02). lib/spotlight.ts marks the card under the mouse with
    data-spot-on="1" and keeps --spot-x / --spot-y on it; here a soft pool of light follows the mouse inside
    that card and the card's edge lights up near it. The light sits over the content without touching it
