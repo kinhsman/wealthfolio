@@ -73,4 +73,17 @@ describe("subscriptions wording", () => {
     expect(subscriptionCharges(list, new Set(["y", "a2", "gone"]))).toEqual({ ids: ["1", "2", "4"], from: "2025-06-01", to: "2026-02-01" });
     expect(subscriptionCharges(list, new Set(["gone"]))).toEqual({ ids: [], from: null, to: null });
   });
+  it("a payment marked paid by hand is no transaction: not in the filter or its list (owner, 10-03)", () => {
+    const loan = mk({
+      key: "manual:loan",
+      name: "Vietnam loan",
+      charges: [
+        { id: "acb1", date: "2026-08-15", amount: 500 },
+        { id: "paid:p1", date: "2026-09-14", amount: 500, outside: true },
+      ],
+    });
+    const cash = mk({ key: "manual:cash", name: "Cash only", charges: [{ id: "paid:p2", date: "2026-09-01", amount: 20, outside: true }] });
+    expect(subscriptionFilterOptions([loan, cash])).toEqual([{ value: "manual:loan", label: "Vietnam loan", count: 1 }]);
+    expect(subscriptionCharges([loan, cash], new Set(["manual:loan", "manual:cash"]))).toEqual({ ids: ["acb1"], from: "2026-08-15", to: "2026-08-15" });
+  });
 });

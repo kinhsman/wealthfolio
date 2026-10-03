@@ -159,9 +159,11 @@ function Choose({
   const draft = w?.draft;
   const [name, setName] = useState(draft?.name ?? charge.notes.slice(0, 60));
   const [words, setWords] = useState((draft?.words.length ? draft.words : [rulePatternFrom(charge.notes) ?? charge.notes.slice(0, 40)]).join(", "));
-  // A charge in another currency: only the service's dollar figure (none without a rate: left to type).
+  // A charge in another currency (dong from ACB): the new one is in it too, at what the bank charged
+  // (owner, 10-03: a loan in Vietnam is a dong bill).
   const foreign = !!charge.currency && charge.currency !== currency;
-  const [amount, setAmount] = useState(String(draft?.amount || (foreign ? "" : charge.amount) || ""));
+  const own = foreign ? charge.currency! : currency;
+  const [amount, setAmount] = useState(String(draft?.amount || Math.abs(charge.amount) || ""));
   const [every, setEvery] = useState<Every>(draft?.every ?? "month");
   const [nextDate, setNextDate] = useState(draft?.nextDate ?? "");
   const [group, setGroup] = useState<StreamGroup>(charge.group);
@@ -203,6 +205,7 @@ function Choose({
             nextDate: nextDate || null,
             group,
             linkIds: [charge.id],
+            ...(foreign ? { currency: own } : {}),
           }),
         );
         toast.success(`${name.trim()} added to ${GROUP_LABEL[group]}.`);
@@ -315,8 +318,8 @@ function Choose({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="track-amount">Amount</Label>
-              <Input id="track-amount" type="number" inputMode="decimal" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              <Label htmlFor="track-amount">{foreign ? `Amount (${own})` : "Amount"}</Label>
+              <Input id="track-amount" type="number" inputMode="decimal" step={foreign ? "any" : "0.01"} min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label>How often</Label>

@@ -185,6 +185,27 @@ describe("budget forecast, bills apart", () => {
   });
 });
 
+describe("paid where the app cannot see it (owner, 10-03)", () => {
+  it("paid on the calendar, never taken off what Spending counted", () => {
+    const loan = stream("Vietnam loan", {
+      usual: 500,
+      next: "2026-11-14",
+      charges: [
+        { id: "acb1", date: "2026-08-14", amount: 500 },
+        { id: "paid:p1", date: "2026-09-14", amount: 500, outside: true },
+        { id: "paid:p2", date: "2026-10-02", amount: 500, outside: true },
+      ],
+    });
+    const parts = forecastParts([loan], { ...OCT, historyOutflow: 9000 });
+    expect(parts.billsInHistory).toBe(500); // only the ACB payment is in Spending's history
+    expect(parts.billsLeft).toEqual([]);
+    expect(paidInMonth(loan, OCT.monthStart, OCT.monthEnd).map((b) => b.amount)).toEqual([500]);
+    // A fixed bill paid that way: not taken off this month's spending either.
+    const fixed = forecastParts([{ ...loan, excludeFromForecast: true } as Stream], { ...OCT, historyOutflow: 9000 });
+    expect(fixed.fixedPaid).toEqual([]);
+  });
+});
+
 describe("pace with fixed bills", () => {
   const fixedParts = forecastParts(
     [

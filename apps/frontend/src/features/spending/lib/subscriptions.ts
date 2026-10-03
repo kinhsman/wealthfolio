@@ -68,8 +68,22 @@ export interface Stream {
   /** Every charge in it. */
   /** `extra`: brought in by a rule but not this kind of charge (a fee, a credit): listed and counted, not
    *  in its rhythm or price. `credit`: money back. `native`: what the bank charged, in the stream's
-   *  `currency`, when that is not the base one (`amount` is then its worth in dollars that day). */
-  charges?: { id: string; date: string; amount: number; native?: number; notes?: string; accountId?: string | null; extra?: boolean; credit?: boolean }[];
+   *  `currency`, when that is not the base one (`amount` is then its worth in dollars that day).
+   *  `outside`: marked paid by the owner where the app cannot see it (cash, a bank not linked): no
+   *  transaction. `paid`: what was really paid when that was another currency than the stream's (a loan
+   *  in dong paid from Chase in dollars). */
+  charges?: {
+    id: string;
+    date: string;
+    amount: number;
+    native?: number;
+    notes?: string;
+    accountId?: string | null;
+    extra?: boolean;
+    credit?: boolean;
+    outside?: boolean;
+    paid?: { amount: number; currency: string };
+  }[];
   /** Charges the owner took out by hand: in no subscription, whatever words or rules say (owner, 10-01). */
   excluded?: ExcludedCharge[];
   /** The charges the owner put in it by hand (owner, 10-01). */
@@ -134,6 +148,10 @@ export interface ManualEntry {
   nextDate: string | null;
   group: StreamGroup;
   merchantId: string | null;
+  /** The owner's currency for it (a loan in Vietnam, in dong); none: the one its charges are in. */
+  currency?: string | null;
+  /** Paid where the app cannot see it, marked by the owner (owner, 10-03): no transaction. */
+  paid?: { id: string; date: string; amount: number; currency?: string }[];
 }
 
 export interface ExcludedCharge {
@@ -173,13 +191,16 @@ export interface ManualInput {
   merchantId?: string | null;
   /** Charges that are its own whatever their words (the one it was made from). */
   linkIds?: string[];
+  /** Its amount's currency (none: the base one). */
+  currency?: string | null;
 }
 
 /** Which stream a charge is in, which it looks like, and a new one drafted from it. */
 export interface WhichOne {
   member: string | null;
   likely: string | null;
-  draft: { name: string; words: string[]; amount: number; every: Every; nextDate: string };
+  /** `currency`: the charge's own when it is not the base one (dong from ACB); `amount` is in it. */
+  draft: { name: string; words: string[]; amount: number; every: Every; nextDate: string; currency?: string };
 }
 
 const BASE = "/api/money-hub/subscriptions";
@@ -222,6 +243,11 @@ export const subscriptionsApi = {
   addManual: (input: ManualInput) => call<SubscriptionsView>("POST", "/manual", input),
   updateManual: (id: string, input: ManualInput) => call<SubscriptionsView>("PUT", `/manual/${encodeURIComponent(id)}`, input),
   removeManual: (id: string) => call<SubscriptionsView>("DELETE", `/manual/${encodeURIComponent(id)}`),
+  /** Paid where the app cannot see it (cash, a bank not linked): that period counts as paid, no transaction is made. */
+  markPaid: (id: string, paid: { date: string; amount: number; currency: string }) =>
+    call<SubscriptionsView>("POST", `/manual/${encodeURIComponent(id)}/paid`, paid),
+  unmarkPaid: (id: string, paidId: string) =>
+    call<SubscriptionsView>("DELETE", `/manual/${encodeURIComponent(id)}/paid/${encodeURIComponent(paidId)}`),
   setAlerts: (alerts: Partial<Record<AlertKind | "on", boolean>>) => call<SubscriptionsView>("PUT", "/alerts", alerts),
   /** A sample of one kind of alert from the owner's own list, sent the way the real one goes. */
   testAlert: (kind: AlertKind) =>
@@ -308,7 +334,8 @@ export function transactionsHref(s: Pick<Stream, "key">): string {
 /** The Subscription filter's choices on the transactions list: every one with charges, by name, with
  *  how many it has. Bills paid from the mortgage escrow have none of their own. */
 export function subscriptionFilterOptions(items: Stream[]): { value: string; label: string; count: number }[] {
-  const listed = items.filter((s) => !s.escrow && (s.charges?.length ?? 0) > 0);
+  const bankCount = (s: Stream) => (s.charges ?? []).filter((c) => !c.outside).length;
+  const listed = items.filter((s) => !s.escrow && bankCount(s) > 0);
   const names = new Map<string, number>();
   for (const s of listed) names.set(s.name, (names.get(s.name) ?? 0) + 1);
   return listed
@@ -316,7 +343,7 @@ export function subscriptionFilterOptions(items: Stream[]): { value: string; lab
       value: s.key,
       // Two with one name (two Apple charges) tell themselves apart by how often they come.
       label: (names.get(s.name) ?? 0) > 1 ? `${s.name} (${s.everyLabel})` : s.name,
-      count: s.charges?.length ?? 0,
+      count: bankCount(s),
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
@@ -329,6 +356,7 @@ export function subscriptionCharges(items: Stream[], keys: Set<string>): { ids: 
   for (const s of items) {
     if (!keys.has(s.key)) continue;
     for (const c of s.charges ?? []) {
+      if (c.outside) continue; // marked paid by hand: not a transaction
       ids.add(c.id);
       const d = c.date.slice(0, 10);
       if (!from || d < from) from = d;

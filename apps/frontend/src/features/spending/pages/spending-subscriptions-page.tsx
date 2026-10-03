@@ -121,6 +121,141 @@ const day = (iso: string) =>
   new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 const errorText = (e: unknown) => (e as Error)?.message ?? String(e);
 
+/** The currencies a hand-added one can be in: the base one and every account's (owner, 10-03: a loan in
+ *  Vietnam is paid in dong). */
+function useBillCurrencies(base: string): string[] {
+  const { accounts } = useAccounts({ filterActive: false });
+  return useMemo(
+    () => [...new Set([base, ...(accounts ?? []).map((a) => a.currency).filter(Boolean)].map((c) => c.toUpperCase()))],
+    [accounts, base],
+  );
+}
+
+/** A currency's own decimals (dong has none), for the amount box. */
+const stepOf = (currency: string) => {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency }).resolvedOptions().maximumFractionDigits === 0 ? "1" : "0.01";
+  } catch {
+    return "0.01";
+  }
+};
+const symbolOf = (currency: string) => {
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency, currencyDisplay: "narrowSymbol" })
+      .formatToParts(0)
+      .find((p) => p.type === "currency")?.value ?? currency;
+  } catch {
+    return currency;
+  }
+};
+
+/** An amount box with its currency in front; the pick shows only when there is more than one. */
+function AmountInCurrency({
+  id,
+  amount,
+  setAmount,
+  currency,
+  setCurrency,
+  currencies,
+  placeholder,
+}: {
+  id: string;
+  amount: string;
+  setAmount: (v: string) => void;
+  currency: string;
+  setCurrency: (v: string) => void;
+  currencies: string[];
+  placeholder?: string;
+}) {
+  return (
+    <div className="flex gap-2">
+      {currencies.length > 1 ? (
+        <Select value={currency} onValueChange={setCurrency}>
+          <SelectTrigger className="w-[6.75rem] shrink-0" aria-label="Currency">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {currencies.map((c) => (
+              <SelectItem key={c} value={c}>
+                {symbolOf(c) !== c ? `${symbolOf(c)} ${c}` : c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
+      <Input
+        id={id}
+        type="number"
+        inputMode={stepOf(currency) === "1" ? "numeric" : "decimal"}
+        step={stepOf(currency)}
+        min="0"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        placeholder={placeholder}
+        className="min-w-0"
+      />
+    </div>
+  );
+}
+
+/** Paid where the app cannot see it (owner, 10-03: a loan in Vietnam paid from "where I kept my cash at"):
+ *  cash, or a bank that is not linked. That period counts as paid; no transaction is made. */
+function MarkPaidDialog({
+  s,
+  manualId,
+  currency,
+  busy,
+  act,
+  onClose,
+}: {
+  s: Stream;
+  manualId: string;
+  currency: string;
+  busy: boolean;
+  act: (label: string, fn: () => Promise<SubscriptionsView>, done?: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const currencies = useBillCurrencies(currency);
+  const own = s.native && s.currency ? s.currency : currency;
+  const [date, setDate] = useState(() => ymd(new Date()));
+  const [cur, setCur] = useState(own);
+  const [amount, setAmount] = useState(String(s.native && s.currency ? s.native.usual : s.usual));
+  const ready = /^\d{4}-\d{2}-\d{2}$/.test(date) && Number(amount) > 0;
+  const submit = () =>
+    act(s.key, () => subscriptionsApi.markPaid(manualId, { date, amount: Number(amount), currency: cur }), `${s.name} marked paid.`).then(onClose);
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle>Mark {s.name} paid</DialogTitle>
+          <DialogDescription>Paid in cash or from a bank the app can&rsquo;t see. No transaction is made.</DialogDescription>
+        </DialogHeader>
+        {/* One under the other: a dong amount runs to eight digits beside its currency. */}
+        <div className="grid gap-3">
+          <Field label="Paid on" htmlFor="paid-date">
+            <Input id="paid-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field label="Amount" htmlFor="paid-amount">
+            <AmountInCurrency id="paid-amount" amount={amount} setAmount={setAmount} currency={cur} setCurrency={setCur} currencies={currencies} />
+          </Field>
+        </div>
+        <DialogFooter className="gap-2 sm:justify-end">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={submit} disabled={!ready || busy}>
+              {busy ? <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Mark paid
+            </Button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function SpendingSubscriptionsPage() {
   const navigate = useNavigate();
   const skins = useDashboardSkins();
@@ -367,6 +502,7 @@ export default function SpendingSubscriptionsPage() {
       </PageContent>
       {adding ? (
         <ManualDialog
+          currency={currency}
           busy={busy !== null}
           onClose={() => setAdding(false)}
           onSave={(input) => act("manual", () => subscriptionsApi.addManual(input), `${input.name} added.`).then(() => setAdding(false))}
@@ -559,6 +695,7 @@ function StreamRow({
   act: (label: string, fn: () => Promise<SubscriptionsView>, done?: string) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
+  const [marking, setMarking] = useState(false);
   const phone = useIsMobileViewport();
   const st = statusLabel(s);
   const category = useStreamCategory(s.categoryId);
@@ -715,6 +852,13 @@ function StreamRow({
                 <Icons.Pencil className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
+              {/* Paid where the app cannot see it (owner, 10-03): a hand-added one only, its own record. */}
+              {manual ? (
+                <DropdownMenuItem disabled={busy !== null} onSelect={() => setMarking(true)}>
+                  <Icons.Check className="mr-2 h-4 w-4" />
+                  Mark paid
+                </DropdownMenuItem>
+              ) : null}
               {s.status === "stopped" ? (
                 <DropdownMenuItem disabled={busy !== null} onSelect={() => setActive(true)}>
                   <Icons.PlayCircle className="mr-2 h-4 w-4" />
@@ -733,6 +877,11 @@ function StreamRow({
       {editing ? (
         <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <EditStreamDialog s={s} manual={manual} currency={currency} busy={busy !== null} act={act} onClose={() => setEditing(false)} />
+        </div>
+      ) : null}
+      {marking && manual ? (
+        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          <MarkPaidDialog s={s} manualId={manual.id} currency={currency} busy={busy !== null} act={act} onClose={() => setMarking(false)} />
         </div>
       ) : null}
     </div>
@@ -767,8 +916,12 @@ function EditStreamDialog({
   const [sendTotal, setSendTotal] = useState(!!s.sendTotal);
   const [excludeFromForecast, setExcludeFromForecast] = useState(!!s.excludeFromForecast);
   const [amount, setAmount] = useState(manual ? String(manual.amount) : "");
+  // A hand-added one's amount is in its own currency (none set: the base one, as it always was).
+  const [cur, setCur] = useState(manual?.currency || currency);
+  const currencies = useBillCurrencies(currency);
   const [words, setWords] = useState(manual ? manual.words.join(", ") : "");
   const [sharing, setSharing] = useState(false);
+  const [marking, setMarking] = useState(false);
   const [confirmHide, setConfirmHide] = useState(false);
   const escrow = s.escrow;
   // The company whose logo it shows: for the ones no charge names (escrow's, hand-added).
@@ -778,8 +931,11 @@ function EditStreamDialog({
   // Its charges, newest first, with the ones taken out by hand (unticked). A tick change is saved with
   // the rest (owner, 10-01: "see all linked transactions in the subscription and a check box to
   // manually exclude (will by pass all rules)").
+  // A payment from another currency shows what was really paid (the loan's dollars from Chase).
   const charges = [
-    ...(s.charges ?? []).map((c) => ({ ...c, notes: c.notes ?? "", accountId: c.accountId ?? null, wasOut: false, own: c.native != null && s.currency ? { amount: c.native, currency: s.currency } : null })),
+    ...(s.charges ?? [])
+      .filter((c) => !c.outside)
+      .map((c) => ({ ...c, notes: c.notes ?? "", accountId: c.accountId ?? null, wasOut: false, own: c.paid ?? (c.native != null && s.currency ? { amount: c.native, currency: s.currency } : null) })),
     ...(s.excluded ?? []).map((c) => ({ ...c, wasOut: true, own: c.native != null && c.currency ? { amount: c.native, currency: c.currency } : null })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   const [out, setOut] = useState<Set<string>>(() => new Set((s.excluded ?? []).map((c) => c.id)));
@@ -803,11 +959,16 @@ function EditStreamDialog({
         nextDate: nextDate || null,
         group,
         merchantId: company,
+        // Sent once it has one or the owner picks one: an older one keeps finding its currency from its charges.
+        ...(manual.currency || cur !== currency ? { currency: cur } : {}),
       }
     : null;
   // Changed against what the window opened with (its date may come from the charges, not the entry).
-  const [shown] = useState(() => JSON.stringify([name, words, amount, every, nextDate, group, company]));
-  const ownChanged = !!manual && JSON.stringify([name, words, amount, every, nextDate, group, company]) !== shown;
+  const [shown] = useState(() => JSON.stringify([name, words, amount, cur, every, nextDate, group, company]));
+  const ownChanged = !!manual && JSON.stringify([name, words, amount, cur, every, nextDate, group, company]) !== shown;
+  // Marked paid where the app cannot see it, newest first.
+  const marks = (s.charges ?? []).filter((c) => c.outside).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const markOf = (id: string) => id.replace(/^paid:/, "");
   if (!manual) {
     if (name.trim() && name.trim() !== s.name) patch.name = name.trim();
     if (group !== s.group) patch.group = group;
@@ -897,7 +1058,7 @@ function EditStreamDialog({
               {manual ? (
                 <>
                   <Field label="Amount" htmlFor="edit-amount">
-                    <Input id="edit-amount" type="number" inputMode="decimal" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                    <AmountInCurrency id="edit-amount" amount={amount} setAmount={setAmount} currency={cur} setCurrency={setCur} currencies={currencies} />
                   </Field>
                   <Field label="Words to look for" htmlFor="edit-words" foot="Separate several with commas.">
                     <Input id="edit-words" value={words} onChange={(e) => setWords(e.target.value)} placeholder={name} autoComplete="off" />
@@ -998,6 +1159,46 @@ function EditStreamDialog({
               </Button>
             </div>
             )}
+
+            {/* Paid where the app cannot see it (owner, 10-03): cash, a bank that is not linked. */}
+            {manual ? (
+              <div className="rounded-lg border">
+                <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">Paid elsewhere</div>
+                    <div className="text-muted-foreground text-xs leading-snug">Cash or a bank the app can&rsquo;t see. No transaction is made.</div>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" className="shrink-0 self-start" disabled={busy} onClick={() => setMarking(true)}>
+                    <Icons.Check className="mr-1 h-3.5 w-3.5" />
+                    Mark paid
+                  </Button>
+                </div>
+                {marks.length ? (
+                  <div className="max-h-[30dvh] divide-y overflow-y-auto border-t">
+                    {marks.map((c) => (
+                      <div key={c.id} className="flex items-center gap-3 px-3 py-2">
+                        <span className="min-w-0 flex-1 truncate text-sm">{day(c.date)}</span>
+                        <span className="shrink-0 text-sm tabular-nums">
+                          {c.native != null && s.currency ? <PrivacyAmount value={c.native} currency={s.currency} /> : <PrivacyAmount value={c.amount} currency={currency} />}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          disabled={busy}
+                          aria-label={`Undo paid on ${day(c.date)}`}
+                          title="Undo"
+                          onClick={() => act(s.key, () => subscriptionsApi.unmarkPaid(manual.id, markOf(c.id)), "Taken off.")}
+                        >
+                          <Icons.Close className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {charges.length ? (
               <div className="rounded-lg border">
@@ -1141,6 +1342,7 @@ function EditStreamDialog({
           }
         />
       ) : null}
+      {marking && manual ? <MarkPaidDialog s={s} manualId={manual.id} currency={currency} busy={busy} act={act} onClose={() => setMarking(false)} /> : null}
     </>
   );
 }
@@ -1268,10 +1470,12 @@ function SharedDialog({
 
 /** Add one by hand; changing it later is the same window as every other row (EditStreamDialog). */
 function ManualDialog({
+  currency,
   busy,
   onClose,
   onSave,
 }: {
+  currency: string;
   busy: boolean;
   onClose: () => void;
   onSave: (input: ManualInput) => Promise<void>;
@@ -1279,14 +1483,23 @@ function ManualDialog({
   const [name, setName] = useState("");
   const [words, setWords] = useState("");
   const [amount, setAmount] = useState("");
+  const [cur, setCur] = useState(currency);
+  const currencies = useBillCurrencies(currency);
   const [every, setEvery] = useState<Every>("year");
   const [nextDate, setNextDate] = useState("");
   const [group, setGroup] = useState<StreamGroup>("subscriptions");
   const ready = name.trim().length > 0 && Number(amount) > 0;
   const submit = () =>
-    onSave(
-      { name: name.trim(), words: (words || name).split(",").map((w) => w.trim()).filter(Boolean), amount: Number(amount), every, nextDate: nextDate || null, group },
-    );
+    onSave({
+      name: name.trim(),
+      words: (words || name).split(",").map((w) => w.trim()).filter(Boolean),
+      amount: Number(amount),
+      every,
+      nextDate: nextDate || null,
+      group,
+      // In another currency (a loan in Vietnam, in dong): its amount is in it.
+      ...(cur !== currency ? { currency: cur } : {}),
+    });
 
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
@@ -1306,9 +1519,10 @@ function ManualDialog({
             <p className="text-muted-foreground text-xs">Separate several with commas. Left empty, the name is used.</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
+            {/* With a currency to pick the box needs the whole row (dong runs to eight digits). */}
+            <div className={cn("space-y-1.5", currencies.length > 1 && "col-span-2")}>
               <Label htmlFor="sub-amount">Amount</Label>
-              <Input id="sub-amount" type="number" inputMode="decimal" step="0.01" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="139.00" />
+              <AmountInCurrency id="sub-amount" amount={amount} setAmount={setAmount} currency={cur} setCurrency={setCur} currencies={currencies} placeholder={cur === currency ? "139.00" : undefined} />
             </div>
             <div className="space-y-1.5">
               <Label>How often</Label>
@@ -1329,7 +1543,7 @@ function ManualDialog({
               <Label htmlFor="sub-next">Next charge</Label>
               <Input id="sub-next" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
             </div>
-            <div className="space-y-1.5">
+            <div className={cn("space-y-1.5", currencies.length > 1 && "col-span-2")}>
               <Label>Group</Label>
               <Select value={group} onValueChange={(v) => setGroup(v as StreamGroup)}>
                 <SelectTrigger>

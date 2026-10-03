@@ -125,6 +125,8 @@ export function forecastParts(
     const fixed = !!s.excludeFromForecast;
     if (fixed) fixedNames.push(s.name);
     for (const c of s.charges ?? []) {
+      // Marked paid where the app cannot see it: in no transaction, so never in what was spent.
+      if (c.outside) continue;
       if (c.date >= opts.histStart && c.date <= opts.histEnd) {
         billsInHistory += myPart(s, c.amount);
         if (fixed)
@@ -266,6 +268,7 @@ function everydayRate(
   for (const s of streams) {
     if (s.hidden || s.escrow) continue;
     for (const c of s.charges ?? []) {
+      if (c.outside) continue;
       if (c.date >= opts.histStart && c.date <= opts.histEnd)
         bills.set(c.date, (bills.get(c.date) ?? 0) + myPart(s, c.amount));
     }
