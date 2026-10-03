@@ -35,12 +35,12 @@ export interface RefundOffer extends RefundRow {
 }
 
 /** The timeline's steps (owner, 2026-10-03: "Return initiated > Vendor accepted > vendor received item >
- *  payment returned"). */
-export type ReturnStepKey = "started" | "accepted" | "received" | "refunded";
+ *  payment returned"; then the store's "refund issued" and the money on the card as two: "no status showing
+ *  that the refunded amount is recored in the card"). */
+export type ReturnStepKey = "started" | "accepted" | "received" | "refunded" | "oncard";
 /** done: with its day. passed: a later step came, this one sent no email. now: the one waited on. declined:
- *  the store said no. The money step also: sent (the store says it sent it, the bank shows nothing yet), part,
- *  late, settled. */
-export type ReturnStepState = "done" | "passed" | "now" | "todo" | "declined" | "sent" | "part" | "late" | "settled";
+ *  the store said no. The card step also: part, late, settled. */
+export type ReturnStepState = "done" | "passed" | "now" | "todo" | "declined" | "part" | "late" | "settled";
 
 /** The store's word on a step: one of its emails (Settings, Google, Return emails), or Amazon's. */
 export interface ReturnEmail {
@@ -292,13 +292,14 @@ export function stepLabel(step: Pick<ReturnStep, "key" | "state">): string {
   if (step.key === "started") return "Started";
   if (step.key === "accepted") return step.state === "declined" ? "Declined" : "Accepted";
   if (step.key === "received") return "Received";
+  if (step.key === "refunded") return "Refunded";
   if (step.state === "settled") return "Settled";
   if (step.state === "part") return "Part back";
-  return "Refunded";
+  return "On card";
 }
 
-/** Under a step: its day, or what it waits on ("Drop off by Oct 21", "By Oct 17", "Sent Oct 5"). Short: a
- *  phone shows four of these side by side. */
+/** Under a step: its day, or what it waits on ("Drop by Oct 21", "By Oct 17"). Short: a phone shows five
+ *  of these side by side. */
 export function stepCaption(step: ReturnStep): string {
   const day = step.date ? shortDay(step.date) : "";
   switch (step.state) {
@@ -309,8 +310,6 @@ export function stepCaption(step: ReturnStep): string {
       return day;
     case "passed":
       return "";
-    case "sent":
-      return `Sent ${day}`;
     case "late":
       return step.note ? `Due ${shortDay(step.note.date)}` : "Late";
     default:
@@ -321,10 +320,11 @@ export function stepCaption(step: ReturnStep): string {
   }
 }
 
-/** Who said so, for the window's timeline. */
-export function stepSource(step: ReturnStep): string {
+/** Who said so, for the window's timeline. `card`: the card's name, for the money on it. */
+export function stepSource(step: ReturnStep, card?: string): string {
   if (step.via === "you") return "the day you set";
-  if (step.via === "bank") return "in your bank";
+  if (step.via === "bank") return card ? `on ${card}` : "on your card";
+  if (step.key === "oncard" && (step.state === "now" || step.state === "late")) return card ? `checking ${card} every hour` : "checking your card every hour";
   if (step.via === "amazon") return "Amazon's email";
   if (step.via === "email") return step.event?.from ? `${step.event.from}'s email` : "the store's email";
   if (step.state === "passed") return "no email";

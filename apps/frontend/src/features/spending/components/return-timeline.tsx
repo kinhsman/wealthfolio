@@ -1,12 +1,14 @@
 // money-hub patch: a return's timeline (owner, 2026-10-03: "build a visual timeline showing that something like
 // Return initiated > Vendor accepted > vendor received item > payment returned"). Started, Accepted, Received,
-// Refunded: the day typed on the return, the store's emails (Settings, Google, Return emails; Amazon's own),
-// and the refund in the bank (lib/returns.ts, steps from the money-hub service). ReturnTimeline is the row on the
+// Refunded (the store's word), On card (the refund found in the bank: "no status showing that the refunded
+// amount is recored in the card"): the day typed on the return, the store's emails (Settings, Google, Return
+// emails; Amazon's own), and the bank (lib/returns.ts, steps from the money-hub service). ReturnTimeline is the row on the
 // Returns page; ReturnSteps is the window's, with each email and "Not it".
 import type { CSSProperties, ReactNode } from "react";
 
 import { Button, Icons } from "@wealthfolio/ui";
 
+import { useAccounts } from "@/hooks/use-accounts";
 import { cn } from "@/lib/utils";
 
 import {
@@ -84,7 +86,7 @@ function Dot({ step, size = 16 }: { step: ReturnStep; size?: number }) {
       </span>
     );
   }
-  if (step.state === "now" || step.state === "sent" || step.state === "late") {
+  if (step.state === "now" || step.state === "late") {
     const c = step.state === "late" ? WARN : GOOD;
     return (
       <span
@@ -107,12 +109,12 @@ function Dot({ step, size = 16 }: { step: ReturnStep; size?: number }) {
 }
 
 /**
- * The row's timeline: four dots on a line, each with its name and day under it. Only the look: a click on
+ * The row's timeline: five dots on a line, each with its name and day under it. Only the look: a click on
  * the row opens the window, where each email is.
  */
 export function ReturnTimeline({ steps, className }: { steps: ReturnStep[]; className?: string }) {
   return (
-    <ol className={cn("grid grid-cols-4", className)} aria-label="Where the return stands">
+    <ol className={cn("grid grid-cols-5", className)} aria-label="Where the return stands">
       {steps.map((s, i) => {
         const next = steps[i + 1];
         const caption = stepCaption(s);
@@ -163,6 +165,7 @@ function eventsOf(key: ReturnStep["key"], emails: ReturnEmail[]): ReturnEmail[] 
     accepted: ["accepted", "declined"],
     received: ["dropped", "received"],
     refunded: ["refunded"],
+    oncard: [],
   };
   return emails.filter((e) => kinds[key].includes(e.kind));
 }
@@ -193,13 +196,17 @@ export function ReturnSteps({
 }) {
   const steps = item.steps ?? [];
   const emails = item.emails ?? [];
+  // The card the money comes back to: the refund's, else the one that paid.
+  const { accounts } = useAccounts({ filterActive: false });
+  const refundCard = [...item.refunds].sort((a, b) => a.date.localeCompare(b.date)).pop()?.accountId ?? item.accountId;
+  const card = (accounts ?? []).find((a) => a.id === refundCard)?.name;
   return (
     <div className="space-y-0">
       <ol>
         {steps.map((s, i) => {
           const mine = eventsOf(s.key, emails);
           const caption = stepCaption(s);
-          const source = stepSource(s);
+          const source = stepSource(s, s.key === "oncard" ? card : undefined);
           return (
             <li key={s.key} className="relative flex gap-3 pb-3 last:pb-0">
               {i < steps.length - 1 ? (
