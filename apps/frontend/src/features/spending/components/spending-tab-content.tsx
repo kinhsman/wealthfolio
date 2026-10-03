@@ -68,6 +68,7 @@ import {
 } from "../lib/timezone";
 import { BudgetLineChartCard } from "./budget-line-chart-card";
 import { CashCardsCard } from "./cash-cards-card";
+import { CashForecastCard } from "./cash-forecast-card";
 import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
 import { SubscriptionsCard } from "./subscriptions-card";
@@ -1078,6 +1079,10 @@ export default function SpendingTabContent() {
       </div>
 
       <CashCardsCard currency={currency} onShowBills={showBills} />
+
+      {/* money-hub patch: where the cash is heading, the payments that repeat and the cards' due dates
+          (lib/cash-forecast.ts; owner, 10-03). */}
+      <CashForecastCard currency={currency} />
 
 
       <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
