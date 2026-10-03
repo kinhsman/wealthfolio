@@ -144,7 +144,7 @@ export function ReturnTimeline({ steps, className }: { steps: ReturnStep[]; clas
             <span
               className={cn(
                 "text-muted-foreground min-h-[14px] text-[10px] tabular-nums leading-tight",
-                (s.via === "email" || s.via === "amazon") && "text-foreground/80",
+                (s.via === "email" || s.via === "amazon" || s.via === "tiktok") && "text-foreground/80",
               )}
               style={looksBad(s) ? { color: WARN } : undefined}
             >
@@ -244,18 +244,28 @@ export function ReturnSteps({
                 {mine.map((e) => (
                   <div key={e.key} className="mt-1 flex items-center gap-2 text-xs">
                     <Icons.Mail className="text-muted-foreground h-3 w-3 shrink-0" />
-                    <a
-                      href={e.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-foreground/90 min-w-0 flex-1 truncate underline-offset-4 hover:underline"
-                      title={`${e.from}: ${e.subject}`}
-                    >
-                      <span className="text-muted-foreground tabular-nums">
-                        {shortDay(e.date)} ·{" "}
+                    {e.url ? (
+                      <a
+                        href={e.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-foreground/90 min-w-0 flex-1 truncate underline-offset-4 hover:underline"
+                        title={`${e.from}: ${e.subject}`}
+                      >
+                        <span className="text-muted-foreground tabular-nums">
+                          {shortDay(e.date)} ·{" "}
+                        </span>
+                        {e.subject || EMAIL_WORD[e.kind]}
+                      </a>
+                    ) : (
+                      // TikTok Shop's orders have no web page: the words only.
+                      <span className="text-foreground/90 min-w-0 flex-1 truncate" title={`${e.from}: ${e.subject}`}>
+                        <span className="text-muted-foreground tabular-nums">
+                          {shortDay(e.date)} ·{" "}
+                        </span>
+                        {e.subject || EMAIL_WORD[e.kind]}
                       </span>
-                      {e.subject || EMAIL_WORD[e.kind]}
-                    </a>
+                    )}
                     {e.source === "email" ? (
                       <Button
                         variant="ghost"

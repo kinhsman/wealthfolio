@@ -1,11 +1,11 @@
-// money-hub patch: an Amazon charge's order (lib/amazon.ts). In the list, the order's line stands where
+// money-hub patch: an Amazon (or TikTok Shop) charge's order (lib/amazon.ts). In the list, the order's line stands where
 // the bank's code would ("AMAZON MKTPL*5107C3NJ1" says nothing); a click shows the order. In the edit
 // window, the order in full. Amazon's newer emails name only the kind of thing bought, so the order's
 // own page on Amazon is one click away.
 import { Icons } from "@wealthfolio/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@wealthfolio/ui/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { amazonReturnState, amazonSummary, type AmazonLink } from "../lib/amazon";
+import { amazonReturnState, amazonSummary, storeName, type AmazonLink } from "../lib/amazon";
 
 const day = (iso: string | null) =>
   iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "";
@@ -17,10 +17,12 @@ export function AmazonOrderDetails({ link, className }: { link: AmazonLink; clas
     <div className={cn("space-y-2.5 text-xs", className)}>
       <div className="flex items-center gap-2">
         <Icons.Package className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-        <span className="text-foreground min-w-0 flex-1 truncate text-sm font-medium">Amazon order</span>
-        <a href={link.url} target="_blank" rel="noreferrer" className="text-primary inline-flex shrink-0 items-center gap-1 underline-offset-4 hover:underline">
-          Open on Amazon <Icons.ExternalLink className="size-3" />
-        </a>
+        <span className="text-foreground min-w-0 flex-1 truncate text-sm font-medium">{storeName(link)} order</span>
+        {link.url ? (
+          <a href={link.url} target="_blank" rel="noreferrer" className="text-primary inline-flex shrink-0 items-center gap-1 underline-offset-4 hover:underline">
+            Open on Amazon <Icons.ExternalLink className="size-3" />
+          </a>
+        ) : null}
       </div>
       {link.items.length ? (
         <ul className="space-y-1">
@@ -66,7 +68,7 @@ export function AmazonOrderLine({ link, className }: { link: AmazonLink; classNa
       <PopoverTrigger asChild>
         <button
           type="button"
-          title={`Amazon order: ${summary}`}
+          title={`${storeName(link)} order: ${summary}`}
           onClick={(e) => e.stopPropagation()}
           className={cn("text-muted-foreground hover:text-foreground inline-flex min-w-0 items-center gap-1 text-left text-xs", className)}
         >

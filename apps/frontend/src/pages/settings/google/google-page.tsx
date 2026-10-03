@@ -6,7 +6,8 @@
 // ("allow user to switch to whatever google account they connected"), and Return emails (owner, 10-03: the
 // Returns timeline's Accepted and Received from the store's emails, "an option to turn on"). The money-hub
 // service keeps the links (/api/money-hub/email, lib/emailAlerts.js), Amazon (/api/money-hub/amazon,
-// lib/amazon.js) and Return emails (/api/money-hub/return-emails, lib/returnEmails.js).
+// lib/amazon.js), TikTok Shop orders (owner, 10-03: "add support for tiktokshop"; /api/money-hub/tiktok,
+// lib/tiktok.js) and Return emails (/api/money-hub/return-emails, lib/returnEmails.js).
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
@@ -18,6 +19,8 @@ import { SettingsHeader } from "../settings-header";
 const EMAIL = "/api/money-hub/email";
 const AMAZON = "/api/money-hub/amazon";
 const RETURN_EMAILS = "/api/money-hub/return-emails";
+const TIKTOK = "/api/money-hub/tiktok";
+const TIKTOK_LOGO = "https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/tiktok.png";
 
 interface Mailbox { id: string; email: string; linkedAt: string; error: string | null }
 interface EmailBank { id: string; bankName: string; accountName: string; mailboxId: string; enabled: boolean }
@@ -35,6 +38,18 @@ interface AmazonStatus {
   kinds?: { kind: string; charges: number; last: string | null; categoryId: string | null }[];
   /** How many charges took their kind's category so far. */
   categorized?: number;
+}
+
+/** TikTok Shop orders (owner, 10-03: "add support for tiktokshop"; lib/tiktok.js): like Amazon's. */
+interface TikTokStatus {
+  on: boolean;
+  busy: boolean;
+  mailboxId: string | null;
+  mailboxes: { id: string; email: string }[];
+  orders: number;
+  matched: number;
+  returns: number;
+  last: { at: string; read: number; orders: number; charges: number; matched: number; returns: number; errors: string[] } | null;
 }
 
 interface ReturnEmailsStatus {
@@ -176,6 +191,7 @@ export default function GoogleSettingsPage() {
   const [email, setEmail] = useState<EmailStatus | null>(null);
   const [amazon, setAmazon] = useState<AmazonStatus | null>(null);
   const [returnEmails, setReturnEmails] = useState<ReturnEmailsStatus | null>(null);
+  const [tiktok, setTikTok] = useState<TikTokStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [confirmUnlink, setConfirmUnlink] = useState<string | null>(null);
@@ -184,6 +200,7 @@ export default function GoogleSettingsPage() {
     call<EmailStatus>(EMAIL, "GET", "/status").then(setEmail).catch((e) => setNote({ tone: "bad", text: e instanceof Error ? e.message : String(e) }));
     call<AmazonStatus>(AMAZON, "GET", "").then(setAmazon).catch(() => setAmazon(null));
     call<ReturnEmailsStatus>(RETURN_EMAILS, "GET", "").then(setReturnEmails).catch(() => setReturnEmails(null));
+    call<TikTokStatus>(TIKTOK, "GET", "").then(setTikTok).catch(() => setTikTok(null));
   }, []);
 
   const run = async <T,>(what: string, fn: () => Promise<T>, take: (v: T) => void, ok?: string) => {
@@ -201,6 +218,7 @@ export default function GoogleSettingsPage() {
   const refreshAmazon = () => {
     call<AmazonStatus>(AMAZON, "GET", "").then(setAmazon).catch(() => {});
     call<ReturnEmailsStatus>(RETURN_EMAILS, "GET", "").then(setReturnEmails).catch(() => {});
+    call<TikTokStatus>(TIKTOK, "GET", "").then(setTikTok).catch(() => {});
   };
 
   // What reads each account: its banks, and Amazon orders (the picked account, or every one).
@@ -208,8 +226,11 @@ export default function GoogleSettingsPage() {
     const banks = (email?.banks ?? []).filter((b) => b.mailboxId === m.id).map((b) => b.accountName || b.bankName);
     const amazonHere = amazon?.on && (!amazon.mailboxId || amazon.mailboxId === m.id);
     const returnsHere = returnEmails?.on && (!returnEmails.mailboxId || returnEmails.mailboxId === m.id);
-    return [banks.length ? `Bank emails: ${banks.join(", ")}` : null, amazonHere ? "Amazon orders" : null, returnsHere ? "Return emails" : null].filter(Boolean).join(" · ") || "Nothing reads it yet";
+    const tiktokHere = tiktok?.on && (!tiktok.mailboxId || tiktok.mailboxId === m.id);
+    return [banks.length ? `Bank emails: ${banks.join(", ")}` : null, amazonHere ? "Amazon orders" : null, tiktokHere ? "TikTok Shop orders" : null, returnsHere ? "Return emails" : null]
+      .filter(Boolean).join(" · ") || "Nothing reads it yet";
   };
+  const tiktokErrors = tiktok?.last?.errors?.length ?? 0;
   const amazonErrors = amazon?.last?.errors?.length ?? 0;
   const returnErrors = returnEmails?.last?.errors?.length ?? 0;
 
@@ -312,6 +333,47 @@ export default function GoogleSettingsPage() {
               <AmazonCategories amazon={amazon} busy={!!busy}
                 onPick={(kind, categoryId) => run(`amazon-cat:${kind}`, () => call<AmazonStatus>(AMAZON, "PUT", "", { kind, categoryId }), setAmazon,
                   categoryId ? `Saved. ${kind} charges are being filed now.` : `${kind} left as it is.`)} />
+            ) : null}
+          </div>
+        ) : null}
+
+        {tiktok ? (
+          <div className="bg-card rounded-xl border">
+            <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <Logo src={TIKTOK_LOGO} />
+              <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
+                <div className="truncate text-sm font-semibold">TikTok Shop orders</div>
+                <div className="text-muted-foreground truncate text-xs">
+                  {tiktok.on
+                    ? [`${tiktok.matched} charges matched to ${tiktok.orders} orders`, tiktok.returns ? `${tiktok.returns} ${tiktok.returns === 1 ? "return" : "returns"}` : null, tiktok.last?.at && `checked ${when(tiktok.last.at)}`].filter(Boolean).join(" · ")
+                    : "Off"}
+                </div>
+              </div>
+              <div className="ml-auto flex items-center gap-3">
+                {tiktok.on ? <Pill tone={tiktokErrors ? "warn" : "ok"} text={tiktokErrors ? "Needs a look" : "Reading"} /> : <Pill tone="off" text="Off" />}
+                <Switch checked={tiktok.on} disabled={!!busy} aria-label="Read TikTok Shop orders"
+                  onCheckedChange={(on) => run("tiktok-on", () => call<TikTokStatus>(TIKTOK, "PUT", "", { on }), setTikTok)} />
+              </div>
+            </div>
+            {tiktok.on ? (
+              <div className="space-y-2.5 border-t px-4 py-3 text-xs">
+                <label className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted-foreground">Read from</span>
+                  <select value={tiktok.mailboxId ?? ""} disabled={!!busy || !tiktok.mailboxes.length} className={field}
+                    onChange={(e) => run("tiktok-box", () => call<TikTokStatus>(TIKTOK, "PUT", "", { mailboxId: e.target.value || null }), setTikTok, "Saved. Reading that account now.")}>
+                    <option value="">Every linked account</option>
+                    {tiktok.mailboxes.map((m) => <option key={m.id} value={m.id}>{m.email}</option>)}
+                  </select>
+                </label>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Each TikTok Shop charge shows its order; a return goes on the Returns page with its steps.</span>
+                  <button type="button" className={`${btn} h-7`} disabled={!!busy || tiktok.busy}
+                    onClick={() => run("tiktok-run", () => call<TikTokStatus>(TIKTOK, "POST", "/run"), setTikTok, "Checked.")}>
+                    {busy === "tiktok-run" || tiktok.busy ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.RefreshCw className="size-3.5" />} Check now
+                  </button>
+                </div>
+                {tiktokErrors ? <p className="text-warning">{tiktok.last?.errors.join(" · ")}</p> : null}
+              </div>
             ) : null}
           </div>
         ) : null}

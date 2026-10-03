@@ -1,5 +1,5 @@
-// money-hub patch: Amazon orders on their card charges (owner, 2026-10-02: "amazon order we can also
-// track a return automatically very good idea, no need for an extension at all"). The money-hub service
+// money-hub patch: Amazon (and TikTok Shop) orders on their card charges (owner, 2026-10-02: "amazon order we
+// can also track a return automatically very good idea, no need for an extension at all"). The money-hub service
 // reads Amazon's own emails from the linked Gmails and matches each Amazon charge to its order
 // (server/drive-backup/lib/amazon.js); returns Amazon confirms go onto the Returns page there.
 import { useQuery } from "@tanstack/react-query";
@@ -19,10 +19,13 @@ export interface AmazonReturn {
 }
 
 /** One charge's order. Since mid 2026 Amazon's emails no longer name the products: `label` then says
- *  what kind ("Coffee Accessories") and `items` is empty; the link opens the order on Amazon. */
+ *  what kind ("Coffee Accessories") and `items` is empty; the link opens the order on Amazon. TikTok Shop's
+ *  orders come in the same shape (owner, 10-03: "add support for tiktokshop"; server lib/tiktok.js), with
+ *  `store` "tiktok" and no web page to open. */
 export interface AmazonLink {
+  store?: "amazon" | "tiktok";
   orderId: string;
-  url: string;
+  url: string | null;
   how: "shipment" | "order";
   placed: string | null;
   delivered: string | null;
@@ -57,8 +60,11 @@ export function amazonSummary(link: AmazonLink): string {
     return more > 0 ? `${items[0].name} +${more}` : items[0].name;
   }
   if (link.label) return link.count && link.count > 1 ? `${link.count} ${link.label} items` : link.label;
-  return `Amazon order ${link.orderId}`;
+  return `${storeName(link)} order ${link.orderId}`;
 }
+
+/** Whose order it is, in words. */
+export const storeName = (link: Pick<AmazonLink, "store">) => (link.store === "tiktok" ? "TikTok Shop" : "Amazon");
 
 /** Where a return stands, in two words. */
 export function amazonReturnState(r: AmazonReturn): string {

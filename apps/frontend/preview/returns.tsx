@@ -98,6 +98,9 @@ window.fetch = (input, init) => {
       categorized: 0,
     });
   }
+  if (url.startsWith("/api/money-hub/tiktok")) {
+    return json({ on: true, busy: false, mailboxId: null, mailboxes: returnEmails.mailboxes, orders: 6, matched: 6, returns: 1, last: { at: new Date().toISOString(), read: 21, orders: 6, charges: 6, matched: 6, returns: 1, errors: [] } });
+  }
   if (url.includes("/candidates")) return json(fixture.moneyIn);
   if (url.startsWith("/api/money-hub/alerts")) return json({ discord: { on: true, shown: "…Ux9tq" }, ntfy: { on: true, server: "https://ntfy.sh", topic: "money", hasToken: false, priority: 4 }, last: null });
   // Anything else the helper serves is not in this preview: an error, so those cards stay hidden.

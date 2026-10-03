@@ -45,13 +45,13 @@ export type ReturnStepState = "done" | "passed" | "now" | "todo" | "declined" | 
 /** The store's word on a step: one of its emails (Settings, Google, Return emails), or Amazon's. */
 export interface ReturnEmail {
   key: string;
-  source: "email" | "amazon";
+  source: "email" | "amazon" | "tiktok";
   kind: "accepted" | "declined" | "dropped" | "received" | "refunded";
   date: string;
   subject: string;
   from: string;
-  /** The email in Gmail, or the order on Amazon. */
-  url: string;
+  /** The email in Gmail, or the order on Amazon (TikTok Shop's: none). */
+  url: string | null;
   /** A day the store gave: drop it off by, the refund by. */
   by?: string | null;
   /** How the email was tied to this return: the sender is the store, an order number, or the amount. */
@@ -63,7 +63,7 @@ export interface ReturnStep {
   state: ReturnStepState;
   date: string | null;
   /** Who told it: the day typed on the return, the store's email, Amazon, or the refund in the bank. */
-  via: "you" | "email" | "amazon" | "bank" | null;
+  via: "you" | "email" | "amazon" | "tiktok" | "bank" | null;
   event: ReturnEmail | null;
   note: { kind: "dropOffBy" | "dropped" | "due"; date: string } | null;
 }
@@ -326,6 +326,7 @@ export function stepSource(step: ReturnStep, card?: string): string {
   if (step.via === "bank") return card ? `on ${card}` : "on your card";
   if (step.key === "oncard" && (step.state === "now" || step.state === "late")) return card ? `checking ${card} every hour` : "checking your card every hour";
   if (step.via === "amazon") return "Amazon's email";
+  if (step.via === "tiktok") return "TikTok Shop's email";
   if (step.via === "email") return step.event?.from ? `${step.event.from}'s email` : "the store's email";
   if (step.state === "passed") return "no email";
   return "";

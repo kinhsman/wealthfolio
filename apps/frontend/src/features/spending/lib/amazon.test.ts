@@ -15,6 +15,8 @@ describe("Amazon order line", () => {
     expect(amazonSummary(link({ label: "Coffee Accessories", count: 1 }))).toBe("Coffee Accessories");
     expect(amazonSummary(link({ label: "Lawn Care", count: 2 }))).toBe("2 Lawn Care items");
     expect(amazonSummary(link({}))).toBe("Amazon order 114-1");
+    // TikTok Shop's orders come the same way (owner, 10-03).
+    expect(amazonSummary(link({ store: "tiktok", orderId: "577484089426481391", url: null }))).toBe("TikTok Shop order 577484089426481391");
   });
   it("says where a return stands", () => {
     const r = { item: "x", refund: 10, requested: "2026-07-01", dropped: null, refunded: null };
