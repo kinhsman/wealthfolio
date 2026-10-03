@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 import { useMerchantFor } from "../lib/merchants";
 import { rulePatternFrom } from "../lib/rule-offer";
+import { FrequencyPicker } from "./frequency-picker";
 import {
   EVERY_LABELS,
   SUBSCRIPTIONS_KEY,
@@ -332,18 +333,7 @@ function Choose({
             </div>
             <div className="space-y-1.5">
               <Label>How often</Label>
-              <Select value={every} onValueChange={(v) => changeEvery(v as Every)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(EVERY_LABELS) as Every[]).map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {EVERY_LABELS[k]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FrequencyPicker value={every} onChange={changeEvery} disabled={busy} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="track-next">Next charge</Label>

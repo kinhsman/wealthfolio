@@ -50,10 +50,13 @@ import { StreamLogo } from "../components/stream-logo";
 import { billMonth, ymd } from "../lib/bill-calendar";
 import type { BillDue } from "../lib/budget-forecast";
 import { ruleOfferStore } from "../lib/rule-offer";
+import { FrequencyPicker } from "../components/frequency-picker";
 import {
   EVERY_LABELS,
   SUBSCRIPTIONS_KEY,
   dueLabel,
+  formatEveryShort,
+  localToday,
   nextChargeAfter,
   openDatePicker,
   rentalSettingsHref,
@@ -75,7 +78,16 @@ import {
 // to look at amber, the rest quiet.
 // On a phone a row's second line keeps its keywords (owner, 10-02: "keep only keywords"): how often and
 // when; the rest is in its Edit window.
-const EVERY_SHORT: Record<Every, string> = { month: "Monthly", quarter: "Every 3 mo", "half-year": "Every 6 mo", year: "Yearly" };
+const RAW_EVERY_SHORT: Record<string, string> = { month: "Monthly", quarter: "Every 3 mo", "half-year": "Every 6 mo", year: "Yearly" };
+const EVERY_SHORT: Record<string, string> = new Proxy(RAW_EVERY_SHORT, {
+  get(target, prop: string) {
+    if (typeof prop === "string") {
+      if (prop in target) return target[prop];
+      return formatEveryShort(prop);
+    }
+    return undefined;
+  },
+});
 
 function phoneDue(label: string) {
   return label
@@ -1085,16 +1097,7 @@ function EditStreamDialog({
                     Use what its charges show
                   </button>
                 ) : "As its charges show."}>
-                <Select value={every} onValueChange={(v) => changeEvery(v as Every)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(EVERY_LABELS) as Every[]).map((k) => (
-                      <SelectItem key={k} value={k}>{EVERY_LABELS[k]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FrequencyPicker value={every} onChange={changeEvery} disabled={busy || (s.status === "stopped" && !manual)} />
               </Field>
               <Field label={escrow ? "Next date" : "Next charge"} htmlFor="edit-next"
                 foot={manual ? "For your records: no transaction is made." : s.nextSetByOwner ? (
@@ -1539,18 +1542,10 @@ function ManualDialog({
             </div>
             <div className="space-y-1.5">
               <Label>How often</Label>
-              <Select value={every} onValueChange={(v) => setEvery(v as Every)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(EVERY_LABELS) as Every[]).map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {EVERY_LABELS[k]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FrequencyPicker value={every} onChange={(v) => {
+                setEvery(v);
+                setNextDate(nextChargeAfter(localToday(), v, true));
+              }} disabled={busy} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="sub-next">Next charge</Label>

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   dueLabel,
+  formatEvery,
+  formatEveryLabel,
+  formatEveryShort,
   nextChargeAfter,
+  parseEvery,
   statusLabel,
   subscriptionCharges,
   subscriptionFilterOptions,
@@ -105,5 +109,49 @@ describe("next charge from a charge's date", () => {
   it("a 31st stays a 31st where the month has one", () => {
     expect(nextChargeAfter("2026-01-31", "month")).toBe("2026-02-28");
     expect(nextChargeAfter("2026-01-31", "month", true, "2026-03-05")).toBe("2026-03-31");
+  });
+});
+
+describe("custom frequencies (every # week/month/year)", () => {
+  it("parses legacy and custom frequencies", () => {
+    expect(parseEvery("month")).toEqual({ count: 1, unit: "month" });
+    expect(parseEvery("quarter")).toEqual({ count: 3, unit: "month" });
+    expect(parseEvery("half-year")).toEqual({ count: 6, unit: "month" });
+    expect(parseEvery("year")).toEqual({ count: 1, unit: "year" });
+    expect(parseEvery("week")).toEqual({ count: 1, unit: "week" });
+    expect(parseEvery("1 week")).toEqual({ count: 1, unit: "week" });
+    expect(parseEvery("2 weeks")).toEqual({ count: 2, unit: "week" });
+    expect(parseEvery("3 months")).toEqual({ count: 3, unit: "month" });
+    expect(parseEvery("2 years")).toEqual({ count: 2, unit: "year" });
+  });
+
+  it("formats key, label and short forms", () => {
+    expect(formatEvery(1, "month")).toBe("month");
+    expect(formatEvery(3, "month")).toBe("quarter");
+    expect(formatEvery(6, "month")).toBe("half-year");
+    expect(formatEvery(1, "year")).toBe("year");
+    expect(formatEvery(1, "week")).toBe("1 week");
+    expect(formatEvery(2, "week")).toBe("2 weeks");
+    expect(formatEvery(2, "month")).toBe("2 months");
+
+    expect(formatEveryLabel("month")).toBe("Every month");
+    expect(formatEveryLabel("quarter")).toBe("Every 3 months");
+    expect(formatEveryLabel("2 weeks")).toBe("Every 2 weeks");
+    expect(formatEveryLabel("1 week")).toBe("Every week");
+    expect(formatEveryLabel("2 years")).toBe("Every 2 years");
+
+    expect(formatEveryShort("month")).toBe("Monthly");
+    expect(formatEveryShort("week")).toBe("Weekly");
+    expect(formatEveryShort("year")).toBe("Yearly");
+    expect(formatEveryShort("2 weeks")).toBe("Every 2 wks");
+    expect(formatEveryShort("3 months")).toBe("Every 3 mo");
+  });
+
+  it("calculates next charge dates for weeks and custom intervals", () => {
+    expect(nextChargeAfter("2026-09-01", "1 week")).toBe("2026-09-08");
+    expect(nextChargeAfter("2026-09-01", "2 weeks")).toBe("2026-09-15");
+    expect(nextChargeAfter("2026-09-01", "2 weeks", true, "2026-10-03")).toBe("2026-10-13");
+    expect(nextChargeAfter("2026-09-01", "2 months")).toBe("2026-11-01");
+    expect(nextChargeAfter("2026-09-01", "2 years")).toBe("2028-09-01");
   });
 });

@@ -11,9 +11,7 @@
 // forcast and use other transactions to forcast toward this budget, but the budget show in the app should
 // be still 4000"): the fixed bills already paid this month come off the budget, and everything else is
 // forecast against what is left. The same sums, said that way on the card.
-import type { Stream } from "./subscriptions";
-
-const MONTHS: Record<Stream["every"], number> = { month: 1, quarter: 3, "half-year": 6, year: 12 };
+import { advancePeriodISO, type Stream } from "./subscriptions";
 
 /** The date `months` on, the day kept (or the month's last). */
 export function addMonthsISO(iso: string, months: number): string {
@@ -43,17 +41,16 @@ export interface BillDue {
  */
 export function dueInMonth(s: Stream, monthStart: string, monthEnd: string, opts: { later?: boolean } = {}): BillDue[] {
   if (s.hidden || s.escrow || s.status === "stopped" || !s.next || !(s.usual > 0)) return [];
-  const every = MONTHS[s.every] ?? 1;
   let date = s.next;
   if (date < monthStart) {
     // This month: late, it comes now. A later month (`later`, the bill calendar): where its rhythm lands.
     if (!opts.later) return [{ key: s.key, name: s.name, date: monthStart, amount: s.usual, late: s.next }];
-    for (let i = 0; date < monthStart && i < 400; i += 1) date = addMonthsISO(s.next, every * (i + 1));
+    for (let i = 0; date < monthStart && i < 400; i += 1) date = advancePeriodISO(s.next, s.every, i + 1);
   }
   const out: BillDue[] = [];
   for (let i = 0; date <= monthEnd && i < 31; i += 1) {
     out.push({ key: s.key, name: s.name, date, amount: s.usual });
-    date = addMonthsISO(date, every);
+    date = advancePeriodISO(date, s.every, 1);
   }
   return out;
 }

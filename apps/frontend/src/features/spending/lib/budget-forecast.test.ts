@@ -348,4 +348,14 @@ describe("paid and left to pay this month (Subscriptions & Bills page)", () => {
     expect(paidInMonth(s, ...OCT1).map((b) => b.amount)).toEqual([2505.76]);
     expect(dueInMonth(s, ...OCT1)).toEqual([]);
   });
+
+  it("dueInMonth handles weekly and custom intervals", () => {
+    const weekly = stream("Gym", { every: "1 week", usual: 10, next: "2026-10-07" });
+    // In October (Oct 1 to Oct 31): Oct 7, Oct 14, Oct 21, Oct 28
+    expect(dueInMonth(weekly, ...OCT1).map((b) => b.date)).toEqual(["2026-10-07", "2026-10-14", "2026-10-21", "2026-10-28"]);
+
+    const biweekly = stream("Box", { every: "2 weeks", usual: 25, next: "2026-10-05" });
+    // Oct 5, Oct 19
+    expect(dueInMonth(biweekly, ...OCT1).map((b) => b.date)).toEqual(["2026-10-05", "2026-10-19"]);
+  });
 });

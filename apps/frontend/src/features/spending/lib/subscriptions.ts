@@ -5,7 +5,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { rentalHref } from "@/lib/rentals";
 import { addMonthsISO } from "./budget-forecast";
 
-export type Every = "month" | "quarter" | "half-year" | "year";
+export type Every = string;
+export type TimeUnit = "week" | "month" | "year";
+
+export interface ParsedEvery {
+  count: number;
+  unit: TimeUnit;
+}
 export type StreamGroup = "subscriptions" | "bills";
 export type StreamStatus = "active" | "price-up" | "price-down" | "stopped";
 export type AlertKind = "newFound" | "priceChange" | "doubleCharge" | "stopped" | "cameBack" | "reminders";
@@ -271,16 +277,94 @@ export function useSetSubscriptions() {
   return (view: SubscriptionsView) => qc.setQueryData(SUBSCRIPTIONS_KEY, view);
 }
 
-export const EVERY_LABELS: Record<Every, string> = {
+export function parseEvery(val?: string | null): ParsedEvery {
+  if (!val) return { count: 1, unit: "month" };
+  const s = String(val).trim().toLowerCase();
+  if (s === "month") return { count: 1, unit: "month" };
+  if (s === "quarter") return { count: 3, unit: "month" };
+  if (s === "half-year" || s === "half_year" || s === "halfyear") return { count: 6, unit: "month" };
+  if (s === "year") return { count: 1, unit: "year" };
+  if (s === "week") return { count: 1, unit: "week" };
+
+  const m = s.match(/^(\d+)\s*[-_]?\s*(week|month|year|w|m|y)s?$/);
+  if (m) {
+    const count = parseInt(m[1], 10);
+    if (count > 0 && count <= 1000) {
+      const u = m[2];
+      const unit: TimeUnit = (u === "w" || u.startsWith("week")) ? "week"
+                           : (u === "y" || u.startsWith("year")) ? "year"
+                           : "month";
+      return { count, unit };
+    }
+  }
+  return { count: 1, unit: "month" };
+}
+
+export function formatEvery(count: number, unit: TimeUnit): string {
+  const n = Math.max(1, Math.round(count) || 1);
+  if (n === 1 && unit === "month") return "month";
+  if (n === 3 && unit === "month") return "quarter";
+  if (n === 6 && unit === "month") return "half-year";
+  if (n === 1 && unit === "year") return "year";
+  if (n === 1 && unit === "week") return "1 week";
+  return `${n} ${unit}${n > 1 ? "s" : ""}`;
+}
+
+export function formatEveryLabel(every: string): string {
+  const { count, unit } = parseEvery(every);
+  if (count === 1) {
+    if (unit === "month") return "Every month";
+    if (unit === "week") return "Every week";
+    if (unit === "year") return "Every year";
+  }
+  if (count === 3 && unit === "month") return "Every 3 months";
+  if (count === 6 && unit === "month") return "Every 6 months";
+  return `Every ${count} ${unit}s`;
+}
+
+export function formatEveryShort(every: string): string {
+  const { count, unit } = parseEvery(every);
+  if (count === 1) {
+    if (unit === "month") return "Monthly";
+    if (unit === "week") return "Weekly";
+    if (unit === "year") return "Yearly";
+  }
+  if (unit === "month") return `Every ${count} mo`;
+  if (unit === "week") return `Every ${count} wk${count === 1 ? "" : "s"}`;
+  return `Every ${count} yr${count === 1 ? "" : "s"}`;
+}
+
+const addDaysISO = (iso: string, n: number): string => {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+};
+
+export function advancePeriodISO(iso: string, every: string, multiplier = 1): string {
+  const { count, unit } = parseEvery(every);
+  const total = count * multiplier;
+  if (unit === "week") return addDaysISO(iso, total * 7);
+  if (unit === "year") return addMonthsISO(iso, total * 12);
+  return addMonthsISO(iso, total);
+}
+
+const RAW_EVERY_LABELS: Record<string, string> = {
   month: "Every month",
   quarter: "Every 3 months",
   "half-year": "Every 6 months",
   year: "Every year",
 };
 
-const EVERY_MONTHS: Record<Every, number> = { month: 1, quarter: 3, "half-year": 6, year: 12 };
+export const EVERY_LABELS: Record<string, string> = new Proxy(RAW_EVERY_LABELS, {
+  get(target, prop: string) {
+    if (typeof prop === "string") {
+      if (prop in target) return target[prop];
+      return formatEveryLabel(prop);
+    }
+    return undefined;
+  },
+});
 
-const localToday = () => {
+export const localToday = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
@@ -289,10 +373,10 @@ const localToday = () => {
  *  last day). `upToToday`: on period by period until it is today or later, the charge still to come
  *  (owner, 10-03: "changing the frequency doesnt change the next charge date"). */
 export function nextChargeAfter(from: string, every: Every, upToToday = false, today = localToday()): string {
-  const step = EVERY_MONTHS[every];
-  let next = addMonthsISO(from, step);
-  // From the charge's own day each time, so a 31st stays a 31st where the month has one.
-  for (let k = 2; upToToday && next < today && k < 1200; k++) next = addMonthsISO(from, k * step);
+  let next = advancePeriodISO(from, every, 1);
+  for (let k = 2; upToToday && next < today && k < 1200; k++) {
+    next = advancePeriodISO(from, every, k);
+  }
   return next;
 }
 
