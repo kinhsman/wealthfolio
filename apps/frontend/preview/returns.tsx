@@ -1,5 +1,5 @@
 // money-hub patch: the Returns timeline with fixture data, for a picture before shipping (vite.preview.config.ts).
-// ?view=page|window|google, ?id=r9 (the window's return), ?theme=light|dark, ?skin=meadow|bronze, ?emails=off,
+// ?view=page|window|google|alerts, ?id=r9 (the window's return), ?theme=light|dark, ?skin=meadow|bronze, ?emails=off,
 // ?side=244 (the app's sidebar beside the page). The fixture is sample returns at the owner's real stores with
 // the steps the money-hub service makes from them (preview/returns-steps.fixture.json, not committed).
 import React from "react";
@@ -20,6 +20,7 @@ import {
   type ReturnsView,
 } from "../src/features/spending/lib/returns";
 import SpendingReturnsPage from "../src/features/spending/pages/spending-returns-page";
+import AlertsSettingsPage from "../src/pages/settings/alerts/alerts-page";
 import GoogleSettingsPage from "../src/pages/settings/google/google-page";
 import { QueryKeys } from "../src/lib/query-keys";
 import fixture from "./returns-steps.fixture.json";
@@ -98,6 +99,9 @@ window.fetch = (input, init) => {
     });
   }
   if (url.includes("/candidates")) return json(fixture.moneyIn);
+  if (url.startsWith("/api/money-hub/alerts")) return json({ discord: { on: true, shown: "…Ux9tq" }, ntfy: { on: true, server: "https://ntfy.sh", topic: "money", hasToken: false, priority: 4 }, last: null });
+  // Anything else the helper serves is not in this preview: an error, so those cards stay hidden.
+  if (url.startsWith("/api/money-hub/")) return Promise.resolve(new Response(JSON.stringify({ error: "Not in the preview" }), { status: 503, headers: { "Content-Type": "application/json" } }));
   return realFetch(input, init);
 };
 
@@ -127,9 +131,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           >
             <div
               style={{ marginLeft: Number(params.get("side") || 0) }}
-              className={view === "google" ? "mx-auto max-w-3xl p-6" : undefined}
+              className={view === "google" || view === "alerts" ? "mx-auto max-w-3xl p-6" : undefined}
             >
-              {view === "google" ? <GoogleSettingsPage /> : <SpendingReturnsPage />}
+              {view === "google" ? <GoogleSettingsPage /> : view === "alerts" ? <AlertsSettingsPage /> : <SpendingReturnsPage />}
             </div>
             <TrackReturnHost />
           </MemoryRouter>

@@ -7,7 +7,8 @@ import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export type ReturnStatus = "waiting" | "part" | "late" | "back" | "settled";
-export type ReturnAlertKind = "arrived" | "possible" | "late";
+/** The refund's three, then the store's emails (owner, 10-03): a step it moved, and the drop-off reminder. */
+export type ReturnAlertKind = "arrived" | "possible" | "late" | "step" | "dropoff";
 
 /** Money in that is (or could be) a return's refund. */
 export interface RefundRow {
@@ -238,6 +239,8 @@ export const RETURN_ALERT_LABELS: Record<ReturnAlertKind, { title: string; text:
   arrived: { title: "Refund landed", text: "The money for a return came back and was matched on its own." },
   possible: { title: "Is this your refund?", text: "Money came in that could be it, for you to say yes or no." },
   late: { title: "Refund is late", text: "Nothing by the day you expected it, then once a week until it comes." },
+  step: { title: "Return updates", text: "The store accepted it, it is on its way back, the store got it, or sent the refund." },
+  dropoff: { title: "Drop-off reminder", text: "3 days before the store's last day to drop it off, if it has not seen it yet." },
 };
 
 /** How long a store may take, for the picker. */
