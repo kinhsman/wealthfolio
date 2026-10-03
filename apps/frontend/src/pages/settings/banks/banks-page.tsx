@@ -6,6 +6,7 @@
 // pages do not allow Plaid's script), and each account switched on becomes a Cash or
 // Credit Card account here whose transactions are imported and kept current.
 import { useEffect, useState } from "react";
+import { useAmountFormatting } from "@wealthfolio/ui";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
@@ -56,8 +57,6 @@ const api = {
     call<BanksStatus>("PUT", `/accounts/${encodeURIComponent(item)}/${encodeURIComponent(id)}/name`, { name }),
 };
 
-const money = (n: number | null | undefined, ccy = "USD") =>
-  n == null ? "" : n.toLocaleString("en-US", { style: "currency", currency: ccy, maximumFractionDigits: 2 });
 const monthYear = (ymd?: string | null) =>
   ymd ? new Date(`${ymd}T12:00:00`).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "";
 const when = (iso?: string | null) => {
@@ -134,6 +133,9 @@ function InlineName({ value, fallback, disabled, onSave, className = "" }: {
 }
 
 export default function BanksSettingsPage() {
+  // Balances through the sidebar's USD / VND switch.
+  const { formatAmount } = useAmountFormatting();
+  const money = (n: number | null | undefined, ccy = "USD") => (n == null ? "" : formatAmount(n, ccy));
   const [status, setStatus] = useState<BanksStatus | null>(null);
   const [loadError, setLoadError] = useState("");
   const [clientId, setClientId] = useState("");

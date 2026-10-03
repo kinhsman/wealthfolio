@@ -30,6 +30,7 @@ import {
   Switch,
   useAmountFormatting,
   useDateFormatting,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 import { Badge } from "@wealthfolio/ui/components/ui/badge";
 import { Button } from "@wealthfolio/ui/components/ui/button";
@@ -450,7 +451,7 @@ function SymbolMappingRow({
   );
 }
 
-export function AssetEditSheet({
+function AssetEditSheetOwn({
   asset,
   latestQuote,
   open,
@@ -1433,3 +1434,13 @@ function ClassificationSkeleton() {
 }
 
 export default AssetEditSheet;
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export function AssetEditSheet(props: Parameters<typeof AssetEditSheetOwn>[0]) {
+  return (
+    <NativeAmounts>
+      <AssetEditSheetOwn {...props} />
+    </NativeAmounts>
+  );
+}

@@ -3,16 +3,17 @@
 // window, the order in full. Amazon's newer emails name only the kind of thing bought, so the order's
 // own page on Amazon is one click away.
 import { Icons } from "@wealthfolio/ui";
+import { useUsd } from "@/lib/app-currency";
 import { Popover, PopoverContent, PopoverTrigger } from "@wealthfolio/ui/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { amazonReturnState, amazonSummary, storeName, type AmazonLink } from "../lib/amazon";
 
 const day = (iso: string | null) =>
   iso ? new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "";
-const usd = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /** The order: what was in it, when, any return, and the link to Amazon. */
 export function AmazonOrderDetails({ link, className }: { link: AmazonLink; className?: string }) {
+  const usd = useUsd();
   return (
     <div className={cn("space-y-2.5 text-xs", className)}>
       <div className="flex items-center gap-2">

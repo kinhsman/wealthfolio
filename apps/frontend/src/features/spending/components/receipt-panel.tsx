@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Button, Icons } from "@wealthfolio/ui";
+import { useUsd } from "@/lib/app-currency";
 import { cn } from "@/lib/utils";
 
 import {
@@ -30,7 +31,9 @@ import {
   type ReceiptEdit,
 } from "../lib/receipts";
 
-const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+// Kept in dollars where amounts are typed (the editor) and in toasts; elsewhere the app's USD / VND switch
+// applies (useUsd).
+const usdNative = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const day = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const errorText = (e: unknown) => (e as Error)?.message ?? String(e);
 
@@ -96,13 +99,13 @@ function CategorySelect({
 
 /** What happened, in a toast: where it was filed, or what it waits for. */
 export function receiptToast(r: ReceiptAnswer) {
-  const name = `${storeName(r.store)}${r.total != null ? `, ${usd(r.total)}` : ""}`;
+  const name = `${storeName(r.store)}${r.total != null ? `, ${usdNative(r.total)}` : ""}`;
   if (r.duplicate) {
     toast.message(`Already added: ${name}`, { description: `This receipt${r.date ? ` from ${day(r.date)}` : ""} was snapped before, so nothing new was added.` });
     return;
   }
   if (r.status === "filed") {
-    const parts = receiptSplit(r).map((l) => `${shortCategory(r.categories, l.categoryId)} ${usd(l.amount)}`);
+    const parts = receiptSplit(r).map((l) => `${shortCategory(r.categories, l.categoryId)} ${usdNative(l.amount)}`);
     toast.success(name, { description: parts.join(" · ") });
   } else if (r.status === "waiting") toast.success(name, { description: "Read. It files itself when the card charge comes in." });
   else if (r.status === "failed") toast.error(r.error || "The receipt could not be read.");
@@ -306,6 +309,7 @@ export function ReceiptDetails({
   showHead?: boolean;
   className?: string;
 }) {
+  const usd = useUsd();
   const qc = useQueryClient();
   const [busy, setBusy] = useState<string | null>(null);
   const [sure, setSure] = useState(false);
@@ -676,8 +680,8 @@ function ReceiptEditor({
           Add a line
         </button>
         <span className={cn("tabular-nums", off ? "text-[var(--m-warn)]" : "text-muted-foreground")}>
-          Lines and tax {usd(sum)}
-          {!Number.isNaN(totalN) ? ` of ${usd(totalN)}` : ""}
+          Lines and tax {usdNative(sum)}
+          {!Number.isNaN(totalN) ? ` of ${usdNative(totalN)}` : ""}
         </span>
         <span className="flex-1" />
         <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={saving} onClick={onCancel}>
@@ -694,6 +698,7 @@ function ReceiptEditor({
 
 /** The charges a receipt may be for, most likely first; a click files the receipt on that one. */
 function ChargePicker({ receipt: r, busy, onPick }: { receipt: Receipt; busy: boolean; onPick: (c: ChargeChoice) => void }) {
+  const usd = useUsd();
   const { data, isLoading, isError, error } = useChargeChoices(r.id, true);
   if (isLoading) {
     return (

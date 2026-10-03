@@ -11,6 +11,7 @@ import {
   FormMessage,
   MoneyInput,
   useAmountFormatting,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 import { AnimatedToggleGroup } from "@wealthfolio/ui/components/ui/animated-toggle-group";
 import { Button } from "@wealthfolio/ui/components/ui/button";
@@ -347,7 +348,7 @@ interface TransferFormProps {
   assetCurrency?: string;
 }
 
-export function TransferForm({
+function TransferFormOwn({
   accounts,
   defaultValues,
   onSubmit,
@@ -958,5 +959,15 @@ export function TransferForm({
         </div>
       </form>
     </FormProvider>
+  );
+}
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export function TransferForm(props: Parameters<typeof TransferFormOwn>[0]) {
+  return (
+    <NativeAmounts>
+      <TransferFormOwn {...props} />
+    </NativeAmounts>
   );
 }

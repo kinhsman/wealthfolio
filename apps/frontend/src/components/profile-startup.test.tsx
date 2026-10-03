@@ -25,6 +25,8 @@ vi.mock("@/features/profiles/session", () => ({
   installProfileSession: () => true,
   profileScope: () => "test-scope",
   revokeProfileSession: vi.fn(),
+  selectedProfileId: () => undefined,
+  usesLegacyPreferences: () => false,
 }));
 vi.mock("@/features/profiles/auth-bridge", () => ({ isNativeAuthPending: () => false }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
@@ -32,6 +34,7 @@ vi.mock("@/adapters", () => ({
   isWeb: false,
   isDesktop: false,
   getSettings: () => mocks.settings(),
+  getExchangeRates: () => Promise.resolve([]),
   logger: { error: vi.fn() },
 }));
 vi.mock("../adapters/tauri/settings", () => ({

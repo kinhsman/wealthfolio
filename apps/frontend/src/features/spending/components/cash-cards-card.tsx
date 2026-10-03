@@ -10,7 +10,7 @@ import { useAccounts } from "@/hooks/use-accounts";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { accountLogoUrl } from "@/lib/account-logo";
 import { cn } from "@/lib/utils";
-import { Icons, PrivacyAmount, Skeleton, useBalancePrivacy } from "@wealthfolio/ui";
+import { Icons, PrivacyAmount, Skeleton, useAmountFormatting, useBalancePrivacy } from "@wealthfolio/ui";
 
 import {
   HIGH_USE,
@@ -564,6 +564,7 @@ function CardRow({
   currency: string;
 }) {
   const { isBalanceHidden } = useBalancePrivacy();
+  const formatting = useAmountFormatting();
   const share = usedShare(c);
   const high = share != null && share >= HIGH_USE;
   const credit = c.owed < 0;
@@ -572,18 +573,9 @@ function CardRow({
   const pct = (x: number) => (limit > 0 ? Math.min(100, Math.max(0, (x / limit) * 100)) : 0);
   const owedW = pct(c.owed);
   const pendingW = Math.min(100 - owedW, pct(c.pending));
-  const whole = (v: number) =>
-    isBalanceHidden
-      ? "••••"
-      : new Intl.NumberFormat("en-US", {
-          style: "currency",
-          currency,
-          maximumFractionDigits: 0,
-        }).format(v);
-  const cents = (v: number) =>
-    isBalanceHidden
-      ? "••••"
-      : new Intl.NumberFormat("en-US", { style: "currency", currency }).format(v);
+  // The app's formatters, so the sidebar's USD / VND switch reaches these too.
+  const whole = (v: number) => (isBalanceHidden ? "••••" : formatting.formatRoundedAmount(v, currency));
+  const cents = (v: number) => (isBalanceHidden ? "••••" : formatting.formatAmount(v, currency));
   // The full words: "8.6% of $22,500, + $568.43 pending". Shown on a phone, and as the row's tooltip on
   // desktop, where the row keeps to one line.
   const detail = [

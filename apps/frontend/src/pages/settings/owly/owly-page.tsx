@@ -4,6 +4,7 @@
 // neither spending nor income. The work runs in the money-hub service at
 // /api/money-hub/owly (server/drive-backup/lib/owly.js in the money-hub repo).
 import { useEffect, useState } from "react";
+import { useUsd, useUsdWhole } from "@/lib/app-currency";
 import { Avatar, AvatarFallback, AvatarImage } from "@wealthfolio/ui/components/ui/avatar";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import {
@@ -50,8 +51,6 @@ const api = {
   sync: () => call<OwlyStatus>("POST", "/sync", {}),
 };
 
-const usd = (n: number | null | undefined, digits = 2) =>
-  n == null ? "" : n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: digits, maximumFractionDigits: digits });
 const day = (ymd?: string | null) => {
   if (!ymd) return "";
   const d = new Date(`${ymd}T12:00:00`);
@@ -108,6 +107,10 @@ const NOT_FRIEND = "none";
 const FRIEND_NOT_IN_OWLY = "friend";
 
 export default function OwlySettingsPage() {
+  // Through the sidebar's USD / VND switch.
+  const usdCents = useUsd();
+  const usdWhole = useUsdWhole();
+  const usd = (n: number | null | undefined, digits = 2) => (n == null ? "" : digits === 0 ? usdWhole(n) : usdCents(n));
   const [status, setStatus] = useState<OwlyStatus | null>(null);
   const [loadError, setLoadError] = useState("");
   const [key, setKey] = useState("");

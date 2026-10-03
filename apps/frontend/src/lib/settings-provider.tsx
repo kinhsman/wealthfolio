@@ -12,6 +12,7 @@ import i18n, { LANGUAGE_STORAGE_KEY } from "@/i18n/i18n";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { Settings, SettingsContextType } from "@/lib/types";
 import { FormattingProvider, resolveFormattingLocale } from "@wealthfolio/ui";
+import { useAppCurrencySetting } from "@/lib/app-currency";
 
 interface ExtendedSettingsContextType extends SettingsContextType {
   updateSettings: (
@@ -130,6 +131,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const uiLocale = settings ? settings.language : DEFAULT_LOCALE;
   const resolvedFormattingLocale = resolveFormattingLocale(formattingRegion);
   const formattingTimezone = settings?.timezone || undefined;
+  // money-hub patch: the sidebar's USD / VND switch, applied to every amount (lib/app-currency.ts).
+  const displayCurrency = useAppCurrencySetting(settings?.baseCurrency);
 
   useEffect(() => {
     setAddonLocalizationSnapshot({
@@ -176,6 +179,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         locale={formattingRegion}
         uiLocale={uiLocale}
         timezone={formattingTimezone}
+        displayCurrency={displayCurrency}
       >
         {children}
       </FormattingProvider>

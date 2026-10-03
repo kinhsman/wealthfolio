@@ -42,6 +42,7 @@ import {
   PrivacyAmount,
   useIsMobile,
   useNumberFormatting,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
@@ -78,7 +79,7 @@ function currentMonthKey() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export function BudgetEditor({ mode, periodKey }: BudgetEditorProps) {
+function BudgetEditorOwn({ mode, periodKey }: BudgetEditorProps) {
   const { t } = useTranslation();
   const { data: budget, isLoading: budgetLoading, error, refetch } = useBudget(periodKey);
   const mutations = useBudgetMutations(periodKey);
@@ -1858,4 +1859,14 @@ function normalizeBalance(value: string) {
 function safePercent(value: number, total: number) {
   if (total <= 0) return 0;
   return value / total;
+}
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export function BudgetEditor(props: Parameters<typeof BudgetEditorOwn>[0]) {
+  return (
+    <NativeAmounts>
+      <BudgetEditorOwn {...props} />
+    </NativeAmounts>
+  );
 }

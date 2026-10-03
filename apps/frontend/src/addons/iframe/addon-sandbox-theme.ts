@@ -37,6 +37,13 @@ export function collectAddonThemeSnapshot(): AddonThemeSnapshot {
     }
     cssVariables[`--mh-skin-${mode}`] = skin;
   }
+  // money-hub patch: the sidebar's USD / VND switch and the dong rate (lib/app-currency.ts), so the Rental
+  // add-on shows its amounts in the same currency as the app (owner, 10-03).
+  const dataset = document.documentElement.dataset;
+  if (dataset?.displayCurrency && dataset?.displayRate) {
+    cssVariables["--mh-currency"] = dataset.displayCurrency;
+    cssVariables["--mh-currency-rate"] = dataset.displayRate;
+  }
 
   return {
     backgroundColor: bodyStyle.backgroundColor || rootStyle.backgroundColor || "transparent",

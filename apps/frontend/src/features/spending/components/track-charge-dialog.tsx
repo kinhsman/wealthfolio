@@ -23,6 +23,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 
 import { useAccounts } from "@/hooks/use-accounts";
@@ -52,7 +53,7 @@ const GROUP_LABEL: Record<StreamGroup, string> = { subscriptions: "Subscriptions
 const caps = "text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.08em]";
 const errorText = (e: unknown) => (e as Error)?.message ?? String(e);
 
-export function TrackChargeHost() {
+function TrackChargeHostOwn() {
   useCategoryGroups(); // keeps each category's Subscriptions & bills choice at hand (lib/category-groups.ts)
   const charge = useSyncExternalStore(trackChargeStore.subscribe, trackChargeStore.get);
   if (!charge) return null;
@@ -374,5 +375,15 @@ function Choose({
         </Button>
       </DialogFooter>
     </>
+  );
+}
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export function TrackChargeHost() {
+  return (
+    <NativeAmounts>
+      <TrackChargeHostOwn />
+    </NativeAmounts>
   );
 }

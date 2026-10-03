@@ -13,6 +13,7 @@ import {
   useDataGrid,
   useDateFormatting,
   useNumberFormatting,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 import { format } from "date-fns";
 import { useCallback, useMemo, useState } from "react";
@@ -83,7 +84,7 @@ const createDraftEntry = (currency: string): QuoteEntry => ({
 // Pagination constants
 const MOBILE_PAGE_SIZE = 20;
 
-export function QuoteHistoryDataGrid({
+function QuoteHistoryDataGridOwn({
   data,
   assetId,
   currency,
@@ -680,3 +681,13 @@ export function QuoteHistoryDataGrid({
 }
 
 export default QuoteHistoryDataGrid;
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export function QuoteHistoryDataGrid(props: Parameters<typeof QuoteHistoryDataGridOwn>[0]) {
+  return (
+    <NativeAmounts>
+      <QuoteHistoryDataGridOwn {...props} />
+    </NativeAmounts>
+  );
+}

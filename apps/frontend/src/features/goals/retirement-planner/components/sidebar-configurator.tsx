@@ -23,6 +23,7 @@ import {
   Input,
   useAmountFormatting,
   useNumberFormatting,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@wealthfolio/ui/components/ui/tooltip";
@@ -389,7 +390,7 @@ function SidebarCard({
 }
 
 /** Complete sidebar configurator — each section is its own card */
-export function SidebarConfigurator({
+function SidebarConfiguratorOwn({
   plan,
   currency,
   plannerMode,
@@ -1858,5 +1859,15 @@ export function SidebarConfigurator({
         />
       )}
     </div>
+  );
+}
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export function SidebarConfigurator(props: Parameters<typeof SidebarConfiguratorOwn>[0]) {
+  return (
+    <NativeAmounts>
+      <SidebarConfiguratorOwn {...props} />
+    </NativeAmounts>
   );
 }

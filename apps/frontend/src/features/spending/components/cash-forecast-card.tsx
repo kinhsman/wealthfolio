@@ -8,7 +8,7 @@ import { useAccounts } from "@/hooks/use-accounts";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
-import { Icons, PrivacyAmount, useBalancePrivacy } from "@wealthfolio/ui";
+import { Icons, PrivacyAmount, useAmountFormatting, useBalancePrivacy, type AmountFormatting } from "@wealthfolio/ui";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import {
   FORECAST_HORIZONS,
@@ -134,13 +134,15 @@ function Verdict({ f, currency, under }: { f: CashForecast; currency: string; un
   );
 }
 
-function money(v: number, currency: string, hidden: boolean, whole = false) {
-  if (hidden) return "••••";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: whole ? 0 : 2, minimumFractionDigits: whole ? 0 : 2 }).format(v);
+// Through the app's formatters, so the sidebar's USD / VND switch reaches the chart too.
+function moneyWith(fmt: AmountFormatting) {
+  return (v: number, currency: string, hidden: boolean, whole = false) =>
+    hidden ? "••••" : whole ? fmt.formatRoundedAmount(v, currency) : fmt.formatAmount(v, currency);
 }
 
 function Chart({ f, currency, isMobile }: { f: CashForecast; currency: string; isMobile: boolean }) {
   const { isBalanceHidden } = useBalancePrivacy();
+  const money = moneyWith(useAmountFormatting());
   const { data: merchants } = useMerchants();
   const { accounts } = useAccounts({ filterActive: false });
   const box = useRef<HTMLDivElement>(null);

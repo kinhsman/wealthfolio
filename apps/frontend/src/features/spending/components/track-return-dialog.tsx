@@ -23,6 +23,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 
 import { useAccounts } from "@/hooks/use-accounts";
@@ -56,7 +57,7 @@ const errorText = (e: unknown) => (e as Error)?.message ?? String(e);
 const today = () => new Date().toLocaleDateString("en-CA");
 const addDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
-export function TrackReturnHost() {
+function TrackReturnHostOwn() {
   const target = useSyncExternalStore(trackReturnStore.subscribe, trackReturnStore.get);
   if (!target) return null;
   return <TrackReturnDialog key={target.returnId ?? target.purchase?.id ?? "pick"} target={target} onClose={trackReturnStore.close} />;
@@ -453,5 +454,15 @@ function PickRefund({ item, currency, busy, accountName, onPick }: { item: Retur
         </MoneyInRow>
       ))}
     </div>
+  );
+}
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export function TrackReturnHost() {
+  return (
+    <NativeAmounts>
+      <TrackReturnHostOwn />
+    </NativeAmounts>
   );
 }

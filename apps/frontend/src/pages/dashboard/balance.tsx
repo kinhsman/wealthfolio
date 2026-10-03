@@ -1,6 +1,11 @@
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 import NumberFlow from "@number-flow/react";
-import { useAmountFormatting, useLocalizationSettings, useNumberFormatting } from "@wealthfolio/ui";
+import {
+  useAmountFormatting,
+  useDisplayCurrency,
+  useLocalizationSettings,
+  useNumberFormatting,
+} from "@wealthfolio/ui";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import { useMemo } from "react";
 
@@ -18,15 +23,20 @@ interface BalanceProps {
 }
 
 const Balance: React.FC<BalanceProps> = ({
-  targetValue,
-  currency = "USD",
+  targetValue: ownValue,
+  currency: ownCurrency = "USD",
   displayCurrency = false,
-  displayDecimal = true,
+  displayDecimal: ownDisplayDecimal = true,
   compact = false,
   isLoading = false,
   isUnavailable = false,
 }) => {
   const amountFormatting = useAmountFormatting();
+  // money-hub patch: in the sidebar's currency (USD or VND), with that currency's digits (none for VND).
+  const { value: targetValue, currency } = useDisplayCurrency().convert(ownValue, ownCurrency);
+  const displayDecimal =
+    ownDisplayDecimal &&
+    !(currency !== ownCurrency && amountFormatting.currencyFractionDigits(currency) === 0);
   const numberFormatting = useNumberFormatting();
   const { locale } = useLocalizationSettings();
 

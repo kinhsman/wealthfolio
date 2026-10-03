@@ -16,6 +16,7 @@ import {
   SheetHeader,
   SheetTitle,
   useAmountFormatting,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 
 import {
@@ -102,7 +103,7 @@ function linePercentage(lineCents: number, totalCents: number) {
   return Math.round((Math.max(lineCents, 0) / totalCents) * 100);
 }
 
-export function SplitTransactionSheet({
+function SplitTransactionSheetOwn({
   open,
   row,
   categories,
@@ -500,5 +501,15 @@ export function SplitTransactionSheet({
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  );
+}
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export function SplitTransactionSheet(props: Parameters<typeof SplitTransactionSheetOwn>[0]) {
+  return (
+    <NativeAmounts>
+      <SplitTransactionSheetOwn {...props} />
+    </NativeAmounts>
   );
 }

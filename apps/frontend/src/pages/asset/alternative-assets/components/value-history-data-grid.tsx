@@ -19,6 +19,7 @@ import {
   useAmountFormatting,
   useDataGrid,
   useDateFormatting,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -133,7 +134,7 @@ const createDraftEntry = (currency: string): ValueHistoryEntry => ({
   isNew: true,
 });
 
-export function ValueHistoryDataGrid({
+function ValueHistoryDataGridOwn({
   data,
   assetId,
   currency,
@@ -770,3 +771,13 @@ export function ValueHistoryDataGrid({
 }
 
 export default ValueHistoryDataGrid;
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export function ValueHistoryDataGrid(props: Parameters<typeof ValueHistoryDataGridOwn>[0]) {
+  return (
+    <NativeAmounts>
+      <ValueHistoryDataGridOwn {...props} />
+    </NativeAmounts>
+  );
+}

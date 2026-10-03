@@ -13,7 +13,7 @@ import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { cn } from "@/lib/utils";
-import { Icons, Page, PageContent, PageHeader, PrivacyAmount, useBalancePrivacy } from "@wealthfolio/ui";
+import { Icons, Page, PageContent, PageHeader, PrivacyAmount, useAmountFormatting, useBalancePrivacy } from "@wealthfolio/ui";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import { searchCashActivities } from "../adapters/cash-activities";
 import { CashActivityForm } from "../components/cash-activity-form";
@@ -234,7 +234,8 @@ function Bars({ buckets, grain, picked, onPick, isMobile }: { buckets: ReturnTyp
   const { isBalanceHidden } = useBalancePrivacy();
   const [hover, setHover] = useState<string | null>(null);
   const max = Math.max(1, ...buckets.map((b) => b.spent));
-  const money = (v: number) => (isBalanceHidden ? "••••" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v));
+  const { formatRoundedAmount } = useAmountFormatting();
+  const money = (v: number) => (isBalanceHidden ? "••••" : formatRoundedAmount(v, "USD"));
   const h = buckets.find((b) => b.key === hover);
   const every = buckets.length > 14 ? Math.ceil(buckets.length / (isMobile ? 4 : 8)) : isMobile && buckets.length > 6 ? 2 : 1;
   return (

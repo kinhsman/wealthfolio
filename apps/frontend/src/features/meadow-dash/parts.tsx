@@ -16,7 +16,7 @@ import {
 import { useDashboardSkins } from "@/features/spending/lib/dashboard-skin";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 import { cn } from "@/lib/utils";
-import { Icons, useAmountFormatting } from "@wealthfolio/ui";
+import { Icons, useAmountFormatting, useDisplayCurrency } from "@wealthfolio/ui";
 
 /** The tab's page: Meadow (or Bronze) ground, the same paddings and gaps as the Spending tab. */
 export function MeadowTab({ children, className }: { children: ReactNode; className?: string }) {
@@ -61,10 +61,14 @@ export function Hero({
 }
 
 /** Money as a figure: the app's currency format, hidden like every amount when privacy is on. */
-export function useMoney(currency: string) {
+export function useMoney(ownCurrency: string) {
   const { isBalanceHidden } = useBalancePrivacy();
   const formatting = useAmountFormatting();
+  // money-hub patch: in the sidebar's currency (USD or VND) at the app's rate; dong has no cents.
+  const display = useDisplayCurrency();
   return useMemo(() => {
+    const { value: rate, currency } = display.convert(1, ownCurrency);
+    const digits = Math.min(2, formatting.currencyFractionDigits(currency));
     const whole = new Intl.NumberFormat(undefined, {
       style: "currency",
       currency,
@@ -73,19 +77,19 @@ export function useMoney(currency: string) {
     const cents = new Intl.NumberFormat(undefined, {
       style: "currency",
       currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
     });
     const hide = (s: string) => (isBalanceHidden ? "••••" : s);
     return {
       hidden: isBalanceHidden,
-      whole: (v: number) => hide(whole.format(v)),
-      cents: (v: number) => hide(cents.format(v)),
+      whole: (v: number) => hide(whole.format(v * rate)),
+      cents: (v: number) => hide(cents.format(v * rate)),
       /** The app's compact amount ($17K, $1.22M), the same as the stock tabs show. */
-      short: (v: number) => hide(formatting.formatCompactAmount(v, currency, true, "narrowSymbol")),
+      short: (v: number) => hide(formatting.formatCompactAmount(v, ownCurrency, true, "narrowSymbol")),
       /** "$537,804" and ".21" apart, so the cents can be quieter. */
       split: (v: number) => {
-        const s = cents.format(v);
+        const s = cents.format(v * rate);
         const dot = s.lastIndexOf(".");
         return isBalanceHidden
           ? { main: "$•••••••", rest: "" }
@@ -94,7 +98,7 @@ export function useMoney(currency: string) {
             : { main: s.slice(0, dot), rest: s.slice(dot) };
       },
     };
-  }, [currency, isBalanceHidden, formatting]);
+  }, [ownCurrency, isBalanceHidden, formatting, display]);
 }
 
 /** A change chip: green up, red down (Bronze's data colours; Meadow's forest and red). */

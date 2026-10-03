@@ -39,6 +39,7 @@ import {
   useAmountFormatting,
   useDateFormatting,
   useNumberFormatting,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 
 declare module "@tanstack/react-table" {
@@ -74,7 +75,7 @@ const emptyQuote: Partial<Quote> = {
   adjclose: 0,
 };
 
-export const QuoteHistoryTable: React.FC<QuoteHistoryTableProps> = ({
+const QuoteHistoryTableOwn: React.FC<QuoteHistoryTableProps> = ({
   data,
   isManualDataSource = false,
   onSaveQuote,
@@ -589,5 +590,13 @@ export const QuoteHistoryTable: React.FC<QuoteHistoryTableProps> = ({
     </div>
   );
 };
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export const QuoteHistoryTable: React.FC<QuoteHistoryTableProps> = (props) => (
+  <NativeAmounts>
+    <QuoteHistoryTableOwn {...props} />
+  </NativeAmounts>
+);
 
 export default QuoteHistoryTable;

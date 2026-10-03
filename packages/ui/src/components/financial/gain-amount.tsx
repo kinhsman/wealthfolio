@@ -3,7 +3,12 @@ import type { Format } from "@number-flow/react";
 import { useBalancePrivacy } from "../../hooks/use-balance-privacy";
 import { getQuoteUnitCurrency } from "../../lib/currencies";
 import { cn } from "../../lib/utils";
-import { useLocalizationSettings, useNumberFormatting } from "../formatting-provider";
+import {
+  useAmountFormatting,
+  useDisplayCurrency,
+  useLocalizationSettings,
+  useNumberFormatting,
+} from "../formatting-provider";
 
 const isValidCurrencyCode = (code: string) => /^[A-Za-z]{3}$/.test(code);
 
@@ -23,8 +28,8 @@ interface GainAmountProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export function GainAmount({
-  value,
-  currency,
+  value: ownValue,
+  currency: ownCurrency,
   displayCurrency = true,
   className,
   displayDecimal = true,
@@ -35,10 +40,15 @@ export function GainAmount({
   const { isBalanceHidden } = useBalancePrivacy();
   const { locale } = useLocalizationSettings();
   const { formatDecimal } = useNumberFormatting();
+  const { currencyFractionDigits } = useAmountFormatting();
+  // money-hub patch: in the app-wide display currency (USD or VND), like every other amount.
+  const { value, currency } = useDisplayCurrency().convert(ownValue, ownCurrency);
+  const converted = currency !== ownCurrency;
   const quoteUnit = getQuoteUnitCurrency(currency);
   const validCurrency = !quoteUnit && isValidCurrencyCode(currency);
   const useCurrencyStyle = displayCurrency && validCurrency;
-  const fractionDigits = displayDecimal ? 2 : 0;
+  // A converted amount takes its new currency's digits (none for VND).
+  const fractionDigits = displayDecimal && !(converted && currencyFractionDigits(currency) === 0) ? 2 : 0;
   const displayValue = normalizeDisplayAmount(value, fractionDigits);
 
   // Dynamic import for NumberFlow to avoid SSR issues

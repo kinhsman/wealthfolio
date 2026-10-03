@@ -7,7 +7,7 @@ import { Link } from "react-router-dom";
 import { DashboardCard } from "@/components/dashboard-card";
 import { useAccounts } from "@/hooks/use-accounts";
 import { accountLogoUrl } from "@/lib/account-logo";
-import { PrivacyAmount, useBalancePrivacy } from "@wealthfolio/ui";
+import { PrivacyAmount, useAmountFormatting, useBalancePrivacy } from "@wealthfolio/ui";
 
 import {
   HIGH_USE,
@@ -197,14 +197,7 @@ function UsageBar({ c, color, darkColor }: { c: CreditCard; color: string; darkC
 /** A limit or what is left of it, in whole dollars ("$22,500"). */
 function WholeAmount({ value, currency }: { value: number; currency: string }) {
   const { isBalanceHidden } = useBalancePrivacy();
+  const { formatRoundedAmount } = useAmountFormatting();
   if (isBalanceHidden) return <span>••••</span>;
-  return (
-    <span>
-      {new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency,
-        maximumFractionDigits: 0,
-      }).format(value)}
-    </span>
-  );
+  return <span>{formatRoundedAmount(value, currency)}</span>;
 }

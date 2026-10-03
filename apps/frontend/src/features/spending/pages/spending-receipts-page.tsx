@@ -9,13 +9,13 @@ import { DashboardCard } from "@/components/dashboard-card";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
 import { Icons, Page, PageContent, PageHeader } from "@wealthfolio/ui";
+import { useUsd } from "@/lib/app-currency";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 
 import { PasteReceiptButton, ReceiptDetails, SnapReceiptButton, STATE_TONE, usePastedReceipt, useReceiptUpload } from "../components/receipt-panel";
 import { useDashboardSkins } from "../lib/dashboard-skin";
 import { photoUrl, receiptState, storeName, toReview, useReceipts, type Receipt } from "../lib/receipts";
 
-const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const day = (iso: string) =>
   new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
@@ -25,6 +25,7 @@ const RANK: Record<Receipt["status"], number> = { failed: 0, held: 0, unmatched:
 const rankOf = (r: Receipt) => (RANK[r.status] > 0 && toReview(r) ? 1 : RANK[r.status]);
 
 export default function SpendingReceiptsPage() {
+  const usd = useUsd();
   const navigate = useNavigate();
   const isMobile = useIsMobileViewport();
   const skins = useDashboardSkins();

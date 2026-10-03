@@ -5,6 +5,7 @@
 // repo): each account switched on becomes an investment account here whose value is
 // the account's value at every day's close, and today's live value, updated hourly.
 import { useEffect, useState } from "react";
+import { useUsdWhole } from "@/lib/app-currency";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
@@ -46,8 +47,6 @@ const BROKERS: Record<string, string> = {
   vanguard: "Vanguard", etrade: "E*TRADE", webull: "Webull", merrill: "Merrill", tradestation: "TradeStation",
   moomoo: "moomoo", sofi: "SoFi",
 };
-const usd = (n: number | null | undefined) =>
-  n == null ? "" : n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const day = (ymd?: string | null) => {
   if (!ymd) return "";
   const d = new Date(`${ymd}T12:00:00`);
@@ -87,6 +86,9 @@ const field = "h-9 rounded-md border bg-background px-3 text-xs text-foreground 
 type Note = { tone: "ok" | "bad"; text: string };
 
 export default function WheelTradrSettingsPage() {
+  // Whole dollars, through the sidebar's USD / VND switch.
+  const usdWhole = useUsdWhole();
+  const usd = (n: number | null | undefined) => (n == null ? "" : usdWhole(n));
   const [status, setStatus] = useState<WtStatus | null>(null);
   const [loadError, setLoadError] = useState("");
   const [key, setKey] = useState("");

@@ -1,6 +1,7 @@
 import { isWeb } from "@/adapters";
 import { CONNECT_HIDDEN } from "@/lib/money-hub";
 import { NotificationsBell } from "@/features/notifications/notifications-bell";
+import { SidebarCurrencySwitch } from "@/components/currency-switch";
 import { isAppleDevice } from "@/lib/device-utils";
 import { useAuth } from "@/context/auth-context";
 import { ProfileMenu } from "@/features/profiles/profile-menu";
@@ -205,6 +206,8 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
             </div>
 
             <div className={cn("flex shrink-0 flex-col py-2", collapsed ? "px-1" : "px-2")}>
+              {/* money-hub patch: every amount in USD or VND (components/currency-switch.tsx). */}
+              <SidebarCurrencySwitch collapsed={collapsed} rowClassName={cn(ROW, rowAlign(collapsed))} />
               {navigation?.secondary?.map((item) => (
                 <NavItem key={item.title} item={item} collapsed={collapsed} />
               ))}

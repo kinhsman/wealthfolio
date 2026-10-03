@@ -21,6 +21,7 @@ import {
   TooltipContent,
   TooltipTrigger,
   useNumberFormatting,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 import { AnimatedToggleGroup } from "@wealthfolio/ui/components/ui/animated-toggle-group";
 import { Checkbox } from "@wealthfolio/ui/components/ui/checkbox";
@@ -113,7 +114,7 @@ function FmvPerUnitLabel() {
   );
 }
 
-export function MobileDetailsStep({
+function MobileDetailsStepOwn({
   accounts,
   activityType,
   isEditing,
@@ -1247,5 +1248,15 @@ function MobileAccountSheet({ accounts, open, onOpenChange, onSelect }: MobileAc
         </ScrollArea>
       </SheetContent>
     </Sheet>
+  );
+}
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export function MobileDetailsStep(props: Parameters<typeof MobileDetailsStepOwn>[0]) {
+  return (
+    <NativeAmounts>
+      <MobileDetailsStepOwn {...props} />
+    </NativeAmounts>
   );
 }

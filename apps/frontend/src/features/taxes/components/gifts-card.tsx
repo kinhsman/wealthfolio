@@ -10,6 +10,7 @@ import { PhoneFold } from "@/features/spending/components/phone-fold";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
 import { Icons, PrivacyAmount } from "@wealthfolio/ui";
+import { useUsdWhole } from "@/lib/app-currency";
 
 import {
   knownPeople,
@@ -23,7 +24,6 @@ import { Amount, Chip, FIELD, PillButton, Row, TextButton, useTaxAct } from "./p
 
 /** How many wires to sort show before "Show all". */
 const SORT_SHOWN = 5;
-const whole = (n: number) => `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
 function BlockHead({
   label,
@@ -172,6 +172,7 @@ function SortRow({
 }
 
 export function GiftsCard({ view }: { view: TaxesView }) {
+  const whole = useUsdWhole();
   const { busy, run } = useTaxAct();
   const [showIn, setShowIn] = useState(false);
   const [showSorted, setShowSorted] = useState(false);

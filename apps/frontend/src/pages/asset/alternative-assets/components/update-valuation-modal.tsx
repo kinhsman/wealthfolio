@@ -5,6 +5,7 @@ import {
   useAmountFormatting,
   type FormattingApi,
   useDateFormatting,
+  NativeAmounts,
 } from "@wealthfolio/ui";
 import { Button } from "@wealthfolio/ui/components/ui/button";
 import {
@@ -58,7 +59,7 @@ interface UpdateValuationModalProps {
  * Modal for updating the valuation of an alternative asset.
  * Shows current value with last updated date and allows entering a new value.
  */
-export function UpdateValuationModal({
+function UpdateValuationModalOwn({
   open,
   onOpenChange,
   assetId,
@@ -241,4 +242,14 @@ function formatDisplayDate(
   } catch {
     return isoDate;
   }
+}
+
+// money-hub patch: amounts here are typed in their own currency, so every amount in it shows in that currency
+// whatever the sidebar's USD / VND switch says (NativeAmounts, @wealthfolio/ui).
+export function UpdateValuationModal(props: Parameters<typeof UpdateValuationModalOwn>[0]) {
+  return (
+    <NativeAmounts>
+      <UpdateValuationModalOwn {...props} />
+    </NativeAmounts>
+  );
 }

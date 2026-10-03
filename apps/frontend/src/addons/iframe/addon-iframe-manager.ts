@@ -1223,7 +1223,15 @@ export class AddonIframeManager {
     this.themeObserver = new MutationObserver(this.scheduleThemeBroadcast);
     this.themeObserver.observe(document.documentElement, {
       // money-hub patch: the theme picked for each mode lives on <html> too (components/app-skin.tsx)
-      attributeFilter: ["class", "style", "data-light-skin", "data-dark-skin"],
+      attributeFilter: [
+        "class",
+        "style",
+        "data-light-skin",
+        "data-dark-skin",
+        // and the USD / VND switch (lib/app-currency.ts)
+        "data-display-currency",
+        "data-display-rate",
+      ],
       attributes: true,
     });
     this.themeObserver.observe(document.body, {

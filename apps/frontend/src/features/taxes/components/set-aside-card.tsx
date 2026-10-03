@@ -8,7 +8,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { DashboardCard } from "@/components/dashboard-card";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
-import { Icons, PrivacyAmount, useBalancePrivacy } from "@wealthfolio/ui";
+import { Icons, PrivacyAmount, useAmountFormatting, useBalancePrivacy } from "@wealthfolio/ui";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
 import {
@@ -283,16 +283,14 @@ function SetupForm({
 export function SetAsideCard({ view }: { view: TaxesView }) {
   const { busy, run } = useTaxAct();
   const { isBalanceHidden } = useBalancePrivacy();
+  const { formatAmount } = useAmountFormatting();
   const phone = useIsMobileViewport();
   const [editing, setEditing] = useState(false);
   const [open, setOpen] = useState(false);
   if (view.needs.includes("table")) return null;
 
   const e = view.estimate;
-  const money = (n: number) =>
-    isBalanceHidden
-      ? "••••"
-      : n.toLocaleString("en-US", { style: "currency", currency: view.currency });
+  const money = (n: number) => (isBalanceHidden ? "••••" : formatAmount(n, view.currency));
   const save = async (patch: Parameters<typeof taxesApi.setSetup>[1]) => {
     if (await run("setup", () => taxesApi.setSetup(view.year, patch))) setEditing(false);
   };

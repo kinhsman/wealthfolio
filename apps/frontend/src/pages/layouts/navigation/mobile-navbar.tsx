@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { type NavLink, type NavigationProps, isPathActive } from "./app-navigation";
 import { resolveNavigationIcon } from "./navigation-icons";
+import { CurrencyPills } from "@/components/currency-switch";
 
 interface MobileNavBarProps {
   navigation: NavigationProps;
@@ -335,6 +336,11 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                     </button>
                   </div>
                 )}
+                {/* money-hub patch: the sidebar's USD / VND switch (components/currency-switch.tsx). */}
+                <div className="border-border/70 flex h-16 items-center justify-between gap-4 border-b">
+                  <span className="text-lg font-semibold">Currency</span>
+                  <CurrencyPills size="sheet" />
+                </div>
                 <div className="divide-border/70 divide-y">
                   {standardMenuItems.map((item) => {
                     const isActive = isPathActive(location.pathname, item.href);

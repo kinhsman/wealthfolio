@@ -1,6 +1,6 @@
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 import { cn } from "@/lib/utils";
-import { AmountDisplay, Card, Skeleton, useNumberFormatting } from "@wealthfolio/ui";
+import { AmountDisplay, Card, Skeleton, useDisplayCurrency, useNumberFormatting } from "@wealthfolio/ui";
 import { useTranslation } from "react-i18next";
 import { paletteColor, type ValueStripData } from "./allocation-derivations";
 
@@ -51,6 +51,9 @@ function CurrencyValuePill({
   color: string;
   isHidden: boolean;
 }) {
+  // money-hub patch: the pill names the holdings' currency; when the sidebar shows another one, the amount
+  // carries its own sign ("USD ₫7,795,200,000").
+  const shown = useDisplayCurrency().currency;
   return (
     <span className="bg-muted/45 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5">
       <span className="h-2 w-1 rounded-sm" style={{ background: color }} />
@@ -58,7 +61,7 @@ function CurrencyValuePill({
       <AmountDisplay
         value={value}
         currency={currency}
-        displayCurrency={false}
+        displayCurrency={shown != null && shown !== currency.toUpperCase()}
         isHidden={isHidden}
         className="text-foreground font-semibold tabular-nums"
       />
