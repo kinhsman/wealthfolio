@@ -463,7 +463,8 @@ export function EmailBanksSection() {
       <div className="bg-card rounded-xl border">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="bg-muted flex size-10 shrink-0 items-center justify-center rounded-lg"><Icons.Mail className="text-primary size-5" /></span>
+            {/* Gmail's own logo (owner, 10-02), served from public/ like the ntfy card's. */}
+            <img src="/icons/gmail.png" width={40} height={40} alt="" aria-hidden="true" className="ring-border size-10 shrink-0 rounded-lg ring-1" />
             <div className="min-w-0">
               <div className="text-sm font-semibold">Gmail</div>
               <div className="text-muted-foreground truncate text-xs">Read only<span className="hidden sm:inline">: the money app cannot send, delete or change mail</span></div>
