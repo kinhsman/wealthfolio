@@ -24,6 +24,8 @@ import {
 } from "@wealthfolio/ui/components/ui/dropdown-menu";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
+import { Switch } from "@wealthfolio/ui/components/ui/switch";
+import { isPropertyHolding, isRentalProperty } from "@/lib/rentals";
 import { useMemo, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 
@@ -38,6 +40,10 @@ interface AlternativeHoldingsTableProps {
   onDelete?: (holding: AlternativeAssetHolding) => void;
   onRowClick?: (holding: AlternativeAssetHolding) => void;
   isDeleting?: boolean;
+  /** money-hub: the Rental switch on each property (Assets tab only) */
+  onToggleRental?: (holding: AlternativeAssetHolding, on: boolean) => void;
+  /** money-hub: switches still saving, with the value they are moving to */
+  pendingRental?: Record<string, boolean>;
 }
 
 export function AlternativeHoldingsTable({
@@ -51,6 +57,8 @@ export function AlternativeHoldingsTable({
   onDelete,
   onRowClick,
   isDeleting = false,
+  onToggleRental,
+  pendingRental,
 }: AlternativeHoldingsTableProps) {
   const formatting = useDateFormatting();
   const { t } = useTranslation();
@@ -216,6 +224,31 @@ export function AlternativeHoldingsTable({
         },
         enableSorting: true,
       },
+      // money-hub: a property is a rental while this is on (its Property type is Rental Property)
+      ...(onToggleRental
+        ? [
+            {
+              id: "rental",
+              header: () => <div className="text-center">Rental</div>,
+              cell: ({ row }) => {
+                const holding = row.original;
+                if (!isPropertyHolding(holding)) return null;
+                const pending = pendingRental?.[holding.id];
+                return (
+                  <div className="flex justify-center">
+                    <Switch
+                      size="sm"
+                      checked={pending ?? isRentalProperty(holding)}
+                      disabled={pending !== undefined}
+                      onCheckedChange={(on) => onToggleRental(holding, on)}
+                      aria-label={`${holding.name}: rental`}
+                    />
+                  </div>
+                );
+              },
+            } satisfies ColumnDef<AlternativeAssetHolding>,
+          ]
+        : []),
       {
         id: "actions",
         header: "",
@@ -272,7 +305,18 @@ export function AlternativeHoldingsTable({
         },
       },
     ],
-    [formatting, isBalanceHidden, onEdit, onUpdateValue, onViewHistory, onDelete, onRowClick, t],
+    [
+      formatting,
+      isBalanceHidden,
+      onEdit,
+      onUpdateValue,
+      onViewHistory,
+      onDelete,
+      onRowClick,
+      onToggleRental,
+      pendingRental,
+      t,
+    ],
   );
 
   if (isLoading) {

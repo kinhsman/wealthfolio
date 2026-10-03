@@ -2,6 +2,7 @@
 // service finds them from the imported transactions (server/drive-backup/lib/subscriptions.js) and
 // keeps the owner's choices; this file reads and changes them, and words the statuses.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { rentalHref } from "@/lib/rentals";
 
 export type Every = "month" | "quarter" | "half-year" | "year";
 export type StreamGroup = "subscriptions" | "bills";
@@ -84,7 +85,7 @@ export interface Stream {
 }
 
 export interface EscrowInfo {
-  /** The rental it belongs to (its Rental page: /addons/rental-tracker?rental=<id>). */
+  /** The rental it belongs to (its page on Rentals: /rentals?rental=<id>). */
   rentalId: string;
   part: "insurance" | "tax";
   /** The company the owner picked for it (its logo is the stream's). */
@@ -286,9 +287,9 @@ export function dueLabel(s: Pick<Stream, "status" | "dueInDays" | "next" | "last
   return `Was due ${date}, ${-s.dueInDays} days ago`;
 }
 
-/** Its Rental page's Settings, where its 1098 years and escrow are kept. */
+/** Its rental's Settings on Rentals, where its 1098 years and escrow are kept. */
 export const rentalSettingsHref = (e: Pick<EscrowInfo, "rentalId">) =>
-  `/addons/rental-tracker?rental=${encodeURIComponent(e.rentalId)}&tab=settings`;
+  rentalHref(e.rentalId, "settings");
 
 /** The transactions list with its Subscription filter on: exactly the charges in it (owner, 10-01: a
  *  word search missed the charges of one with several words or rules). */

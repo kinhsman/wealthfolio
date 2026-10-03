@@ -5,17 +5,24 @@ import { AmountDisplay, GainPercent, Separator } from "@wealthfolio/ui";
 import { Card } from "@wealthfolio/ui/components/ui/card";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
+import { Switch } from "@wealthfolio/ui/components/ui/switch";
+import { isPropertyHolding, isRentalProperty } from "@/lib/rentals";
 
 interface AlternativeHoldingsListMobileProps {
   holdings: AlternativeAssetHolding[];
   isLoading: boolean;
   onRowClick?: (holding: AlternativeAssetHolding) => void;
+  /** money-hub: the Rental switch on each property (Assets tab only) */
+  onToggleRental?: (holding: AlternativeAssetHolding, on: boolean) => void;
+  pendingRental?: Record<string, boolean>;
 }
 
 export function AlternativeHoldingsListMobile({
   holdings,
   isLoading,
   onRowClick,
+  onToggleRental,
+  pendingRental,
 }: AlternativeHoldingsListMobileProps) {
   const { isBalanceHidden } = useBalancePrivacy();
 
@@ -47,6 +54,7 @@ export function AlternativeHoldingsListMobile({
 
         const gain = holding.unrealizedGain ? parseFloat(holding.unrealizedGain) : null;
         const gainPct = holding.unrealizedGainPct ? parseFloat(holding.unrealizedGainPct) : null;
+        const pending = pendingRental?.[holding.id];
 
         return (
           <Card
@@ -61,7 +69,24 @@ export function AlternativeHoldingsListMobile({
                 </div>
                 <div className="flex-1 overflow-hidden">
                   <p className="truncate font-semibold">{holding.name}</p>
-                  <p className="text-muted-foreground truncate text-sm">{kindDisplay}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-muted-foreground truncate text-sm">{kindDisplay}</p>
+                    {onToggleRental && isPropertyHolding(holding) ? (
+                      // money-hub: the Rental switch; a tap here must not open the asset
+                      <label
+                        className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-xs"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Switch
+                          size="sm"
+                          checked={pending ?? isRentalProperty(holding)}
+                          disabled={pending !== undefined}
+                          onCheckedChange={(on) => onToggleRental(holding, on)}
+                        />
+                        Rental
+                      </label>
+                    ) : null}
+                  </div>
                 </div>
               </div>
               <div className="ml-2 text-right">

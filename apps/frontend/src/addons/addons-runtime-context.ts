@@ -46,6 +46,7 @@ import {
 import { searchCashActivities } from "@/features/spending/adapters/cash-activities";
 import { getSpendingReport } from "@/features/spending/adapters/reports";
 import { openCsvFileDialog, openFileSaveDialog } from "@/adapters";
+import { ADDON_ADDRESS_ALIASES } from "@/lib/rentals";
 import { createGoal, getGoals, getGoalFunding, saveGoalFunding, updateGoal } from "@/adapters";
 import {
   listenFileDrop as listenImportFileDrop,
@@ -396,7 +397,7 @@ export function getDynamicNavItems() {
   for (const item of getDurableNavItems()) {
     merged.set(item.id, item);
   }
-  return Array.from(merged.values()).sort((a, b) => a.order - b.order);
+  return Array.from(merged.values(), navItemAtHostAddress).sort((a, b) => a.order - b.order);
 }
 
 export function getDynamicRoutes() {
@@ -409,7 +410,22 @@ export function getDynamicRoutes() {
   for (const route of getDurableRoutes()) {
     merged.set(scopedKey(route.addonId, route.routeId), route);
   }
-  return Array.from(merged.values()).sort((a, b) => a.path.localeCompare(b.path));
+  return Array.from(merged.values(), routeAtHostAddress).sort((a, b) =>
+    a.path.localeCompare(b.path),
+  );
+}
+
+// money-hub patch: some of our add-on pages get a short host address (/rentals for
+// /addons/rental-tracker, see lib/rentals.ts). Registration and its namespace checks still
+// use the add-on's own address; only the routes and sidebar links the app renders move.
+function navItemAtHostAddress(item: DynamicNavItem): DynamicNavItem {
+  const alias = ADDON_ADDRESS_ALIASES[item.href];
+  return alias ? { ...item, href: alias } : item;
+}
+
+function routeAtHostAddress(route: DynamicRouteEntry): DynamicRouteEntry {
+  const alias = ADDON_ADDRESS_ALIASES[route.href];
+  return alias ? { ...route, href: alias, path: toRouterPath(alias) } : route;
 }
 
 export function subscribeToNavigationUpdates(callback: () => void) {

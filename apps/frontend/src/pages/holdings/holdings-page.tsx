@@ -66,6 +66,8 @@ import { useUpdatePortfolioMutation } from "@/hooks/use-calculate-portfolio";
 import { useQueryClient } from "@tanstack/react-query";
 import { QueryKeys } from "@/lib/query-keys";
 import { useSettingsContext } from "@/lib/settings-provider";
+import { rentalHref, rentalSwitchMetadata } from "@/lib/rentals";
+import { toast } from "sonner";
 
 export const HoldingsPage = () => {
   const { t } = useTranslation();
@@ -239,6 +241,38 @@ export const HoldingsPage = () => {
       }
     },
     [queryClient],
+  );
+
+  // money-hub: the Rental switch on a property. On, the property shows on Rentals (its rental
+  // settings and entries account are made there on first open); off, it leaves Rentals and the
+  // nightly rental job skips it, but its settings and entries are kept for when it comes back.
+  const [pendingRental, setPendingRental] = useState<Record<string, boolean>>({});
+  const handleToggleRental = useCallback(
+    async (holding: AlternativeAssetHolding, on: boolean) => {
+      setPendingRental((p) => ({ ...p, [holding.id]: on }));
+      try {
+        await updateAlternativeAssetMetadata(holding.id, rentalSwitchMetadata(holding, on));
+        await queryClient.invalidateQueries({ queryKey: [QueryKeys.ALTERNATIVE_HOLDINGS] });
+        if (on) {
+          toast.success(`${holding.name} is a rental`, {
+            action: { label: "Open Rentals", onClick: () => navigate(rentalHref(holding.id)) },
+          });
+        } else {
+          toast.success(`${holding.name} is not a rental`, {
+            description: "Its rental settings and entries are kept.",
+          });
+        }
+      } catch (e) {
+        toast.error("Could not change the Rental switch", { description: String(e) });
+      } finally {
+        setPendingRental((p) => {
+          const next = { ...p };
+          delete next[holding.id];
+          return next;
+        });
+      }
+    },
+    [queryClient, navigate],
   );
 
   // Handler to delete an asset
@@ -623,6 +657,8 @@ export const HoldingsPage = () => {
               onDelete={handleDeleteAsset}
               onRowClick={handleRowClick}
               isDeleting={isDeleting}
+              onToggleRental={handleToggleRental}
+              pendingRental={pendingRental}
             />
           </div>
           {/* Mobile View */}
@@ -631,6 +667,8 @@ export const HoldingsPage = () => {
               holdings={assetsHoldings}
               isLoading={isDataLoading}
               onRowClick={handleRowClick}
+              onToggleRental={handleToggleRental}
+              pendingRental={pendingRental}
             />
           </div>
         </>

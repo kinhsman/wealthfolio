@@ -1,7 +1,8 @@
 import { RestoredPortfolioNotice } from "@/features/database-recovery/restored-portfolio-notice";
 import { CONNECT_HIDDEN } from "@/lib/money-hub";
+import { RENTALS_ADDON_PATH, RENTALS_PATH } from "@/lib/rentals";
 import { useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { AppLayout } from "@/pages/layouts/app-layout";
 import { OnboardingLayout } from "@/pages/layouts/onboarding-layout";
@@ -66,6 +67,11 @@ import GoalsDashboardPage from "@/features/goals/pages/goals-dashboard-page";
 import GoalNewPage from "@/features/goals/pages/goal-new-page";
 import GoalDetailPage from "@/features/goals/pages/goal-detail-page";
 import GoalRetirementGuidePage from "@/features/goals/pages/goal-retirement-guide-page";
+
+function ToRentalsPage() {
+  const { search } = useLocation();
+  return <Navigate to={`${RENTALS_PATH}${search}`} replace />;
+}
 
 function NavigationEventBridge() {
   useNavigationEventListener();
@@ -138,6 +144,8 @@ export function AppRoutes() {
           <Route path="spending/pending-changes" element={<SpendingPendingChangesPage />} />
           <Route path="spending/returns" element={<SpendingReturnsPage />} />
           <Route path="taxes" element={<TaxesPage />} />
+          {/* money-hub: the Rentals page moved to /rentals; old links keep the rental and tab */}
+          <Route path={RENTALS_ADDON_PATH.slice(1)} element={<ToRentalsPage />} />
           {/* Dynamic addon routes */}
           {dynamicRoutes.map(({ path, addonId, routeId }) => (
             <Route
