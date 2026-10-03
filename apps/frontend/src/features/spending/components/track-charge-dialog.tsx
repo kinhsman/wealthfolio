@@ -33,6 +33,8 @@ import { rulePatternFrom } from "../lib/rule-offer";
 import {
   EVERY_LABELS,
   SUBSCRIPTIONS_KEY,
+  nextChargeAfter,
+  openDatePicker,
   shortDate,
   subscriptionsApi,
   useSubscriptions,
@@ -165,7 +167,13 @@ function Choose({
   const own = foreign ? charge.currency! : currency;
   const [amount, setAmount] = useState(String(draft?.amount || Math.abs(charge.amount) || ""));
   const [every, setEvery] = useState<Every>(draft?.every ?? "month");
-  const [nextDate, setNextDate] = useState(draft?.nextDate ?? "");
+  // One period after this charge, on to the one still to come (an older charge: not a date gone by),
+  // and again whenever How often changes.
+  const [nextDate, setNextDate] = useState(() => nextChargeAfter(charge.date, draft?.every ?? "month", true));
+  const changeEvery = (v: Every) => {
+    setEvery(v);
+    setNextDate(nextChargeAfter(charge.date, v, true));
+  };
   const [group, setGroup] = useState<StreamGroup>(charge.group);
 
   // The one it is in and the one it looks like on top; then the charge's own group, then the other.
@@ -323,7 +331,7 @@ function Choose({
             </div>
             <div className="space-y-1.5">
               <Label>How often</Label>
-              <Select value={every} onValueChange={(v) => setEvery(v as Every)}>
+              <Select value={every} onValueChange={(v) => changeEvery(v as Every)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -338,7 +346,7 @@ function Choose({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="track-next">Next charge</Label>
-              <Input id="track-next" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+              <Input id="track-next" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} onClick={openDatePicker} />
             </div>
             <div className="space-y-1.5">
               <Label>Group</Label>

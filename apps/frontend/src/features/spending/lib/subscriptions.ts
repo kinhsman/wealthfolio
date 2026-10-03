@@ -3,6 +3,7 @@
 // keeps the owner's choices; this file reads and changes them, and words the statuses.
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { rentalHref } from "@/lib/rentals";
+import { addMonthsISO } from "./budget-forecast";
 
 export type Every = "month" | "quarter" | "half-year" | "year";
 export type StreamGroup = "subscriptions" | "bills";
@@ -276,6 +277,34 @@ export const EVERY_LABELS: Record<Every, string> = {
   "half-year": "Every 6 months",
   year: "Every year",
 };
+
+const EVERY_MONTHS: Record<Every, number> = { month: 1, quarter: 3, "half-year": 6, year: 12 };
+
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+/** One period after a charge on `from`, as the service counts it (the 31st becomes a shorter month's
+ *  last day). `upToToday`: on period by period until it is today or later, the charge still to come
+ *  (owner, 10-03: "changing the frequency doesnt change the next charge date"). */
+export function nextChargeAfter(from: string, every: Every, upToToday = false, today = localToday()): string {
+  const step = EVERY_MONTHS[every];
+  let next = addMonthsISO(from, step);
+  // From the charge's own day each time, so a 31st stays a 31st where the month has one.
+  for (let k = 2; upToToday && next < today && k < 1200; k++) next = addMonthsISO(from, k * step);
+  return next;
+}
+
+/** A date box opens its calendar wherever it is clicked, not only on its small icon (owner, 10-03:
+ *  "there is no way to edit it"). Typing in it still works. */
+export function openDatePicker(e: { currentTarget: HTMLInputElement }) {
+  try {
+    e.currentTarget.showPicker?.();
+  } catch {
+    // Already open, or the browser will not here: the box still takes typing and its own icon.
+  }
+}
 
 export const ALERT_LABELS: Record<AlertKind, { title: string; text: string }> = {
   newFound: { title: "New subscription found", text: "A charge starts repeating." },

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   dueLabel,
+  nextChargeAfter,
   statusLabel,
   subscriptionCharges,
   subscriptionFilterOptions,
@@ -85,5 +86,24 @@ describe("subscriptions wording", () => {
     const cash = mk({ key: "manual:cash", name: "Cash only", charges: [{ id: "paid:p2", date: "2026-09-01", amount: 20, outside: true }] });
     expect(subscriptionFilterOptions([loan, cash])).toEqual([{ value: "manual:loan", label: "Vietnam loan", count: 1 }]);
     expect(subscriptionCharges([loan, cash], new Set(["manual:loan", "manual:cash"]))).toEqual({ ids: ["acb1"], from: "2026-08-15", to: "2026-08-15" });
+  });
+});
+
+describe("next charge from a charge's date", () => {
+  it("one period on, by How often (owner, 10-03: changing it must move the date)", () => {
+    expect(nextChargeAfter("2025-06-13", "month")).toBe("2025-07-13");
+    expect(nextChargeAfter("2025-06-13", "quarter")).toBe("2025-09-13");
+    expect(nextChargeAfter("2025-06-13", "half-year")).toBe("2025-12-13");
+    expect(nextChargeAfter("2025-06-13T17:00:00Z", "year")).toBe("2026-06-13");
+  });
+  it("on to the charge still to come when asked, never a date gone by", () => {
+    expect(nextChargeAfter("2025-06-13", "month", true, "2026-10-03")).toBe("2026-10-13");
+    expect(nextChargeAfter("2025-06-13", "year", true, "2026-10-03")).toBe("2027-06-13");
+    expect(nextChargeAfter("2026-09-30", "month", true, "2026-10-03")).toBe("2026-10-30");
+    expect(nextChargeAfter("2026-09-03", "month", true, "2026-10-03")).toBe("2026-10-03");
+  });
+  it("a 31st stays a 31st where the month has one", () => {
+    expect(nextChargeAfter("2026-01-31", "month")).toBe("2026-02-28");
+    expect(nextChargeAfter("2026-01-31", "month", true, "2026-03-05")).toBe("2026-03-31");
   });
 });

@@ -54,6 +54,8 @@ import {
   EVERY_LABELS,
   SUBSCRIPTIONS_KEY,
   dueLabel,
+  nextChargeAfter,
+  openDatePicker,
   rentalSettingsHref,
   shortDate,
   statusLabel,
@@ -234,7 +236,7 @@ function MarkPaidDialog({
         {/* One under the other: a dong amount runs to eight digits beside its currency. */}
         <div className="grid gap-3">
           <Field label="Paid on" htmlFor="paid-date">
-            <Input id="paid-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <Input id="paid-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} onClick={openDatePicker} />
           </Field>
           <Field label="Amount" htmlFor="paid-amount">
             <AmountInCurrency id="paid-amount" amount={amount} setAmount={setAmount} currency={cur} setCurrency={setCur} currencies={currencies} />
@@ -911,6 +913,15 @@ function EditStreamDialog({
   const [group, setGroup] = useState<StreamGroup>(s.group);
   const [every, setEvery] = useState<Every>(s.every);
   const [nextDate, setNextDate] = useState(s.next);
+  // A date typed here stays put; otherwise it follows How often: one period after the last charge, as
+  // the list will show it once saved (owner, 10-03: "changing the frequency doesnt change the next
+  // charge date"). A hand-added or reactivated one goes on to the charge still to come, as the list does.
+  const [nextTyped, setNextTyped] = useState(false);
+  const changeEvery = (v: Every) => {
+    setEvery(v);
+    if (nextTyped || s.escrow || !s.last) return;
+    setNextDate(v === s.every ? s.next : nextChargeAfter(s.last.date, v, !!manual || !!s.reactivated));
+  };
   const [remind, setRemind] = useState(s.remindBefore ? String(s.remindBefore) : "off");
   const [confirmed, setConfirmed] = useState(!!s.confirmed);
   const [sendTotal, setSendTotal] = useState(!!s.sendTotal);
@@ -973,7 +984,9 @@ function EditStreamDialog({
     if (name.trim() && name.trim() !== s.name) patch.name = name.trim();
     if (group !== s.group) patch.group = group;
     if (every !== s.every) patch.every = every;
-    if (nextDate && nextDate !== s.next) patch.nextDate = nextDate;
+    if (nextTyped && nextDate && nextDate !== s.next) patch.nextDate = nextDate;
+    // A date set before on the old rhythm: the new rhythm's date from its charges, as shown, takes over.
+    else if (!nextTyped && every !== s.every && s.nextSetByOwner && s.last) patch.nextDate = null;
     if (escrow && company !== s.merchantId) patch.merchantId = company;
   }
   if ((remind === "off" ? null : Number(remind)) !== (s.remindBefore ?? null)) patch.remindBefore = remind === "off" ? null : Number(remind);
@@ -1072,7 +1085,7 @@ function EditStreamDialog({
                     Use what its charges show
                   </button>
                 ) : "As its charges show."}>
-                <Select value={every} onValueChange={(v) => setEvery(v as Every)}>
+                <Select value={every} onValueChange={(v) => changeEvery(v as Every)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -1090,7 +1103,7 @@ function EditStreamDialog({
                     {escrow ? "Use the end of the year" : "Use the date from its charges"}
                   </button>
                 ) : escrow ? "Its renewal or due date, for your records and the reminder." : "For your records: no transaction is made."}>
-                <Input id="edit-next" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} disabled={s.status === "stopped" && !manual} />
+                <Input id="edit-next" type="date" value={nextDate} onChange={(e) => { setNextDate(e.target.value); setNextTyped(true); }} onClick={openDatePicker} disabled={s.status === "stopped" && !manual} />
               </Field>
               <Field label="Remind me" foot="On Discord and your phone, in the daytime.">
                 <Select value={remind} onValueChange={setRemind} disabled={s.status === "stopped"}>
@@ -1541,7 +1554,7 @@ function ManualDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="sub-next">Next charge</Label>
-              <Input id="sub-next" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
+              <Input id="sub-next" type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} onClick={openDatePicker} />
             </div>
             <div className={cn("space-y-1.5", currencies.length > 1 && "col-span-2")}>
               <Label>Group</Label>
