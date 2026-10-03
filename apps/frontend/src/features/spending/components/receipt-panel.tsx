@@ -55,6 +55,10 @@ const field =
 /** What happened, in a toast: where it was filed, or what it waits for. */
 export function receiptToast(r: ReceiptAnswer) {
   const name = `${storeName(r.store)}${r.total != null ? `, ${usd(r.total)}` : ""}`;
+  if (r.duplicate) {
+    toast.message(`Already added: ${name}`, { description: `This receipt${r.date ? ` from ${day(r.date)}` : ""} was snapped before, so nothing new was added.` });
+    return;
+  }
   if (r.status === "filed") {
     const parts = receiptSplit(r).map((l) => `${shortCategory(r.categories, l.categoryId)} ${usd(l.amount)}`);
     toast.success(name, { description: parts.join(" · ") });

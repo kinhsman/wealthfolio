@@ -39,6 +39,8 @@ export interface Receipt {
   check: string | null;
   store: string | null;
   date: string | null;
+  /** The time printed on it, "HH:MM". */
+  time?: string | null;
   total: number | null;
   tax: number | null;
   cardLast4: string | null;
@@ -94,7 +96,8 @@ export function useReceiptFor(activityId: string | null | undefined) {
   });
 }
 
-export type ReceiptAnswer = Receipt & { categories: ReceiptCategory[] };
+/** `duplicate`: the photo was a receipt already kept; this is that one, and nothing new was added. */
+export type ReceiptAnswer = Receipt & { categories: ReceiptCategory[]; duplicate?: boolean };
 
 /** A charge the owner may pick for a receipt that found none itself. */
 export interface ChargeChoice {
