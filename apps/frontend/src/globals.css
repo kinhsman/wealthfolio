@@ -1185,6 +1185,10 @@ summary {
   --m-on-done: var(--m-on-forest);
   --m-good-soft: var(--m-mint);
   --m-good-ink: var(--m-mint-ink);
+  /* A charge that posted above its pending amount (Pending vs posted): worth a look, amber in Meadow. */
+  --m-higher: var(--m-warn-line);
+  --m-higher-ink: var(--m-warn);
+  --m-higher-soft: var(--m-warn-soft);
   --m-seg-cards: var(--m-forest);
   --m-free: var(--m-forest-soft);
   --m-tint: 17%;
@@ -1379,6 +1383,10 @@ summary {
   --m-up: #1f7a3a;
   --m-down: #b3261e;
   --m-bad: #b3261e;
+  /* posted above pending is money down: red, the theme's gold would blend in */
+  --m-higher: var(--m-down);
+  --m-higher-ink: var(--m-down);
+  --m-higher-soft: rgba(179, 38, 30, 0.1);
   --m-chart: #0f7c77;
   --m-chart-today: #3fa39d;
   --m-chart-2: #4356b0;
@@ -1474,6 +1482,9 @@ summary {
   --m-up: #8fd19e;
   --m-down: #ff8a80;
   --m-bad: #ff8a80;
+  --m-higher: var(--m-down);
+  --m-higher-ink: var(--m-down);
+  --m-higher-soft: rgba(255, 138, 128, 0.14);
   --m-chart: #5fc8c0;
   --m-chart-today: #a3e4de;
   --m-chart-2: #9aa8f0;
