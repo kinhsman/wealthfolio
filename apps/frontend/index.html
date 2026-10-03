@@ -40,19 +40,6 @@
           document.documentElement.classList.add(resolved);
           document.documentElement.style.colorScheme = resolved;
         } catch (e) {}
-        // money-hub patch: the theme picked for each mode (Meadow or Bronze Titanium), cached by the app
-        // (src/components/app-skin.tsx), so the sign-in screen wears it before the profile opens.
-        try {
-          var skin = JSON.parse(localStorage.getItem("mh-skin-last") || "null");
-          var ok = function (v) {
-            return v === "meadow" || v === "bronze";
-          };
-          if (skin && ok(skin.light) && ok(skin.dark)) {
-            document.documentElement.classList.add("mh-skin");
-            document.documentElement.setAttribute("data-light-skin", skin.light);
-            document.documentElement.setAttribute("data-dark-skin", skin.dark);
-          }
-        } catch (e) {}
         // Presentation hint only; profile access is still checked by the app.
         try {
           var opening = JSON.parse(sessionStorage.getItem("wealthfolio-profile-opening") || "null");

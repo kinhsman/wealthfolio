@@ -5,6 +5,8 @@ import { StartupScreen } from "@/components/startup-screen";
 import ReactDOM from "react-dom/client";
 import { debugAddonState, isAddonDevModeEnabled } from "./addons/addons-loader";
 import App from "./App";
+// money-hub patch: the theme picked last, on the sign-in screen too (components/app-skin.tsx).
+import { applyLastSkin } from "./components/app-skin";
 import "./globals.css";
 // Initialize i18next before the app renders. The active language is applied
 // from the stored user setting by the settings provider.
@@ -32,6 +34,8 @@ if (import.meta.env.DEV) {
     writable: false,
   });
 }
+
+applyLastSkin();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
