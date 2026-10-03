@@ -43,6 +43,7 @@ import { cn } from "@/lib/utils";
 
 import { CompanyButton, CompanyPicker } from "../components/company-picker";
 import { BillMonthPanel } from "../components/bill-calendar";
+import { SubscriptionsCategoryWidget } from "../components/subscriptions-category-card";
 import { PhoneFold } from "../components/phone-fold";
 import { useDashboardSkins } from "../lib/dashboard-skin";
 import { StreamCategory, useStreamCategory } from "../components/stream-category";
@@ -372,16 +373,25 @@ export default function SpendingSubscriptionsPage() {
                 />
               </div>
               {items.length > 0 ? (
-                <aside
-                  data-m="card"
-                  className="min-w-0 self-start rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-[18px] py-3.5 max-md:px-3 max-md:py-2.5 lg:sticky lg:top-4 lg:col-start-2 lg:row-span-2 lg:row-start-1"
-                >
-                  <div className="flex items-baseline gap-2 pb-1">
-                    <h2 className="text-sm font-medium">Calendar</h2>
-                    <span className="hidden text-[12.5px] text-[var(--m-muted)] sm:inline">When each one comes.</span>
-                  </div>
-                  <BillMonthPanel items={items} currency={currency} totals={false} />
-                </aside>
+                <div className="flex min-w-0 flex-col gap-3.5 max-md:gap-2 lg:sticky lg:top-4 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+                  <aside
+                    data-m="card"
+                    className="min-w-0 rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-[18px] py-3.5 max-md:px-3 max-md:py-2.5"
+                  >
+                    <div className="flex items-baseline gap-2 pb-1">
+                      <h2 className="text-sm font-medium">Calendar</h2>
+                      <span className="hidden text-[12.5px] text-[var(--m-muted)] sm:inline">When each one comes.</span>
+                    </div>
+                    <BillMonthPanel items={items} currency={currency} totals={false} />
+                  </aside>
+
+                  <aside
+                    data-m="card"
+                    className="min-w-0 rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-[18px] py-3.5 max-md:px-3 max-md:py-2.5"
+                  >
+                    <SubscriptionsCategoryWidget items={items} currency={currency} />
+                  </aside>
+                </div>
               ) : null}
               <div className="flex min-w-0 flex-col gap-3.5 max-md:gap-2 lg:col-start-1 lg:row-start-2">
                 {items.length === 0 ? (
