@@ -33,6 +33,8 @@ import {
   BUDGET_ALERT_LABELS,
   CARD_ALERT_LABELS,
   DUE_STEPS,
+  LOAN_ALERT_LABELS,
+  RENEW_STEPS,
   CONNECTION_ALERT_LABELS,
   MONEY_ALERTS_KEY,
   NEAR_STEPS,
@@ -42,6 +44,7 @@ import {
   type BigAlertKind,
   type BudgetAlertKind,
   type CardAlertKind,
+  type LoanAlertKind,
   type ConnectionAlertKind,
   type MoneyAlertGroup,
   type RecapAlertKind,
@@ -746,6 +749,37 @@ export default function AlertsSettingsPage() {
                         ))}
                       </select>
                       <span className="text-muted-foreground">before it is due</span>
+                    </label>
+                  }
+                />
+              ) : null}
+              {more.loans ? (
+                <GroupAlerts<LoanAlertKind>
+                  icon={<Icons.RefreshCw className="text-muted-foreground size-4 shrink-0" />}
+                  title="Loan renewals"
+                  to="/holdings"
+                  text="A loan's lines whose term ends soon, to renew with the bank (Holdings, the loan, Edit details, Lines)"
+                  on={more.loans.alerts.on !== false}
+                  kinds={more.loans.alerts}
+                  labels={LOAN_ALERT_LABELS}
+                  busyKey="loans"
+                  busy={busy}
+                  onSwitch={(patch) => setMore("loans", patch)}
+                  onTest={(k) => testMore("loans", k)}
+                  extra={
+                    <label className="flex flex-wrap items-center gap-2">
+                      <span className="text-muted-foreground">Remind</span>
+                      <select
+                        value={more.loans.daysBefore}
+                        disabled={!!busy}
+                        onChange={(e) => setMore("loans", { daysBefore: Number(e.target.value) })}
+                        className="h-8 rounded-md border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+                      >
+                        {[...new Set([...RENEW_STEPS, more.loans.daysBefore])].sort((a, b) => a - b).map((d) => (
+                          <option key={d} value={d}>{d === 1 ? "1 day" : `${d} days`}</option>
+                        ))}
+                      </select>
+                      <span className="text-muted-foreground">before a line&rsquo;s term ends</span>
                     </label>
                   }
                 />

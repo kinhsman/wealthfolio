@@ -142,11 +142,10 @@ function LoanLinesSummary({ data, amount }: { data: LoanView; amount: (v: number
     <>
       <div className="flex justify-between gap-3">
         <span className="text-muted-foreground shrink-0">Lines</span>
+        {/* How many (owner, 10-03: "for lines show the # of lines"); their total is the balance above. */}
         <span className="min-w-0 text-right font-medium">
-          {amount(data.linesTotal)}
-          <span className="text-muted-foreground block text-xs font-normal">
-            {data.lines.length} line{data.lines.length === 1 ? "" : "s"}, table below
-          </span>
+          {data.lines.length}
+          <span className="text-muted-foreground block text-xs font-normal">Table below</span>
         </span>
       </div>
       {n ? (
@@ -265,6 +264,8 @@ export function LoanScheduleSection({ id, currency }: { id: string; currency: st
   if (!data || data.keptBy) return null;
   const s = data.schedule;
   const t = data.terms;
+  // A loan in lines (owner, 10-03): renewed line by line, never paid off in one last payment.
+  const lined = data.lines.length > 0;
   const amount = (v: number) => <AmountDisplay value={v} currency={currency} isHidden={isBalanceHidden} />;
   const row = (label: string, value: React.ReactNode, foot?: React.ReactNode) => (
     <div className="flex justify-between gap-3">
@@ -286,8 +287,9 @@ export function LoanScheduleSection({ id, currency }: { id: string; currency: st
           </p>
         ) : (
           <>
-            {t.termMonths && !t.maturity ? row("Term", termLabel(t.termMonths), STYLE[t.method] ?? STYLE.annuity) : null}
+            {t.termMonths && (!t.maturity || lined) ? row("Term", termLabel(t.termMonths), lined ? "Each line, when it starts or renews" : (STYLE[t.method] ?? STYLE.annuity)) : null}
             {/* A due date is a day: shown in full, with how it is paid back. */}
+            {lined && t.maturity ? row("Due", fullDay(t.maturity)) : null}
             {s.payoff && t.maturity
               ? row("Due", fullDay(s.payoff), `${STYLE[t.method] ?? STYLE.annuity}, ${s.monthsLeft} payment${s.monthsLeft === 1 ? "" : "s"} left`)
               : s.payoff
@@ -307,10 +309,10 @@ export function LoanScheduleSection({ id, currency }: { id: string; currency: st
                 )
               : null}
             {/* Interest only: the principal comes back in one payment at the end. */}
-            {t.method === "interest_only" && s.payoff && s.finalPayment != null && (s.monthsLeft ?? 0) > 0
+            {!lined && t.method === "interest_only" && s.payoff && s.finalPayment != null && (s.monthsLeft ?? 0) > 0
               ? row("Last payment", amount(s.finalPayment), `${fullDay(s.payoff)}: the principal plus that month's interest`)
               : null}
-            {(s.monthsLeft ?? 0) > 0 && s.interestLeft != null ? row("Interest still to pay", amount(s.interestLeft)) : null}
+            {!lined && (s.monthsLeft ?? 0) > 0 && s.interestLeft != null ? row("Interest still to pay", amount(s.interestLeft)) : null}
             {s.openEnded && s.regular != null ? row("Interest a year", amount(s.regular * 12)) : null}
             {data.countedFrom && !t.maturity && !s.openEnded ? (
               <p className="text-muted-foreground text-xs leading-snug">

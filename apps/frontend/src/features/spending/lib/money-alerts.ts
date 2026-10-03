@@ -8,6 +8,7 @@ export type BudgetAlertKind = "near" | "over";
 export type ConnectionAlertKind = "signIn" | "broken" | "back";
 export type RecapAlertKind = "weekly";
 export type CardAlertKind = "dueSoon" | "overdue";
+export type LoanAlertKind = "renewSoon" | "renewToday";
 
 type Switches<K extends string> = { on: boolean } & Record<K, boolean>;
 
@@ -18,11 +19,13 @@ export interface MoneyAlertsView {
   recap: { alerts: Switches<RecapAlertKind> };
   /** Optional: a service from before the card reminders sends none. */
   cards?: { alerts: Switches<CardAlertKind>; daysBefore: number };
+  /** Optional: a service from before the loan renewal reminders sends none. */
+  loans?: { alerts: Switches<LoanAlertKind>; daysBefore: number };
   went?: { discord: boolean; ntfy: boolean };
   sample?: string;
 }
 
-export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap" | "cards";
+export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap" | "cards" | "loans";
 
 const BASE = "/api/money-hub/money-alerts";
 export const MONEY_ALERTS_KEY = ["money-hub", "money-alerts"] as const;
@@ -94,3 +97,13 @@ export const CARD_ALERT_LABELS: Record<CardAlertKind, { title: string; text: str
 
 /** How many days before a card's due date the reminder comes, for the picker. */
 export const DUE_STEPS = [1, 2, 3, 5, 7];
+
+// Owner, 10-03: "add the renewal reminders, X day before" (a loan drawn in lines, each renewed with the
+// bank when its term ends; Holdings, the loan, Edit details, Lines).
+export const LOAN_ALERT_LABELS: Record<LoanAlertKind, { title: string; text: string }> = {
+  renewSoon: { title: "Renewal coming up", text: "A loan's lines whose term ends within the days above, with the renewal fee." },
+  renewToday: { title: "Term ends today", text: "On the day a line's term ends, to renew it with the bank." },
+};
+
+/** How many days before a line's term ends the reminder comes, for the picker. */
+export const RENEW_STEPS = [3, 5, 7, 10, 14, 30];
