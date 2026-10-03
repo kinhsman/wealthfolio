@@ -266,6 +266,15 @@ export function LoanScheduleSection({ id, currency }: { id: string; currency: st
   const t = data.terms;
   // A loan in lines (owner, 10-03): renewed line by line, never paid off in one last payment.
   const lined = data.lines.length > 0;
+  const feesMonthly = lined && data.feesTotal != null && t.termMonths ? data.feesTotal / t.termMonths : null;
+  const withFees =
+    s?.regular != null && feesMonthly != null && data.linesTotal > 0
+      ? {
+          monthly: Math.round((s.regular + feesMonthly) * 100) / 100,
+          fees: Math.round(feesMonthly),
+          rate: (((s.regular + feesMonthly) * 12 * 100) / data.linesTotal).toFixed(2),
+        }
+      : null;
   const amount = (v: number) => <AmountDisplay value={v} currency={currency} isHidden={isBalanceHidden} />;
   const row = (label: string, value: React.ReactNode, foot?: React.ReactNode) => (
     <div className="flex justify-between gap-3">
@@ -306,6 +315,18 @@ export function LoanScheduleSection({ id, currency }: { id: string; currency: st
                       {shortDay(s.next.date)}: {amount(s.next.principal)} principal, {amount(s.next.interest)} interest
                     </>
                   ),
+                )
+              : null}
+            {/* The month with the renewal fees spread over each line's term (owner, 10-03: "add a new line
+                monthly adjusted including the renewal fee"): every line renews each term, so the fees come
+                round once a term. */}
+            {withFees
+              ? row(
+                  "Monthly with fees",
+                  amount(withFees.monthly),
+                  <>
+                    Fees {amount(withFees.fees)} a month, {withFees.rate}% a year
+                  </>,
                 )
               : null}
             {/* Interest only: the principal comes back in one payment at the end. */}
