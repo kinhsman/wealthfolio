@@ -17,6 +17,8 @@ import { invalidateSpendingCaches } from "../lib/invalidation";
 import { offerRule } from "../lib/rule-offer";
 import { askWhichOne } from "../lib/track-charge";
 import { BankDescription } from "./bank-description";
+import { AmazonOrderDetails } from "./amazon-order";
+import { useAmazonLinks } from "../lib/amazon";
 import { MerchantShortcut } from "./merchant-dialog";
 import type { Account, Activity, ActivityCreate, ActivityUpdate } from "@/lib/types";
 
@@ -905,6 +907,8 @@ export function CashActivityForm({
 
                     {/* money-hub patch: the bank's full line, under the payee. */}
                     {isEditing ? <BankDescription activityId={activity?.id} /> : null}
+                    {/* money-hub patch: an Amazon charge's order (lib/amazon.ts). */}
+                    {isEditing && activity?.id ? <AmazonOrderFor activityId={activity.id} /> : null}
 
                     {/* Collapsed by default, so the everyday case — a charge in
                         the account's own currency — never sees it. Open, it
@@ -999,4 +1003,10 @@ export function CashActivityForm({
       </SheetContent>
     </Sheet>
   );
+}
+
+/** money-hub patch: the Amazon order a charge was for, when the service matched one (lib/amazon.ts). */
+function AmazonOrderFor({ activityId }: { activityId: string }) {
+  const link = useAmazonLinks().data?.[activityId];
+  return link ? <AmazonOrderDetails link={link} className="rounded-lg border p-3" /> : null;
 }

@@ -170,6 +170,60 @@ function Pill({ tone, text }: { tone: "ok" | "warn" | "off"; text: string }) {
   );
 }
 
+// money-hub patch: Amazon orders (owner, 2026-10-02): Amazon's order and return emails read from the
+// linked Gmails, each Amazon charge matched to its order, returns put on the Returns page
+// (/api/money-hub/amazon, server/drive-backup/lib/amazon.js).
+interface AmazonStatus {
+  on: boolean;
+  busy: boolean;
+  orders: number;
+  matched: number;
+  returns: number;
+  last: { at: string; read: number; orders: number; charges: number; matched: number; errors: string[] } | null;
+}
+const AMAZON_LOGO = "https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/amazon.png";
+
+function AmazonOrdersCard() {
+  const [st, setSt] = useState<AmazonStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const ask = (method: string, path: string, body?: unknown) =>
+    fetch(`/api/money-hub/amazon${path}`, { method, credentials: "include", headers: body === undefined ? undefined : { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) })
+      .then(async (r) => { const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error((d as { error?: string }).error || `The money app helper said ${r.status}`); return d as AmazonStatus; });
+  const go = (fn: () => Promise<AmazonStatus>) => { setBusy(true); setError(""); fn().then(setSt).catch((e) => setError(e instanceof Error ? e.message : String(e))).finally(() => setBusy(false)); };
+  useEffect(() => { ask("GET", "").then(setSt).catch(() => setSt(null)); }, []);
+  if (!st) return null;
+  const errors = st.last?.errors?.length ?? 0;
+  return (
+    <div className="bg-card rounded-xl border">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+        <img src={AMAZON_LOGO} width={40} height={40} alt="" aria-hidden="true" className="ring-border size-10 shrink-0 rounded-lg bg-white object-contain p-1.5 ring-1" />
+        <div className="min-w-0 flex-1 basis-[calc(100%-4rem)] sm:basis-0">
+          <div className="truncate text-sm font-semibold">Amazon orders</div>
+          <div className="text-muted-foreground truncate text-xs">
+            {st.on
+              ? [`${st.matched} charges matched to ${st.orders} orders`, st.returns ? `${st.returns} returns` : null, st.last?.at && `checked ${when(st.last.at)}`].filter(Boolean).join(" · ")
+              : "Off"}
+          </div>
+        </div>
+        <div className="ml-auto flex items-center gap-3">
+          {st.on ? <Pill tone={errors ? "warn" : "ok"} text={errors ? "Needs a look" : "Reading"} /> : <Pill tone="off" text="Off" />}
+          <Switch checked={st.on} disabled={busy} aria-label="Read Amazon orders" onCheckedChange={(on) => go(() => ask("PUT", "", { on }))} />
+        </div>
+      </div>
+      {st.on ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2.5">
+          <span className="text-muted-foreground text-xs">Each Amazon charge shows its order; a return Amazon confirms goes on the Returns page.</span>
+          <button type="button" className={`${btn} h-7`} disabled={busy || st.busy} onClick={() => go(() => ask("POST", "/run"))}>
+            {busy || st.busy ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.RefreshCw className="size-3.5" />} Check now
+          </button>
+        </div>
+      ) : null}
+      {error || errors ? <p className="text-warning px-4 pb-3 text-xs">{error || st.last?.errors.join(" · ")}</p> : null}
+    </div>
+  );
+}
+
 /** Google's consent in a small window, opened before any await so no pop-up blocker fires. */
 function linkGmail(before: number): Promise<Status> {
   const win = window.open("about:blank", "money-gmail-link", "width=520,height=680");
@@ -504,6 +558,8 @@ export function EmailBanksSection() {
           </div>
         )}
       </div>
+
+      <AmazonOrdersCard />
 
       {status.banks.map((b) => {
         const imported = b.imported && !("error" in b.imported) ? b.imported : null;

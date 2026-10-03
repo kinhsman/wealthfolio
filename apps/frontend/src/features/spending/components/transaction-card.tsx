@@ -23,6 +23,8 @@ import { PendingChangeTag } from "./pending-change-tag";
 import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
 import { canLinkCharge, linkCharge } from "../lib/track-charge";
 import { ReturnBadge } from "./return-badge";
+import { AmazonOrderText } from "./amazon-order";
+import { useAmazonLinks } from "../lib/amazon";
 import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
@@ -96,6 +98,7 @@ function TransactionCardImpl({
   const { data: notesById } = useNotes();
   const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id, notesById));
   const bankLine = bankLineFor(bankLines, a);
+  const amazon = useAmazonLinks().data?.[a.id];   // money-hub patch: the Amazon order (lib/amazon.ts)
   const note = notesById?.[a.id];
   const returnMark = useReturnMarks().get(a.id);
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
@@ -187,9 +190,10 @@ function TransactionCardImpl({
 
           {/* money-hub patch: the bank's own line under the payee (lib/bank-lines.ts), and the tag when it
               posted at another amount than it was pending (lib/pending-changes.ts). */}
-          {bankLine ? (
+          {amazon || bankLine ? (
             <div className="text-muted-foreground mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px]">
-              <span className="min-w-0 truncate">{bankLine}</span>
+              {/* On an Amazon charge, its order instead of the bank's code (lib/amazon.ts). */}
+              {amazon ? <AmazonOrderText link={amazon} /> : <span className="min-w-0 truncate">{bankLine}</span>}
               <PendingChangeTag activityId={a.id} />
             </div>
           ) : (

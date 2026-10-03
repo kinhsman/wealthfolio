@@ -39,6 +39,8 @@ import { PendingChangeTag } from "./pending-change-tag";
 import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
 import { canLinkCharge, linkCharge } from "../lib/track-charge";
 import { ReturnBadge } from "./return-badge";
+import { AmazonOrderLine } from "./amazon-order";
+import { useAmazonLinks } from "../lib/amazon";
 import { CategoryMark } from "./category-chips";
 import { useShownAmount } from "@/lib/display-currency";
 
@@ -108,6 +110,7 @@ function TransactionRowImpl({
   const bankLine = bankLineFor(bankLines, a);
   const note = notesById?.[a.id];
   const returnMark = useReturnMarks().get(a.id);
+  const amazon = useAmazonLinks().data?.[a.id];   // money-hub patch: the Amazon order (lib/amazon.ts)
   const { isOutflow, isIncome, isSaving, isNeutral, sign, safeAmount } = getTransactionDisplay(
     a,
     account?.accountType,
@@ -175,7 +178,7 @@ function TransactionRowImpl({
           {/* money-hub patch: the owner's merchant logo (lib/merchants.ts). */}
           {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} /> : null}
           {a.notes != null ? (
-            <TruncatedText text={a.notes} className={cn("text-sm", bankLine && "max-w-[50%] shrink-0")} />
+            <TruncatedText text={a.notes} className={cn("text-sm", (bankLine || amazon) && "max-w-[50%] shrink-0")} />
           ) : (
             <span className="text-muted-foreground text-sm italic">—</span>
           )}
@@ -190,8 +193,13 @@ function TransactionRowImpl({
           <PendingChangeTag activityId={a.id} />
           {/* money-hub patch: sent back, or the refund for something sent back (lib/returns.ts). */}
           <ReturnBadge mark={returnMark} />
-          {/* money-hub patch: the bank's own line after the payee (lib/bank-lines.ts). */}
-          {bankLine ? <TruncatedText text={bankLine} className="text-muted-foreground flex-1 text-xs" /> : null}
+          {/* money-hub patch: the bank's own line after the payee (lib/bank-lines.ts); on an Amazon charge, its
+              order instead (the bank's code says nothing; the edit window still shows it). */}
+          {amazon ? (
+            <AmazonOrderLine link={amazon} className="flex-1" />
+          ) : bankLine ? (
+            <TruncatedText text={bankLine} className="text-muted-foreground flex-1 text-xs" />
+          ) : null}
           <QuickEventPopover
             selectedEventId={event?.id ?? null}
             onSelect={(eventId) => onSetEvent(a.id, eventId)}
