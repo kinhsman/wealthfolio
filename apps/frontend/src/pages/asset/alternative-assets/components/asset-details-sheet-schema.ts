@@ -139,6 +139,8 @@ export const liabilityDetailsSchema = baseSchema.extend({
     .optional()
     .nullable(),
   repayment: z.enum(["annuity", "equal_principal", "interest_only"]).optional().nullable(),
+  /** The day the loan must be paid back (a Vietnamese bank's "ngày đáo hạn"): payments fall on its day. */
+  maturityDate: z.date().optional().nullable(),
   followSchedule: z.boolean().optional().nullable(),
 });
 
@@ -247,6 +249,7 @@ export function getDefaultDetailsFormValues(
             ? metadata.repayment
             : "annuity",
         followSchedule: metadata?.follow_schedule === "true",
+        maturityDate: metadata?.maturity_date ? parseLocalDate(metadata.maturity_date as string) : null,
       };
 
     case AlternativeAssetKind.OTHER:
@@ -315,6 +318,7 @@ export function formValuesToMetadata(values: AssetDetailsFormValues): Record<str
       metadata.term_months = values.termMonths != null ? values.termMonths.toString() : "";
       metadata.repayment = values.repayment ?? "annuity";
       metadata.follow_schedule = values.followSchedule ? "true" : "false";
+      metadata.maturity_date = values.maturityDate ? formatDateToISO(values.maturityDate) : "";
       break;
 
     case AlternativeAssetKind.OTHER:

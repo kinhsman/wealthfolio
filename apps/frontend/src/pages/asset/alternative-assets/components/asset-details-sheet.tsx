@@ -808,6 +808,23 @@ function LiabilityFields({
 
       <FormField
         control={form.control}
+        name="maturityDate"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Due date</FormLabel>
+            <FormControl>
+              <DatePickerInput value={field.value ?? undefined} onChange={(date) => field.onChange(date ?? null)} />
+            </FormControl>
+            <p className="text-muted-foreground text-xs">
+              When it must be paid back. Payments fall on this day each month; no term needed.
+            </p>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
         name="followSchedule"
         render={({ field }) => (
           <FormItem className="flex items-start justify-between gap-4 rounded-lg border p-3">

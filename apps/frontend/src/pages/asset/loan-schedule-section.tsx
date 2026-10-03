@@ -23,7 +23,16 @@ export interface LoanView {
   id: string;
   name: string;
   currency: string;
-  terms: { original: number | null; rate: number | null; termMonths: number | null; start: string | null; method: "annuity" | "equal_principal" | "interest_only"; follow: boolean };
+  terms: {
+    original: number | null;
+    rate: number | null;
+    termMonths: number | null;
+    start: string | null;
+    /** The due date: payments fall on its day each month. */
+    maturity: string | null;
+    method: "annuity" | "equal_principal" | "interest_only";
+    follow: boolean;
+  };
   missing: string[];
   /** No start date: counted from the first balance typed, the term from then. */
   countedFrom?: { date: string; balance: number } | null;
@@ -121,8 +130,13 @@ export function LoanScheduleSection({ id, currency }: { id: string; currency: st
           </p>
         ) : (
           <>
-            {t.termMonths ? row("Term", termLabel(t.termMonths), STYLE[t.method] ?? STYLE.annuity) : null}
-            {s.payoff ? row("Pays off", monthYear(s.payoff), `${s.monthsLeft} payment${s.monthsLeft === 1 ? "" : "s"} left`) : null}
+            {t.termMonths && !t.maturity ? row("Term", termLabel(t.termMonths), STYLE[t.method] ?? STYLE.annuity) : null}
+            {/* A due date is a day: shown in full, with how it is paid back. */}
+            {s.payoff && t.maturity
+              ? row("Due", fullDay(s.payoff), `${STYLE[t.method] ?? STYLE.annuity}, ${s.monthsLeft} payment${s.monthsLeft === 1 ? "" : "s"} left`)
+              : s.payoff
+                ? row("Pays off", monthYear(s.payoff), `${s.monthsLeft} payment${s.monthsLeft === 1 ? "" : "s"} left`)
+                : null}
             {s.next && s.regular != null
               ? row(
                   "Monthly payment",
@@ -141,7 +155,7 @@ export function LoanScheduleSection({ id, currency }: { id: string; currency: st
               ? row("Last payment", amount(s.finalPayment), `${fullDay(s.payoff)}: the principal plus that month's interest`)
               : null}
             {s.monthsLeft > 0 ? row("Interest still to pay", amount(s.interestLeft)) : null}
-            {data.countedFrom ? (
+            {data.countedFrom && !t.maturity ? (
               <p className="text-muted-foreground text-xs leading-snug">
                 Counted from your balance on {fullDay(data.countedFrom.date)}. Add the start date and original amount in Edit details to
                 count from when the loan began.
