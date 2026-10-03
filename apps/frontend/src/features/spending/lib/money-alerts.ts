@@ -9,6 +9,7 @@ export type ConnectionAlertKind = "signIn" | "broken" | "back";
 export type RecapAlertKind = "weekly";
 export type CardAlertKind = "dueSoon" | "overdue";
 export type LoanAlertKind = "renewSoon" | "renewToday";
+export type ReceiptAlertKind = "filed";
 
 type Switches<K extends string> = { on: boolean } & Record<K, boolean>;
 
@@ -21,11 +22,13 @@ export interface MoneyAlertsView {
   cards?: { alerts: Switches<CardAlertKind>; daysBefore: number };
   /** Optional: a service from before the loan renewal reminders sends none. */
   loans?: { alerts: Switches<LoanAlertKind>; daysBefore: number };
+  /** Optional: a service from before the receipt alert sends none. */
+  receipts?: { alerts: Switches<ReceiptAlertKind> };
   went?: { discord: boolean; ntfy: boolean };
   sample?: string;
 }
 
-export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap" | "cards" | "loans";
+export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap" | "cards" | "loans" | "receipts";
 
 const BASE = "/api/money-hub/money-alerts";
 export const MONEY_ALERTS_KEY = ["money-hub", "money-alerts"] as const;
@@ -100,6 +103,12 @@ export const DUE_STEPS = [1, 2, 3, 5, 7];
 
 // Owner, 10-03: "add the renewal reminders, X day before" (a loan drawn in lines, each renewed with the
 // bank when its term ends; Holdings, the loan, Edit details, Lines).
+// money-hub patch: a receipt that waited for its card charge and filed it (owner, 10-03: "add the bell
+// notice/alert when a waiting receipt gets filed").
+export const RECEIPT_ALERT_LABELS: Record<ReceiptAlertKind, { title: string; text: string }> = {
+  filed: { title: "Receipt filed", text: "A receipt that waited for its card charge found it, and the charge is filed or split to match." },
+};
+
 export const LOAN_ALERT_LABELS: Record<LoanAlertKind, { title: string; text: string }> = {
   renewSoon: { title: "Renewal coming up", text: "A loan's lines whose term ends within the days above, with the renewal fee." },
   renewToday: { title: "Term ends today", text: "On the day a line's term ends, to renew it with the bank." },

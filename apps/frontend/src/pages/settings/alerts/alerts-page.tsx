@@ -34,6 +34,7 @@ import {
   CARD_ALERT_LABELS,
   DUE_STEPS,
   LOAN_ALERT_LABELS,
+  RECEIPT_ALERT_LABELS,
   RENEW_STEPS,
   CONNECTION_ALERT_LABELS,
   MONEY_ALERTS_KEY,
@@ -45,6 +46,7 @@ import {
   type BudgetAlertKind,
   type CardAlertKind,
   type LoanAlertKind,
+  type ReceiptAlertKind,
   type ConnectionAlertKind,
   type MoneyAlertGroup,
   type RecapAlertKind,
@@ -782,6 +784,21 @@ export default function AlertsSettingsPage() {
                       <span className="text-muted-foreground">before a line&rsquo;s term ends</span>
                     </label>
                   }
+                />
+              ) : null}
+              {more.receipts ? (
+                <GroupAlerts<ReceiptAlertKind>
+                  icon={<Icons.ReceiptText className="text-muted-foreground size-4 shrink-0" />}
+                  title="Receipts"
+                  to="/spending/receipts"
+                  text="A snapped receipt that waited for its card charge and has filed it"
+                  on={more.receipts.alerts.on !== false}
+                  kinds={more.receipts.alerts}
+                  labels={RECEIPT_ALERT_LABELS}
+                  busyKey="receipts"
+                  busy={busy}
+                  onSwitch={(patch) => setMore("receipts", patch)}
+                  onTest={(k) => testMore("receipts", k)}
                 />
               ) : null}
               <GroupAlerts<ConnectionAlertKind>
