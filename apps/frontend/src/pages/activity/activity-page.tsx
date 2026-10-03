@@ -44,6 +44,7 @@ import {
   resolveActivityTabFromUrlFilters,
   resolveActivityUrlFilters,
 } from "./utils/url-filters";
+import { useReceiptsToReview } from "@/features/spending/lib/receipts";
 
 interface ActivityDateRangeFilter {
   from?: string;
@@ -95,6 +96,7 @@ const ActivityPage = () => {
   const [showActionPalette, setShowActionPalette] = useState(false);
   const [showSpendingActionPalette, setShowSpendingActionPalette] = useState(false);
   const isMobileViewport = useIsMobileViewport();
+  const receiptsToReview = useReceiptsToReview().data?.toReview ?? 0;
   const isCompactTableViewport = useIsCompactTableViewport();
   const {
     selectedActivity,
@@ -685,10 +687,23 @@ const ActivityPage = () => {
       <SyncButton />
       {/* money-hub patch: the Receipts page (snap or paste a store receipt there; lib/receipts.ts). The owner,
           10-03: "i dont see the button to access this page in the transactions page". */}
-      <Button asChild size={isMobileViewport ? "icon" : "sm"} variant="outline" title="Receipts" aria-label="Receipts">
+      <Button
+        asChild
+        size={isMobileViewport ? "icon" : "sm"}
+        variant="outline"
+        title={receiptsToReview ? `Receipts, ${receiptsToReview} to review` : "Receipts"}
+        aria-label={receiptsToReview ? `Receipts, ${receiptsToReview} to review` : "Receipts"}
+        className="relative"
+      >
         <Link to="/spending/receipts">
           <Icons.Receipt className={isMobileViewport ? "size-4" : "mr-1.5 size-4"} />
           {isMobileViewport ? null : "Receipts"}
+          {/* money-hub patch: receipts the AI read that wait for the owner's Looks good (owner, 10-03). */}
+          {receiptsToReview ? (
+            <span className="absolute -right-1.5 -top-1.5 min-w-4 rounded-full bg-[var(--m-warn)] px-1 text-center text-[10px] font-semibold leading-4 text-white tabular-nums">
+              {receiptsToReview}
+            </span>
+          ) : null}
         </Link>
       </Button>
       {/* Ask AI to categorize uncategorized transactions */}

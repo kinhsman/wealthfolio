@@ -13,14 +13,16 @@ import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 
 import { PasteReceiptButton, ReceiptDetails, SnapReceiptButton, STATE_TONE, usePastedReceipt, useReceiptUpload } from "../components/receipt-panel";
 import { useDashboardSkins } from "../lib/dashboard-skin";
-import { photoUrl, receiptState, storeName, useReceipts, type Receipt } from "../lib/receipts";
+import { photoUrl, receiptState, storeName, toReview, useReceipts, type Receipt } from "../lib/receipts";
 
 const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 const day = (iso: string) =>
   new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
-/** Needs a look first, then waiting, then filed; newest first in each. */
-const RANK: Record<Receipt["status"], number> = { failed: 0, held: 0, unmatched: 0, reading: 1, read: 1, waiting: 1, filed: 2 };
+/** Needs a look first (could not be read, or no charge), then the ones to review (owner, 10-03: what the AI
+ *  read waits for their Looks good), then waiting, then filed; newest first in each. */
+const RANK: Record<Receipt["status"], number> = { failed: 0, held: 0, unmatched: 0, reading: 2, read: 2, waiting: 2, filed: 3 };
+const rankOf = (r: Receipt) => (RANK[r.status] > 0 && toReview(r) ? 1 : RANK[r.status]);
 
 export default function SpendingReceiptsPage() {
   const navigate = useNavigate();
@@ -32,10 +34,11 @@ export default function SpendingReceiptsPage() {
   usePastedReceipt((files) => void upload.send(files), !!data?.ready);
 
   const rows = useMemo(
-    () => [...(data?.receipts ?? [])].sort((a, b) => RANK[a.status] - RANK[b.status] || String(b.date ?? b.at).localeCompare(String(a.date ?? a.at))),
+    () => [...(data?.receipts ?? [])].sort((a, b) => rankOf(a) - rankOf(b) || String(b.date ?? b.at).localeCompare(String(a.date ?? a.at))),
     [data],
   );
   const look = rows.filter((r) => RANK[r.status] === 0).length;
+  const reviews = rows.filter(toReview).length;
   const waiting = rows.filter((r) => r.status === "waiting").length;
 
   const snap = (
@@ -86,7 +89,7 @@ export default function SpendingReceiptsPage() {
           ) : rows.length ? (
             <DashboardCard
               title="Receipts"
-              subtitle={[`${rows.length}`, look ? `${look} to look at` : null, waiting ? `${waiting} waiting` : null].filter(Boolean).join(" · ")}
+              subtitle={[`${rows.length}`, reviews ? `${reviews} to review` : null, look ? `${look} to look at` : null, waiting ? `${waiting} waiting` : null].filter(Boolean).join(" · ")}
               padded={false}
             >
               <ul className="divide-border/60 divide-y">
@@ -109,6 +112,12 @@ export default function SpendingReceiptsPage() {
                               <span className="sm:hidden">{st.short}</span>
                               <span className="hidden sm:inline">{st.text}</span>
                             </span>
+                            {toReview(r) ? (
+                              <span className={cn("shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium", STATE_TONE.look)}>
+                                <span className="sm:hidden">Review</span>
+                                <span className="hidden sm:inline">To review</span>
+                              </span>
+                            ) : null}
                           </div>
                           <div className="text-muted-foreground truncate text-xs">
                             {[r.date ? day(r.date) : `Snapped ${day(r.at)}`, r.items.length ? `${r.items.filter((x) => x.price > 0).length} items` : null].filter(Boolean).join(" · ")}

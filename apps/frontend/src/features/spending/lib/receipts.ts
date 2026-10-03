@@ -46,6 +46,8 @@ export interface Receipt {
   cardLast4: string | null;
   items: ReceiptItem[];
   activityId: string | null;
+  /** The owner checked what the AI read and pressed Looks good. */
+  reviewed: boolean;
   /** The charge's day, once there is one. */
   chargeDate: string | null;
   chosen: boolean;
@@ -131,12 +133,45 @@ export const receiptsApi = {
     return call<ReceiptAnswer>("POST", "", form);
   },
   setCategory: (id: string, n: number, categoryId: string) => call<ReceiptAnswer>("PUT", `/${id}`, { items: [{ n, categoryId }] }),
+  /** Looks good (false puts it back under To review). */
+  setReviewed: (id: string, reviewed = true) => call<ReceiptAnswer>("PUT", `/${id}/reviewed`, { reviewed }),
+  /** The owner's corrections: store, date, total, tax and every line. */
+  edit: (id: string, body: ReceiptEdit) => call<ReceiptAnswer>("PUT", `/${id}/edit`, body),
   /** File it over the owner's own split. */
   fileAnyway: (id: string) => call<ReceiptAnswer>("PUT", `/${id}`, { file: true }),
   setCharge: (id: string, activityId: string | null, activityDate?: string) => call<ReceiptAnswer>("PUT", `/${id}`, { activityId, activityDate }),
   readAgain: (id: string) => call<ReceiptAnswer>("POST", `/${id}/read`),
   remove: (id: string) => call<{ ok: true }>("DELETE", `/${id}`),
 };
+
+export interface ReceiptEdit {
+  store: string;
+  date: string;
+  total: string | number;
+  tax: string | number | null;
+  items: {
+    name: string;
+    what: string;
+    code: string | null;
+    price: string | number;
+    taxable: boolean;
+    categoryId: string;
+    byOwner: boolean;
+    pinned: boolean;
+  }[];
+}
+
+/** How many receipts wait for the owner's look (the Receipts button on Transactions). */
+export function useReceiptsToReview() {
+  return useQuery({
+    queryKey: [...RECEIPTS_KEY, "summary"],
+    queryFn: () => call<{ toReview: number }>("GET", "/summary"),
+    staleTime: 60 * 1000,
+  });
+}
+
+/** Read by the AI and not yet marked good (a failed read has nothing to check). */
+export const toReview = (r: Pick<Receipt, "reviewed" | "status">) => !r.reviewed && r.status !== "failed" && r.status !== "reading";
 
 export const photoUrl = (id: string, n = 0) => `${BASE}/${id}/photo/${n}`;
 

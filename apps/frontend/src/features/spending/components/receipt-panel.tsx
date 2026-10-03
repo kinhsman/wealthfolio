@@ -20,12 +20,14 @@ import {
   refreshAfterReceipt,
   shortCategory,
   storeName,
+  toReview,
   useChargeChoices,
   useReceiptFor,
   type ChargeChoice,
   type Receipt,
   type ReceiptAnswer,
   type ReceiptCategory,
+  type ReceiptEdit,
 } from "../lib/receipts";
 
 const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -51,6 +53,46 @@ function groupsOf(categories: ReceiptCategory[]): [string, ReceiptCategory[]][] 
 
 const field =
   "h-7 w-full rounded-md border bg-background px-1.5 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-50";
+
+/** A category picker: the owner's categories under their parent. */
+function CategorySelect({
+  value,
+  categories,
+  disabled,
+  onChange,
+  label,
+  className,
+}: {
+  value: string;
+  categories: ReceiptCategory[];
+  disabled?: boolean;
+  onChange: (categoryId: string) => void;
+  label: string;
+  className?: string;
+}) {
+  return (
+    <select value={value} disabled={disabled || !categories.length} onChange={(e) => onChange(e.target.value)} className={cn(field, className)} aria-label={label}>
+      {groupsOf(categories).map(([group, cats]) =>
+        group ? (
+          <optgroup key={group} label={group}>
+            {cats.map((c) => (
+              <option key={c.id} value={c.id}>
+                {shortCategory(categories, c.id)}
+              </option>
+            ))}
+          </optgroup>
+        ) : (
+          cats.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))
+        ),
+      )}
+      {categories.some((c) => c.id === value) ? null : <option value={value}>{value}</option>}
+    </select>
+  );
+}
 
 /** What happened, in a toast: where it was filed, or what it waits for. */
 export function receiptToast(r: ReceiptAnswer) {
@@ -268,6 +310,8 @@ export function ReceiptDetails({
   const [busy, setBusy] = useState<string | null>(null);
   const [sure, setSure] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const review = toReview(r);
   const st = receiptState(r);
   const split = receiptSplit(r);
   // No charge found by itself yet: the owner can pick it (a gift card paid part, or two alike).
@@ -297,6 +341,7 @@ export function ReceiptDetails({
           <div className="flex items-center gap-1.5">
             <span className="text-foreground truncate text-sm font-medium">{storeName(r.store)}</span>
             <span className={cn("shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium", STATE_TONE[st.tone])}>{st.text}</span>
+            {review ? <span className={cn("shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium", STATE_TONE.look)}>To review</span> : null}
           </div>
           <div className="text-muted-foreground truncate">
             {[r.date && day(r.date), r.total != null && usd(r.total), r.tax ? `tax ${usd(r.tax)}` : null, r.cardLast4 && `card ••${r.cardLast4}`]
@@ -321,6 +366,25 @@ export function ReceiptDetails({
         </div>
       )}
 
+      {editing ? (
+        <ReceiptEditor
+          receipt={r}
+          categories={categories}
+          onCancel={() => setEditing(false)}
+          onSaved={(out) => {
+            setEditing(false);
+            refreshAfterReceipt(qc);
+            onChanged?.(out);
+            toast.success("Receipt saved", { description: out.status === "filed" ? "The charge is filed to match." : receiptState(out).text });
+          }}
+        />
+      ) : (
+      <>
+      {review ? (
+        <p className="rounded-md bg-[var(--m-warn-soft)] px-2.5 py-1.5 text-[var(--m-warn)]">
+          Read by AI. Check the lines, fix anything with Edit, then press Looks good.
+        </p>
+      ) : null}
       {split.length ? (
         <div className="flex flex-wrap gap-1.5">
           {split.map((l) => (
@@ -363,32 +427,13 @@ export function ReceiptDetails({
                   {discount ? (
                     <span className="text-muted-foreground block truncate px-1.5">{shortCategory(categories, it.categoryId)}</span>
                   ) : (
-                    <select
+                    <CategorySelect
                       value={it.categoryId}
-                      disabled={busy !== null || !categories.length}
-                      onChange={(e) => void act(`cat-${it.n}`, () => receiptsApi.setCategory(r.id, it.n, e.target.value))}
-                      className={field}
-                      aria-label={`Category for ${it.what || it.name}`}
-                    >
-                      {groupsOf(categories).map(([group, cats]) =>
-                        group ? (
-                          <optgroup key={group} label={group}>
-                            {cats.map((c) => (
-                              <option key={c.id} value={c.id}>
-                                {shortCategory(categories, c.id)}
-                              </option>
-                            ))}
-                          </optgroup>
-                        ) : (
-                          cats.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))
-                        ),
-                      )}
-                      {categories.some((c) => c.id === it.categoryId) ? null : <option value={it.categoryId}>{it.categoryId}</option>}
-                    </select>
+                      categories={categories}
+                      disabled={busy !== null}
+                      onChange={(v) => void act(`cat-${it.n}`, () => receiptsApi.setCategory(r.id, it.n, v))}
+                      label={`Category for ${it.what || it.name}`}
+                    />
                   )}
                 </div>
               </li>
@@ -396,6 +441,8 @@ export function ReceiptDetails({
           })}
         </ul>
       ) : null}
+      </>
+      )}
 
       {canPick && picking ? (
         <ChargePicker
@@ -412,7 +459,19 @@ export function ReceiptDetails({
         />
       ) : null}
 
+      {editing ? null : (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t pt-2">
+        {review ? (
+          <Button size="sm" className="h-7 text-xs" disabled={busy !== null} onClick={() => void act("good", () => receiptsApi.setReviewed(r.id, true))}>
+            {busy === "good" ? <Icons.Spinner className="mr-1.5 size-3.5 animate-spin" /> : <Icons.Check className="mr-1.5 size-3.5" />}
+            Looks good
+          </Button>
+        ) : null}
+        {r.status !== "failed" && r.status !== "reading" ? (
+          <button type="button" className="text-primary underline-offset-4 hover:underline disabled:opacity-50" disabled={busy !== null} onClick={() => setEditing(true)}>
+            Edit
+          </button>
+        ) : null}
         {canPick ? (
           <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy !== null} onClick={() => setPicking(!picking)} aria-expanded={picking}>
             {busy === "pick" ? <Icons.Spinner className="mr-1.5 size-3.5 animate-spin" /> : null}
@@ -454,6 +513,180 @@ export function ReceiptDetails({
             Delete receipt
           </button>
         )}
+      </div>
+      )}
+    </div>
+  );
+}
+
+interface DraftLine {
+  key: number;
+  name: string;
+  what: string;
+  code: string | null;
+  price: string;
+  taxable: boolean;
+  categoryId: string;
+  byOwner: boolean;
+  pinned: boolean;
+}
+
+const moneyIn = (x: string) => {
+  const n = Number(String(x).replace(/[$,\s]/g, ""));
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : NaN;
+};
+
+/**
+ * The owner's corrections of what the AI read (owner, 10-03: "user must be allowed to modify the AI
+ * output"): the store, date, total and tax, and every line (what it is, price, category), removed or
+ * added. Saving files the charge again to match.
+ */
+function ReceiptEditor({
+  receipt: r,
+  categories,
+  onCancel,
+  onSaved,
+}: {
+  receipt: Receipt;
+  categories: ReceiptCategory[];
+  onCancel: () => void;
+  onSaved: (r: ReceiptAnswer) => void;
+}) {
+  const [store, setStore] = useState(storeName(r.store));
+  const [date, setDate] = useState(r.date ?? "");
+  const [total, setTotal] = useState(r.total != null ? r.total.toFixed(2) : "");
+  const [tax, setTax] = useState(r.tax != null ? r.tax.toFixed(2) : "");
+  const [lines, setLines] = useState<DraftLine[]>(() =>
+    r.items.map((it, i) => ({
+      key: i,
+      name: it.name,
+      what: it.what || it.name,
+      code: it.code,
+      price: it.price.toFixed(2),
+      taxable: it.taxable,
+      categoryId: it.categoryId,
+      byOwner: !!it.byOwner,
+      pinned: false,
+    })),
+  );
+  const [saving, setSaving] = useState(false);
+  const fallback = categories.some((c) => c.id === "cat_groceries") ? "cat_groceries" : (categories[0]?.id ?? "");
+
+  const set = (key: number, patch: Partial<DraftLine>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  const sum = lines.reduce((acc, l) => acc + (Number.isNaN(moneyIn(l.price)) ? 0 : moneyIn(l.price)), 0) + (Number.isNaN(moneyIn(tax)) ? 0 : moneyIn(tax));
+  const totalN = moneyIn(total);
+  const off = !Number.isNaN(totalN) && Math.abs(sum - totalN) > 0.009;
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const body: ReceiptEdit = {
+        store,
+        date,
+        total,
+        tax: tax.trim() === "" ? null : tax,
+        items: lines.map(({ name, what, code, price, taxable, categoryId, byOwner, pinned }) => ({ name, what, code, price, taxable, categoryId, byOwner, pinned })),
+      };
+      onSaved(await receiptsApi.edit(r.id, body));
+    } catch (e) {
+      toast.error(errorText(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const box = "h-8 w-full rounded-md border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none";
+  const label = (text: string, input: ReactNode) => (
+    <label className="min-w-0 space-y-1">
+      <span className="text-muted-foreground block text-[11px]">{text}</span>
+      {input}
+    </label>
+  );
+
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {label("Store", <input value={store} onChange={(e) => setStore(e.target.value)} className={box} />)}
+        {label("Date", <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={box} />)}
+        {label("Total", <input value={total} inputMode="decimal" onChange={(e) => setTotal(e.target.value)} className={cn(box, "tabular-nums")} />)}
+        {label("Tax", <input value={tax} inputMode="decimal" onChange={(e) => setTax(e.target.value)} className={cn(box, "tabular-nums")} />)}
+      </div>
+
+      <ul className="divide-border/60 divide-y border-t">
+        {lines.map((l, i) => {
+          const discount = moneyIn(l.price) < 0;
+          return (
+            <li key={l.key} className="py-2">
+              {/* One row on a computer; on a phone the name and the remove button, then the price and category. */}
+              <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                <input
+                  value={l.what}
+                  onChange={(e) => set(l.key, { what: e.target.value })}
+                  placeholder="What it is"
+                  title={l.name ? `On the receipt: ${l.name}` : undefined}
+                  className={cn(box, "min-w-0 flex-1 basis-[calc(100%-2.5rem)] sm:basis-auto")}
+                  aria-label={`Line ${i + 1}`}
+                />
+                <input
+                  value={l.price}
+                  inputMode="decimal"
+                  onChange={(e) => set(l.key, { price: e.target.value })}
+                  className={cn(box, "order-3 w-24 shrink-0 tabular-nums sm:order-none")}
+                  aria-label={`Price of line ${i + 1}`}
+                />
+                {discount ? (
+                  <span className="text-muted-foreground order-4 min-w-0 flex-1 truncate sm:order-none sm:w-56 sm:flex-none">Discount, goes with the line above</span>
+                ) : (
+                  <CategorySelect
+                    value={l.categoryId}
+                    categories={categories}
+                    onChange={(v) => set(l.key, { categoryId: v, byOwner: true, pinned: true })}
+                    label={`Category for line ${i + 1}`}
+                    className="order-4 h-8 min-w-0 flex-1 sm:order-none sm:w-56 sm:flex-none"
+                  />
+                )}
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-destructive order-2 shrink-0 p-1 sm:order-none"
+                  title="Remove this line"
+                  aria-label={`Remove line ${i + 1}`}
+                  onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}
+                >
+                  <Icons.Close className="size-3.5" />
+                </button>
+              </div>
+              {l.name && l.name !== l.what ? <div className="text-muted-foreground mt-1 truncate text-[11px]">On the receipt: {l.name}</div> : null}
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <button
+          type="button"
+          className="text-primary inline-flex items-center gap-1 underline-offset-4 hover:underline"
+          onClick={() =>
+            setLines((ls) => [
+              ...ls,
+              { key: Math.max(-1, ...ls.map((x) => x.key)) + 1, name: "", what: "", code: null, price: "", taxable: false, categoryId: fallback, byOwner: true, pinned: true },
+            ])
+          }
+        >
+          <Icons.Plus className="size-3.5" />
+          Add a line
+        </button>
+        <span className={cn("tabular-nums", off ? "text-[var(--m-warn)]" : "text-muted-foreground")}>
+          Lines and tax {usd(sum)}
+          {!Number.isNaN(totalN) ? ` of ${usd(totalN)}` : ""}
+        </span>
+        <span className="flex-1" />
+        <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={saving} onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button size="sm" className="h-7 text-xs" disabled={saving} onClick={() => void save()}>
+          {saving ? <Icons.Spinner className="mr-1.5 size-3.5 animate-spin" /> : null}
+          Save
+        </Button>
       </div>
     </div>
   );
