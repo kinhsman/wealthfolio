@@ -88,7 +88,8 @@ function TransactionDayHeaderImpl({
           }
         />
       </TableCell>
-      <TableCell colSpan={3} className="px-3 py-1.5">
+      {/* money-hub patch: name + category (the Time column is gone, 10-02). */}
+      <TableCell colSpan={2} className="px-3 py-1.5">
         <div className="flex items-baseline gap-2">
           <span className="text-xs font-medium">{label}</span>
           {/* "1 transaction" restates the single row below it, so the count

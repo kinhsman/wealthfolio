@@ -53,12 +53,13 @@ function renderHeader(
 }
 
 describe("TransactionDayHeader", () => {
-  it("spans exactly the six columns of the transactions table", () => {
+  // money-hub patch: five since the Time column went (owner, 10-02).
+  it("spans exactly the five columns of the transactions table", () => {
     const { container } = renderHeader(group([{ id: "a" }]));
 
     const cells = [...container.querySelectorAll("td")];
     const spanned = cells.reduce((total, cell) => total + (cell.colSpan || 1), 0);
-    expect(spanned).toBe(6);
+    expect(spanned).toBe(5);
   });
 
   it("shows the day, its count and its net", () => {

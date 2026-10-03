@@ -1051,7 +1051,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       [groupByDay, dayGroups, rows],
     );
     /** The table's column count, for the spacer rows that span it. */
-    const columnCount = groupByDay ? 6 : 7;
+    const columnCount = groupByDay ? 5 : 6;
 
     // Neither layout owns its scroll box — the table scrolls with the page, the
     // card list scrolls inside its swipeable pane — so both sit below a filter
@@ -1384,14 +1384,6 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
                     />
                   </TableHead>
                   {!groupByDay && <TableHead className="w-28 px-3">Date</TableHead>}
-                  <TableHead
-                    className={cn(
-                      "hidden w-20 px-3",
-                      groupByDay ? "md:table-cell" : "xl:table-cell",
-                    )}
-                  >
-                    {t("spending:txTab.time")}
-                  </TableHead>
                   <TableHead className="px-3">{t("spending:txTab.nameNotes")}</TableHead>
                   <TableHead className="hidden w-44 px-3 sm:table-cell">
                     {t("spending:filters.category")}

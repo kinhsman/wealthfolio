@@ -37,7 +37,7 @@ interface TransactionCardProps {
   appTimezone?: string;
   /** True when the loaded result set spans more than one account. */
   showAccount: boolean;
-  /** money-hub patch: day groups switched off, so the card shows its own date in place of the time. */
+  /** money-hub patch: day groups switched off, so the card shows its own date. */
   showDate?: boolean;
   /** Checkboxes only appear once the list is in selection mode. */
   selectionMode: boolean;
@@ -86,7 +86,7 @@ function TransactionCardImpl({
   onUnlinkTransfer,
 }: TransactionCardProps) {
   const shown = useShownAmount();   // money-hub patch: Show in USD (lib/display-currency.ts)
-  const { formatDate, formatTime } = useDateFormatting();
+  const { formatDate } = useDateFormatting();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const { t } = useTranslation();
@@ -108,9 +108,9 @@ function TransactionCardImpl({
   const transferLinkStatus = getTransferLinkStatus(a);
   const canMarkReimbursement =
     isIncome && !isCreditCardAccountType(account?.accountType) && activityType !== "CREDIT";
-  // Minutes only, matching the desktop row — the seconds-bearing formatDateTime
-  // is too verbose for a line that now carries just the time and the account.
-  const time = showDate
+  // money-hub patch: no time on the card (owner, 10-02: bank entries all read 12:00 PM); the date only
+  // when the day groups are off.
+  const date = showDate
     ? formatDate(a.activityDate, {
         month: "short",
         day: "numeric",
@@ -120,11 +120,7 @@ function TransactionCardImpl({
           : {}),
         ...(appTimezone ? { timeZone: appTimezone } : {}),
       })
-    : formatTime(a.activityDate, {
-        hour: "numeric",
-        minute: "numeric",
-        ...(appTimezone ? { timeZone: appTimezone } : {}),
-      });
+    : null;
 
   return (
     <Card
@@ -210,8 +206,12 @@ function TransactionCardImpl({
               the date, and the category sits inline the way the table row shows
               it rather than in a chip row of its own. */}
           <div className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-[11px]">
-            <span className="shrink-0">{time}</span>
-            <span aria-hidden="true">·</span>
+            {date && (
+              <>
+                <span className="shrink-0">{date}</span>
+                <span aria-hidden="true">·</span>
+              </>
+            )}
             {isNeutral ? (
               <span className="shrink-0">{t("spending:transactions.neutral")}</span>
             ) : row.splitCount > 0 ? (

@@ -97,7 +97,7 @@ function TransactionRowImpl({
   onUnlinkTransfer,
 }: TransactionRowProps) {
   const shown = useShownAmount();   // money-hub patch: Show in USD (lib/display-currency.ts)
-  const { formatDate, formatTime } = useDateFormatting();
+  const { formatDate } = useDateFormatting();
 
   const { t } = useTranslation();
   const a = row.activity;
@@ -121,11 +121,6 @@ function TransactionRowImpl({
   const transferLinkStatus = getTransferLinkStatus(a);
   const canMarkReimbursement =
     isIncome && !isCreditCardAccountType(account?.accountType) && activityType !== "CREDIT";
-  const time = formatTime(a.activityDate, {
-    hour: "numeric",
-    minute: "numeric",
-    ...(appTimezone ? { timeZone: appTimezone } : {}),
-  });
 
   return (
     <TableRow
@@ -154,15 +149,7 @@ function TransactionRowImpl({
           })}
         </TableCell>
       )}
-      <TableCell
-        className={cn(
-          "text-muted-foreground hidden w-20 whitespace-nowrap px-3 py-2 text-xs tabular-nums",
-          // With the Date column in, the time only shows on wide screens, so the name keeps its room.
-          showDate ? "xl:table-cell" : "md:table-cell",
-        )}
-      >
-        {time}
-      </TableCell>
+      {/* money-hub patch: no Time column (owner, 10-02: bank entries all read 12:00 PM). */}
       {/* `max-w-0` hands this column whatever width the fixed-width columns
           leave over, instead of letting a long note stretch the table. It has
           to be `!important`: globals.css sets `max-width: 100vw` on every
