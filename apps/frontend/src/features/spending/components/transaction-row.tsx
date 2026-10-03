@@ -39,6 +39,7 @@ import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
 import { canLinkCharge, linkCharge } from "../lib/track-charge";
 import { ReturnBadge } from "./return-badge";
 import { CategoryMark } from "./category-chips";
+import { useShownAmount } from "@/lib/display-currency";
 
 interface TransactionRowProps {
   row: TransactionRowVM;
@@ -92,6 +93,7 @@ function TransactionRowImpl({
   onLinkTransfer,
   onUnlinkTransfer,
 }: TransactionRowProps) {
+  const shown = useShownAmount();   // money-hub patch: Show in USD (lib/display-currency.ts)
   const { formatTime } = useDateFormatting();
 
   const { t } = useTranslation();
@@ -106,6 +108,7 @@ function TransactionRowImpl({
     a,
     account?.accountType,
   );
+  const display = shown(Math.abs(safeAmount), a.currency, a.accountId);
   const accountName = account?.name ?? a.accountId;
   const rowAriaLabel = isSelected
     ? t("spending:transactions.deselect")
@@ -281,7 +284,7 @@ function TransactionRowImpl({
         )}
       >
         {sign}
-        <PrivacyAmount value={Math.abs(safeAmount)} currency={a.currency} />
+        <PrivacyAmount value={display.amount} currency={display.currency} />
       </TableCell>
       <TableCell className="w-10 px-3 py-2">
         <DropdownMenu>

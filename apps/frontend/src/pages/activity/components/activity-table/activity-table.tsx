@@ -61,6 +61,7 @@ import { useVirtualScrollContainer } from "@/hooks/use-virtual-scroll-container"
 import { useActivityMutations } from "../../hooks/use-activity-mutations";
 import { ActivityOperations } from "../activity-operations";
 import { ActivityTypeBadge } from "../activity-type-badge";
+import { useShownAmount } from "@/lib/display-currency";
 
 /**
  * Starting height for a virtualized row. Rows report their real height once
@@ -113,6 +114,7 @@ export const ActivityTable = ({
   const { isBalanceHidden } = useBalancePrivacy();
   const { t } = useTranslation();
   const { duplicateActivityMutation } = useActivityMutations();
+  const shown = useShownAmount();   // money-hub patch: Show in USD (lib/display-currency.ts)
   // mutateAsync is stable; the mutation object is not, and `columns` depends on this handler.
   const { mutateAsync: duplicateActivity } = duplicateActivityMutation;
   const { settings } = useSettingsContext();
@@ -513,10 +515,10 @@ export const ActivityTable = ({
             return <div className="pr-4 text-right">-</div>;
           }
 
-          const displayValue = calculateActivityValue(activity);
+          const display = shown(calculateActivityValue(activity), currency, activity.accountId);
           return (
             <div className="pr-4 text-right">
-              <AmountDisplay value={displayValue} currency={currency} isHidden={isBalanceHidden} />
+              <AmountDisplay value={display.amount} currency={display.currency} isHidden={isBalanceHidden} />
             </div>
           );
         },
@@ -644,6 +646,7 @@ export const ActivityTable = ({
       onUnlinkTransfer,
       numberFormatting,
       symbolExchangeCountMap,
+      shown,
       t,
     ],
   );

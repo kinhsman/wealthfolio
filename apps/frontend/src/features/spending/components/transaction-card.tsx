@@ -27,6 +27,7 @@ import { useMerchantFor } from "../lib/merchants";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
 import { CategoryMark } from "./category-chips";
+import { useShownAmount } from "@/lib/display-currency";
 
 interface TransactionCardProps {
   row: TransactionRowVM;
@@ -81,6 +82,7 @@ function TransactionCardImpl({
   onLinkTransfer,
   onUnlinkTransfer,
 }: TransactionCardProps) {
+  const shown = useShownAmount();   // money-hub patch: Show in USD (lib/display-currency.ts)
   const { formatTime } = useDateFormatting();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -96,6 +98,7 @@ function TransactionCardImpl({
     a,
     account?.accountType,
   );
+  const display = shown(Math.abs(safeAmount), a.currency, a.accountId);
   const accountName = account?.name ?? a.accountId;
   const activityType = getEffectiveCashActivityType(a);
   const isTransfer = isTransferCashActivity(a);
@@ -168,7 +171,7 @@ function TransactionCardImpl({
               )}
             >
               {sign}
-              <PrivacyAmount value={Math.abs(safeAmount)} currency={a.currency} />
+              <PrivacyAmount value={display.amount} currency={display.currency} />
             </span>
           </div>
 

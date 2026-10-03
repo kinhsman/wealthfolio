@@ -37,6 +37,7 @@ import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 import { useVirtualScrollContainer } from "@/hooks/use-virtual-scroll-container";
 import { ActivityOperations } from "../activity-operations";
 import { ActivityTypeBadge } from "../activity-type-badge";
+import { useShownAmount } from "@/lib/display-currency";
 
 /**
  * Starting heights for virtualized cards. The detailed card grows with the
@@ -92,6 +93,7 @@ export const ActivityTableMobile = ({
   const { isBalanceHidden } = useBalancePrivacy();
   const { t } = useTranslation();
   const { settings } = useSettingsContext();
+  const shown = useShownAmount();   // money-hub patch: Show in USD (lib/display-currency.ts)
   const appTimezone = settings?.timezone?.trim() || undefined;
 
   // The list scrolls inside its own box, so it sits at the top of it and the
@@ -184,6 +186,7 @@ export const ActivityTableMobile = ({
       : null;
     const formattedDate = formatDateTime(activity.date, dateFormatting, appTimezone);
     const displayValue = calculateActivityValue(activity);
+    const display = shown(displayValue, activity.currency, activity.accountId);
 
     // Compact View
     if (isCompactView) {
@@ -206,8 +209,8 @@ export const ActivityTableMobile = ({
                       <p className="truncate font-semibold">{displaySymbol}</p>
                       {activity.activityType !== "SPLIT" && (
                         <AmountDisplay
-                          value={displayValue}
-                          currency={activity.currency}
+                          value={display.amount}
+                          currency={display.currency}
                           isHidden={isBalanceHidden}
                           className="shrink-0 text-sm font-semibold"
                         />

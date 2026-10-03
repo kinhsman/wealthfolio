@@ -22,6 +22,7 @@ import { merchantFor, useMerchants } from "../lib/merchants";
 import { MerchantLogo } from "./merchant-logo";
 import { usePendingTransactions, type PendingTransaction } from "./pending-transactions";
 import { PhoneFold } from "./phone-fold";
+import { useShownAmount } from "@/lib/display-currency";
 
 const SPENDING_TAXONOMY = "spending_categories";
 
@@ -43,6 +44,7 @@ export function RecentActivityCard({
    *  listed first in their day, read-only (components/pending-transactions.tsx). */
   pendingRange?: { from?: string; to?: string };
 }) {
+  const shown = useShownAmount();   // money-hub patch: Show in USD (lib/display-currency.ts)
   const formatting = useDateFormatting();
   const { t } = useTranslation();
   const { data: merchants } = useMerchants();
@@ -207,6 +209,7 @@ export function RecentActivityCard({
               const isOutflow = spendingAmount > 0;
               const amount =
                 spendingAmount === 0 ? parseFloat(a.amount ?? "0") || 0 : Math.abs(spendingAmount);
+              const display = shown(amount, a.currency, a.accountId);
               const badge = badgeByActivityId.get(a.id);
               const needsReview = a.needsReview || (isOutflow && !badge);
 
@@ -255,7 +258,7 @@ export function RecentActivityCard({
                     )}
                   >
                     {isOutflow ? "−" : "+"}
-                    <PrivacyAmount value={amount} currency={a.currency} />
+                    <PrivacyAmount value={display.amount} currency={display.currency} />
                   </div>
                 </Link>
               );

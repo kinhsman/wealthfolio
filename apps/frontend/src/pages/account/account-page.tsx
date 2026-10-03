@@ -2,7 +2,7 @@ import { parseLocalDate } from "@/lib/utils";
 import { displayAccountType } from "@/lib/account-display";
 import { accountLogoUrl } from "@/lib/account-logo";
 import { formatZonedDateKey } from "@/features/spending/lib/timezone";
-import { getContributionLimit, getSnapshots, searchActivities } from "@/adapters";
+import { getContributionLimit, getSnapshots, searchActivities, updateAccount } from "@/adapters";
 import { HistoryChart } from "@/components/history-chart";
 import type { ActivityDetails } from "@/lib/types";
 import {
@@ -75,7 +75,9 @@ import { useActivitySearch } from "@/pages/activity/hooks/use-activity-search";
 import { PortfolioUpdateTrigger } from "@/pages/dashboard/portfolio-update-trigger";
 import { HoldingsEditMode } from "@/pages/holdings/components/holdings-edit-mode";
 import { useCalculatePerformanceHistory } from "@/pages/performance/hooks/use-performance-data";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { setShowInBaseInMeta, showsInBase, useShownAmount } from "@/lib/display-currency";
+import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import type { SortingState } from "@tanstack/react-table";
 import { Icons, type Icon } from "@wealthfolio/ui";
 import { Button } from "@wealthfolio/ui/components/ui/button";
@@ -169,6 +171,10 @@ async function getCashAuditActivities(
 const AccountPage = () => {
   const { t } = useTranslation();
   const { settings } = useSettingsContext();
+  // money-hub patch: Show in USD for an account in another currency (lib/display-currency.ts).
+  const shown = useShownAmount();
+  const queryClient = useQueryClient();
+  const [savingShowInBase, setSavingShowInBase] = useState(false);
   const baseCurrency = settings?.baseCurrency ?? "USD";
   const appTimezone = settings?.timezone?.trim() || undefined;
   const { id = "" } = useParams<{ id: string }>();
@@ -616,6 +622,21 @@ const AccountPage = () => {
       : performanceCurrency;
   const showGainLossCurrency =
     gainLossCurrencyToDisplay.toUpperCase() !== displayedValueCurrency.toUpperCase();
+  // money-hub patch: the value and its gain in the base currency when the account's Show in USD is on.
+  const valueShown = shown(displayedTotalValue, displayedValueCurrency, account?.id);
+  const gainShown =
+    gainLossAmountToDisplay == null ? null : shown(gainLossAmountToDisplay, gainLossCurrencyToDisplay, account?.id);
+  const canShowInBase = !!account && account.currency.toUpperCase() !== baseCurrency.toUpperCase();
+  const toggleShowInBase = async (on: boolean) => {
+    if (!account) return;
+    setSavingShowInBase(true);
+    try {
+      await updateAccount({ ...account, meta: setShowInBaseInMeta(account.meta, on) });
+      await queryClient.invalidateQueries({ queryKey: [QueryKeys.ACCOUNTS] });
+    } finally {
+      setSavingShowInBase(false);
+    }
+  };
 
   const chartData: HistoryChartData[] = useMemo(() => {
     if (!valuationHistory) return [];
@@ -1032,12 +1053,20 @@ const AccountPage = () => {
                                 {t("account:not_available")}
                               </span>
                             ) : (
-                              <PrivacyAmount
-                                value={displayedTotalValue}
-                                currency={displayedValueCurrency}
-                              />
+                              <PrivacyAmount value={valueShown.amount} currency={valueShown.currency} />
                             )}
                           </p>
+                          {canShowInBase && (
+                            <label className="text-muted-foreground flex items-center gap-1.5 pt-1 text-xs">
+                              <Switch
+                                checked={showsInBase(account)}
+                                disabled={savingShowInBase}
+                                onCheckedChange={(v) => void toggleShowInBase(v)}
+                                aria-label={`Show ${account?.name ?? "this account"} in ${baseCurrency}`}
+                              />
+                              Show in {baseCurrency}
+                            </label>
+                          )}
                           {!hasPerformanceError && (
                             <div className="flex items-center gap-2 text-sm">
                               {gainLossAmountToDisplay == null ? (
@@ -1047,9 +1076,9 @@ const AccountPage = () => {
                               ) : (
                                 <GainAmount
                                   className="text-sm font-light"
-                                  value={gainLossAmountToDisplay}
-                                  currency={gainLossCurrencyToDisplay}
-                                  displayCurrency={showGainLossCurrency}
+                                  value={gainShown?.amount ?? gainLossAmountToDisplay}
+                                  currency={gainShown?.currency ?? gainLossCurrencyToDisplay}
+                                  displayCurrency={showGainLossCurrency && !gainShown?.converted}
                                 />
                               )}
                               {percentageToDisplay == null ? (
