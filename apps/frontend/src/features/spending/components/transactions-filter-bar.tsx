@@ -18,6 +18,8 @@ import {
   useBalancePrivacy,
 } from "@wealthfolio/ui";
 
+import { Switch } from "@wealthfolio/ui/components/ui/switch";
+
 import { cn } from "@/lib/utils";
 
 import { AmountRangeFilter, type AmountRange } from "./amount-range-filter";
@@ -146,6 +148,25 @@ interface TransactionsFilterBarProps {
   filteredNet: NetSummary | null;
   isRefreshing: boolean;
   isMobile?: boolean;
+  /** money-hub patch: the list's day groups, on or off (owner, 10-02). */
+  groupByDay?: boolean;
+  onGroupByDayChange?: (next: boolean) => void;
+}
+
+/** money-hub patch: the switch for the list's day groups. Not a filter, so Clear all leaves it. */
+function GroupByDaySwitch({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <label className="text-muted-foreground inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs">
+      <Switch size="sm" checked={checked} onCheckedChange={onChange} />
+      Group by day
+    </label>
+  );
 }
 
 export function TransactionsFilterBar({
@@ -184,6 +205,8 @@ export function TransactionsFilterBar({
   filteredNet,
   isRefreshing,
   isMobile = false,
+  groupByDay = true,
+  onGroupByDayChange,
 }: TransactionsFilterBarProps) {
   const { t } = useTranslation();
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -303,6 +326,11 @@ export function TransactionsFilterBar({
             </SheetHeader>
             <ScrollArea className="flex-1">
               <div className="flex flex-wrap gap-2 px-6 py-4">{filterControls}</div>
+              {onGroupByDayChange && (
+                <div className="border-border border-t px-6 py-4">
+                  <GroupByDaySwitch checked={groupByDay} onChange={onGroupByDayChange} />
+                </div>
+              )}
             </ScrollArea>
             <SheetFooter className="border-border flex-row border-t px-6 py-4">
               <Button
@@ -359,6 +387,9 @@ export function TransactionsFilterBar({
           <NetReadout label={t("spending:filters.selectedNet")} net={selectedNet} />
         )}
         {filteredNet && <NetReadout label={t("spending:filters.filteredNet")} net={filteredNet} />}
+        {onGroupByDayChange && (
+          <GroupByDaySwitch checked={groupByDay} onChange={onGroupByDayChange} />
+        )}
         <span className="text-muted-foreground inline-flex items-center gap-1.5 whitespace-nowrap text-xs tabular-nums">
           {countLabel}
           {isRefreshing && (

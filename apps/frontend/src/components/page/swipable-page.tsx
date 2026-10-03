@@ -196,6 +196,9 @@ export function SwipablePage({
     return idx === -1 ? 0 : idx;
   }, [currentView, views]);
   const currentActions = views.find((v) => v.value === currentView)?.actions;
+  // money-hub patch: one tab has nothing to switch to, so its pill is not drawn (owner, 10-02:
+  // the lone "Spending" pill on Transactions).
+  const singleView = views.length < 2;
   const mobileActionsInHeader = mobileActionsPlacement === "header";
 
   const handleViewChange = React.useCallback(
@@ -239,6 +242,7 @@ export function SwipablePage({
               <div
                 className={cn(
                   "grid w-full items-center gap-2",
+                  singleView && !mobileActionsInHeader && "hidden",
                   mobileActionsInHeader
                     ? "grid-cols-[minmax(0,1fr)_auto] min-[430px]:grid-cols-[2.5rem_minmax(0,1fr)_auto]"
                     : "grid-cols-[1fr_auto_1fr]",
@@ -251,12 +255,14 @@ export function SwipablePage({
                     mobileActionsInHeader && "flex justify-end min-[430px]:justify-center",
                   )}
                 >
-                  <MobileNavigation
-                    views={views}
-                    currentView={currentView}
-                    onViewChange={handleViewChange}
-                    compact={mobileActionsInHeader}
-                  />
+                  {!singleView && (
+                    <MobileNavigation
+                      views={views}
+                      currentView={currentView}
+                      onViewChange={handleViewChange}
+                      compact={mobileActionsInHeader}
+                    />
+                  )}
                 </div>
                 {mobileActionsInHeader ? (
                   <div className="flex min-w-0 shrink-0 items-center justify-end gap-2">
@@ -305,11 +311,13 @@ export function SwipablePage({
             <div className="flex shrink-0 items-center justify-between gap-4 px-2 pb-3 pt-4 lg:px-4">
               <div className="titlebar-nudge flex items-center gap-3">
                 {title && <h1 className="text-muted-foreground text-sm font-medium">{title}</h1>}
-                <NavigationPills
-                  views={views}
-                  currentView={currentView}
-                  onViewChange={handleViewChange}
-                />
+                {!singleView && (
+                  <NavigationPills
+                    views={views}
+                    currentView={currentView}
+                    onViewChange={handleViewChange}
+                  />
+                )}
               </div>
               {/* Actions slot - renders current view's actions */}
               <div className="flex items-center gap-2">{currentActions}</div>

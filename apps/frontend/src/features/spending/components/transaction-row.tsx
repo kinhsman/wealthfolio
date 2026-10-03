@@ -49,6 +49,8 @@ interface TransactionRowProps {
   appTimezone?: string;
   /** True when the loaded result set spans more than one account. */
   showAccount: boolean;
+  /** money-hub patch: day groups switched off, so the date gets its own column. */
+  showDate?: boolean;
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
   onAssignCategory: (activityId: string, taxonomyId: string, categoryId: string) => void;
@@ -80,6 +82,7 @@ function TransactionRowImpl({
   eventTypeColor,
   appTimezone,
   showAccount,
+  showDate = false,
   isSelected,
   onToggleSelect,
   onAssignCategory,
@@ -94,7 +97,7 @@ function TransactionRowImpl({
   onUnlinkTransfer,
 }: TransactionRowProps) {
   const shown = useShownAmount();   // money-hub patch: Show in USD (lib/display-currency.ts)
-  const { formatTime } = useDateFormatting();
+  const { formatDate, formatTime } = useDateFormatting();
 
   const { t } = useTranslation();
   const a = row.activity;
@@ -141,7 +144,23 @@ function TransactionRowImpl({
           aria-label={rowAriaLabel}
         />
       </TableCell>
-      <TableCell className="text-muted-foreground hidden w-20 whitespace-nowrap px-3 py-2 text-xs tabular-nums md:table-cell">
+      {showDate && (
+        <TableCell className="w-28 whitespace-nowrap px-3 py-2 text-xs tabular-nums">
+          {formatDate(a.activityDate, {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            ...(appTimezone ? { timeZone: appTimezone } : {}),
+          })}
+        </TableCell>
+      )}
+      <TableCell
+        className={cn(
+          "text-muted-foreground hidden w-20 whitespace-nowrap px-3 py-2 text-xs tabular-nums",
+          // With the Date column in, the time only shows on wide screens, so the name keeps its room.
+          showDate ? "xl:table-cell" : "md:table-cell",
+        )}
+      >
         {time}
       </TableCell>
       {/* `max-w-0` hands this column whatever width the fixed-width columns
@@ -181,8 +200,10 @@ function TransactionRowImpl({
           <ReturnBadge mark={returnMark} />
           {/* money-hub patch: the bank's own line after the payee (lib/bank-lines.ts). */}
           {bankLine ? <TruncatedText text={bankLine} className="text-muted-foreground flex-1 text-xs" /> : null}
+          {/* money-hub patch: it may shrink (truncate) rather than spill into the Category column when
+              the Date column takes room (day groups off, 10-02). */}
           {showAccount && (
-            <span className="text-muted-foreground max-w-[8rem] shrink-0 truncate text-xs">
+            <span className="text-muted-foreground min-w-0 max-w-[8rem] truncate text-xs">
               {accountName}
             </span>
           )}

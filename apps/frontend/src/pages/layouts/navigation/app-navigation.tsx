@@ -49,11 +49,12 @@ function buildStaticNavigation(t: TFunction): NavigationProps {
         label: t("common:nav.label_holdings"),
       },
       {
+        // money-hub patch: the owner calls this page Transactions (10-02); plain words, the URL stays.
         icon: <Icons.Activity className="size-6" />,
-        title: t("common:activities"),
+        title: "Transactions",
         href: "/activities",
-        keywords: ["transactions", "trades", "history"],
-        label: t("common:nav.label_activities"),
+        keywords: ["transactions", "activities", "trades", "history"],
+        label: "View transactions",
       },
       {
         icon: <Icons.Goals className="size-6" />,

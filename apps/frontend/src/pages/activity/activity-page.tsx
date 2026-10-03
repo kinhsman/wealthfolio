@@ -630,7 +630,8 @@ const ActivityPage = () => {
           trigger={
             <Button data-testid="add-activities-button" size="sm">
               <Icons.Plus className="mr-2 h-4 w-4" />
-              {t("activity:page.add_activities")}
+              {/* money-hub patch: the page is Transactions now (owner, 10-02). */}
+              Add Transactions
             </Button>
           }
         />
@@ -699,7 +700,8 @@ const ActivityPage = () => {
           trigger={
             <Button data-testid="add-activities-button" size="sm">
               <Icons.Plus className="mr-2 h-4 w-4" />
-              {t("activity:page.add_activities")}
+              {/* money-hub patch: the page is Transactions now (owner, 10-02). */}
+              Add Transactions
             </Button>
           }
         />

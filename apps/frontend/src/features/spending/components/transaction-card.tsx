@@ -37,6 +37,8 @@ interface TransactionCardProps {
   appTimezone?: string;
   /** True when the loaded result set spans more than one account. */
   showAccount: boolean;
+  /** money-hub patch: day groups switched off, so the card shows its own date in place of the time. */
+  showDate?: boolean;
   /** Checkboxes only appear once the list is in selection mode. */
   selectionMode: boolean;
   isSelected: boolean;
@@ -68,6 +70,7 @@ function TransactionCardImpl({
   eventTypeColor,
   appTimezone,
   showAccount,
+  showDate = false,
   selectionMode,
   isSelected,
   onToggleSelect,
@@ -83,7 +86,7 @@ function TransactionCardImpl({
   onUnlinkTransfer,
 }: TransactionCardProps) {
   const shown = useShownAmount();   // money-hub patch: Show in USD (lib/display-currency.ts)
-  const { formatTime } = useDateFormatting();
+  const { formatDate, formatTime } = useDateFormatting();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const { t } = useTranslation();
@@ -107,11 +110,21 @@ function TransactionCardImpl({
     isIncome && !isCreditCardAccountType(account?.accountType) && activityType !== "CREDIT";
   // Minutes only, matching the desktop row — the seconds-bearing formatDateTime
   // is too verbose for a line that now carries just the time and the account.
-  const time = formatTime(a.activityDate, {
-    hour: "numeric",
-    minute: "numeric",
-    ...(appTimezone ? { timeZone: appTimezone } : {}),
-  });
+  const time = showDate
+    ? formatDate(a.activityDate, {
+        month: "short",
+        day: "numeric",
+        // The year only when it is not this one, to keep the line short.
+        ...(new Date(a.activityDate).getFullYear() !== new Date().getFullYear()
+          ? { year: "numeric" }
+          : {}),
+        ...(appTimezone ? { timeZone: appTimezone } : {}),
+      })
+    : formatTime(a.activityDate, {
+        hour: "numeric",
+        minute: "numeric",
+        ...(appTimezone ? { timeZone: appTimezone } : {}),
+      });
 
   return (
     <Card

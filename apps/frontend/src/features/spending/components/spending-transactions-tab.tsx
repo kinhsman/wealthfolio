@@ -20,6 +20,7 @@ import { useAccounts } from "@/hooks/use-accounts";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { useVirtualScrollContainer } from "@/hooks/use-virtual-scroll-container";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 import { InfiniteScrollTrigger } from "@/components/infinite-scroll-trigger";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { QueryKeys } from "@/lib/query-keys";
@@ -230,6 +231,9 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
   function SpendingTransactionsTab(_, ref) {
     const { t } = useTranslation();
     const skins = useDashboardSkins();
+    // money-hub patch: the owner can switch the day groups off (10-02); the date then gets its own
+    // column (cards: its own spot on the time line). Remembered per device.
+    const [groupByDay, setGroupByDay] = usePersistentState("spending-tx-group-by-day", true);
     const [searchParams, setSearchParams] = useSearchParams();
     const urlCategoryId = searchParams.get("category");
     const urlSubcategoryId = searchParams.get("subcategory");
@@ -1039,7 +1043,15 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
      * Both layouts render the same day-grouped sequence, so they share one flat
      * item list and one virtualizer; only one of them is ever mounted.
      */
-    const listItems = useMemo(() => flattenDayGroups(dayGroups), [dayGroups]);
+    const listItems = useMemo(
+      () =>
+        groupByDay
+          ? flattenDayGroups(dayGroups)
+          : rows.map((row) => ({ kind: "row" as const, key: row.activity.id, row })),
+      [groupByDay, dayGroups, rows],
+    );
+    /** The table's column count, for the spacer rows that span it. */
+    const columnCount = groupByDay ? 6 : 7;
 
     // Neither layout owns its scroll box — the table scrolls with the page, the
     // card list scrolls inside its swipeable pane — so both sit below a filter
@@ -1148,6 +1160,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
               <TransactionCard
                 {...sharedRowProps(item.row)}
                 showAccount={showAccount}
+                showDate={!groupByDay}
                 selectionMode={selectionMode}
               />
             )}
@@ -1168,7 +1181,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       <>
         {firstItemStart > 0 && (
           <TableRow aria-hidden className="hover:bg-transparent">
-            <TableCell colSpan={6} className="p-0" style={{ height: firstItemStart }} />
+            <TableCell colSpan={columnCount} className="p-0" style={{ height: firstItemStart }} />
           </TableRow>
         )}
         {virtualItems.map((virtualItem) => {
@@ -1192,12 +1205,13 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
               data-index={virtualItem.index}
               {...sharedRowProps(item.row)}
               showAccount={showAccount}
+              showDate={!groupByDay}
             />
           );
         })}
         {totalSize - lastItemEnd > 0 && (
           <TableRow aria-hidden className="hover:bg-transparent">
-            <TableCell colSpan={6} className="p-0" style={{ height: totalSize - lastItemEnd }} />
+            <TableCell colSpan={columnCount} className="p-0" style={{ height: totalSize - lastItemEnd }} />
           </TableRow>
         )}
       </>
@@ -1258,6 +1272,8 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
           filteredNet={filteredNet}
           isRefreshing={isRefreshing}
           isMobile={isMobile}
+          groupByDay={groupByDay}
+          onGroupByDayChange={setGroupByDay}
         />
 
         {selectedRowIds.size > 0 && (
@@ -1367,7 +1383,13 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
                       }
                     />
                   </TableHead>
-                  <TableHead className="hidden w-20 px-3 md:table-cell">
+                  {!groupByDay && <TableHead className="w-28 px-3">Date</TableHead>}
+                  <TableHead
+                    className={cn(
+                      "hidden w-20 px-3",
+                      groupByDay ? "md:table-cell" : "xl:table-cell",
+                    )}
+                  >
                     {t("spending:txTab.time")}
                   </TableHead>
                   <TableHead className="px-3">{t("spending:txTab.nameNotes")}</TableHead>
