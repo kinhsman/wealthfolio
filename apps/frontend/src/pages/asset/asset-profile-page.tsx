@@ -1,6 +1,8 @@
 import { isExpiredOptionAsset } from "./asset-utils";
 import { createActivity, getAssetHoldings, getAssetLots, searchActivities } from "@/adapters";
 import { ActionPalette, type ActionPaletteGroup } from "@/components/action-palette";
+import { EditableAltAssetIcon } from "@/components/alt-asset-icon";
+import { AltAssetIconDialog } from "@/components/alt-asset-icon-dialog";
 import { AssetLogoDialog } from "@/components/asset-logo/asset-logo-dialog";
 import { EditableTickerAvatar } from "@/components/asset-logo/editable-ticker-avatar";
 import { useHapticFeedback } from "@/hooks";
@@ -1343,6 +1345,12 @@ export const AssetProfilePage = () => {
                             label: t("asset:profile.edit_details"),
                             onClick: () => altAssetActions.openEditDetails(),
                           },
+                          // money-hub: its picture (components/alt-asset-icon-dialog.tsx)
+                          {
+                            icon: Icons.ImageUp,
+                            label: "Change icon",
+                            onClick: () => setLogoDialogOpen(true),
+                          },
                           ...(altAssetActions.isLinkableAsset
                             ? [
                                 {
@@ -1453,9 +1461,12 @@ export const AssetProfilePage = () => {
       >
         <div className="group/asset-header flex items-center gap-2" data-tauri-drag-region="true">
           {isAltAsset && altHolding ? (
-            <div className="bg-muted flex h-9 w-9 items-center justify-center rounded-full">
-              <AlternativeAssetIcon kind={altHolding.kind} size={20} />
-            </div>
+            <EditableAltAssetIcon
+              assetId={altHolding.id}
+              kind={altHolding.kind}
+              name={altHolding.name}
+              onEdit={() => setLogoDialogOpen(true)}
+            />
           ) : (
             (profile?.symbol ?? holding?.instrument?.symbol ?? assetProfile?.displayCode) && (
               <EditableTickerAvatar
@@ -1739,41 +1750,33 @@ export const AssetProfilePage = () => {
         defaultTab={editSheetDefaultTab}
       />
 
-      <AssetLogoDialog
-        open={logoDialogOpen}
-        onOpenChange={setLogoDialogOpen}
-        assetId={assetProfile?.id ?? assetId}
-        symbol={
-          profile?.symbol ?? holding?.instrument?.symbol ?? assetProfile?.displayCode ?? assetId
-        }
-        exchangeMic={holding?.instrument?.exchangeMic ?? assetProfile?.instrumentExchangeMic}
-        instrumentType={holding?.instrument?.instrumentType ?? assetProfile?.instrumentType}
-        name={assetProfile?.name ?? holding?.instrument?.name}
-      />
+      {isAltAsset && altHolding ? (
+        <AltAssetIconDialog
+          open={logoDialogOpen}
+          onOpenChange={setLogoDialogOpen}
+          assetId={altHolding.id}
+          kind={altHolding.kind}
+          name={altHolding.name}
+        />
+      ) : (
+        <AssetLogoDialog
+          open={logoDialogOpen}
+          onOpenChange={setLogoDialogOpen}
+          assetId={assetProfile?.id ?? assetId}
+          symbol={
+            profile?.symbol ?? holding?.instrument?.symbol ?? assetProfile?.displayCode ?? assetId
+          }
+          exchangeMic={holding?.instrument?.exchangeMic ?? assetProfile?.instrumentExchangeMic}
+          instrumentType={holding?.instrument?.instrumentType ?? assetProfile?.instrumentType}
+          name={assetProfile?.name ?? holding?.instrument?.name}
+        />
+      )}
 
       {/* Alternative Asset Modals */}
       {isAltAsset && altHolding && altAssetActions.modals}
     </Page>
   );
 };
-
-// Helper component for alternative asset icons
-function AlternativeAssetIcon({ kind, size = 20 }: { kind: string; size?: number }) {
-  switch (kind.toLowerCase()) {
-    case "property":
-      return <Icons.RealEstateDuotone size={size} />;
-    case "vehicle":
-      return <Icons.VehicleDuotone size={size} />;
-    case "collectible":
-      return <Icons.CollectibleDuotone size={size} />;
-    case "precious":
-      return <Icons.PreciousDuotone size={size} />;
-    case "liability":
-      return <Icons.LiabilityDuotone size={size} />;
-    default:
-      return <Icons.OtherAssetDuotone size={size} />;
-  }
-}
 
 // Helper to get display label for alternative asset kinds
 function getAlternativeAssetKindLabel(kind: string, t: TFunction): string {

@@ -2,6 +2,10 @@ import { useNumberFormatting } from "@wealthfolio/ui";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@wealthfolio/ui/components/ui/sheet";
 import { useTranslation } from "react-i18next";
+import { AltAssetIcon } from "@/components/alt-asset-icon";
+import { RoundLogo } from "@/components/round-logo";
+import { useAccounts } from "@/hooks/use-accounts";
+import { accountLogoUrl } from "@/lib/account-logo";
 import { CategoryTrendChart } from "./category-trend-chart";
 import { CompactAmount } from "./compact-amount";
 import {
@@ -61,6 +65,30 @@ function CategoryAvatar({
   );
 }
 
+/** money-hub: an item's own picture where it has one (a house's or a loan's icon, a card's bank
+ *  logo), else the category chip. */
+function ItemAvatar({
+  selected,
+  assetId,
+  name,
+}: {
+  selected: SelectedCategory;
+  assetId?: string;
+  name: string;
+}) {
+  const { accounts } = useAccounts({ filterActive: false });
+  const chip = <CategoryAvatar selected={selected} />;
+  const card = assetId?.match(/^CREDIT_CARD:(.+)$/)?.[1];
+  if (card) {
+    const url = accountLogoUrl(accounts.find((a) => a.id === card));
+    return url ? <RoundLogo url={url} name={name} className="h-7 w-7 rounded-md" /> : chip;
+  }
+  if (!assetId || assetId.includes(":")) return chip;
+  return (
+    <AltAssetIcon assetId={assetId} name={name} className="h-7 w-7 rounded-md" fallback={chip} />
+  );
+}
+
 interface CategoryDetailSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -97,7 +125,11 @@ export function CategoryDetailSheet({
           <>
             <SheetHeader className="mt-4">
               <SheetTitle className="flex items-center gap-2.5">
-                <CategoryAvatar selected={selected} />
+                {selected.isLiability ? (
+                  <ItemAvatar selected={selected} assetId={selected.key} name={selected.name} />
+                ) : (
+                  <CategoryAvatar selected={selected} />
+                )}
                 {selected.name}
               </SheetTitle>
             </SheetHeader>
@@ -151,7 +183,11 @@ export function CategoryDetailSheet({
                         className="flex items-center justify-between gap-3 py-2"
                       >
                         <div className="flex min-w-0 items-center gap-2.5">
-                          <CategoryAvatar selected={selected} />
+                          <ItemAvatar
+                            selected={selected}
+                            assetId={child.assetId}
+                            name={child.name}
+                          />
                           <span className="text-foreground/90 min-w-0 truncate text-sm">
                             {child.name}
                           </span>

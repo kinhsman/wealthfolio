@@ -12,6 +12,8 @@ export interface ResponsiveSelectOption {
   value: string;
   label: string;
   description?: string;
+  /** Shown before the label (money-hub: a house's or a loan's icon). */
+  icon?: React.ReactNode;
 }
 
 interface ResponsiveSelectProps {
@@ -73,7 +75,10 @@ export function ResponsiveSelect({
           )}
           onClick={() => setOpen(true)}
         >
-          <span className="truncate">{displayText}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            {selectedOption?.icon}
+            <span className="truncate">{displayText}</span>
+          </span>
           <Icons.ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
 
@@ -101,6 +106,7 @@ export function ResponsiveSelect({
                             : "hover:bg-accent active:bg-accent/80 focus:border-primary focus:outline-none",
                         )}
                       >
+                        {option.icon}
                         <div className="min-w-0 flex-1">
                           <div className="truncate font-semibold">{option.label}</div>
                           {option.description ? (
@@ -135,10 +141,24 @@ export function ResponsiveSelect({
       <SelectContent className={contentClassName}>
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
-            <div className="flex flex-col">
-              <span>{option.label}</span>
-              {option.description ? <span className="text-muted-foreground text-xs">{option.description}</span> : null}
-            </div>
+            {option.icon ? (
+              <div className="flex items-center gap-2">
+                {option.icon}
+                <div className="flex flex-col">
+                  <span>{option.label}</span>
+                  {option.description ? (
+                    <span className="text-muted-foreground text-xs">{option.description}</span>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col">
+                <span>{option.label}</span>
+                {option.description ? (
+                  <span className="text-muted-foreground text-xs">{option.description}</span>
+                ) : null}
+              </div>
+            )}
           </SelectItem>
         ))}
       </SelectContent>

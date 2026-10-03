@@ -1,9 +1,9 @@
+import { AltAssetIcon } from "@/components/alt-asset-icon";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 import type { AlternativeAssetHolding } from "@/lib/types";
 import { ALTERNATIVE_ASSET_KIND_DISPLAY_NAMES } from "@/lib/types";
 import { AmountDisplay, GainPercent, Separator } from "@wealthfolio/ui";
 import { Card } from "@wealthfolio/ui/components/ui/card";
-import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { isPropertyHolding, isRentalProperty } from "@/lib/rentals";
@@ -64,9 +64,7 @@ export function AlternativeHoldingsListMobile({
           >
             <div className="flex items-center justify-between">
               <div className="flex flex-1 items-center gap-3 overflow-hidden">
-                <div className="bg-muted flex h-10 w-10 shrink-0 items-center justify-center rounded-full">
-                  <AssetKindIcon kind={holding.kind} size={20} />
-                </div>
+                <AltAssetIcon assetId={holding.id} kind={holding.kind} name={holding.name} />
                 <div className="flex-1 overflow-hidden">
                   <p className="truncate font-semibold">{holding.name}</p>
                   <div className="flex items-center gap-2">
@@ -116,21 +114,4 @@ export function AlternativeHoldingsListMobile({
       })}
     </div>
   );
-}
-
-function AssetKindIcon({ kind, size = 20 }: { kind: string; size?: number }) {
-  switch (kind.toLowerCase()) {
-    case "property":
-      return <Icons.RealEstateDuotone size={size} />;
-    case "vehicle":
-      return <Icons.VehicleDuotone size={size} />;
-    case "collectible":
-      return <Icons.CollectibleDuotone size={size} />;
-    case "precious":
-      return <Icons.PreciousDuotone size={size} />;
-    case "liability":
-      return <Icons.LiabilityDuotone size={size} />;
-    default:
-      return <Icons.OtherAssetDuotone size={size} />;
-  }
 }

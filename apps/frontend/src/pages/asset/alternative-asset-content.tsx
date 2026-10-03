@@ -923,7 +923,7 @@ export function useAlternativeAssetActions({
         asset={editSheetAsset}
         onSave={handleEditSave}
         linkedAssetName={linkedAssetName}
-        linkableAssets={linkableAssets.map((a) => ({ id: a.id, name: a.name }))}
+        linkableAssets={linkableAssets.map((a) => ({ id: a.id, name: a.name, kind: a.kind }))}
         linkedLiabilities={linkedLiabilities.map((l) => ({
           id: l.id,
           name: l.name,

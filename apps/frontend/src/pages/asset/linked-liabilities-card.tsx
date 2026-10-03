@@ -7,6 +7,7 @@ import { Button } from "@wealthfolio/ui/components/ui/button";
 import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { AmountDisplay } from "@wealthfolio/ui";
+import { AltAssetIcon } from "@/components/alt-asset-icon";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 import type { AlternativeAssetHolding } from "@/lib/types";
 
@@ -62,9 +63,13 @@ export const LinkedLiabilitiesCard: React.FC<LinkedLiabilitiesCardProps> = ({
                 className="hover:bg-muted/50 flex w-full items-center justify-between rounded-lg p-2 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className="bg-muted flex h-8 w-8 items-center justify-center rounded-full">
-                    <Icons.LiabilityDuotone size={16} />
-                  </div>
+                  <AltAssetIcon
+                    assetId={liability.id}
+                    kind="liability"
+                    name={liability.name}
+                    className="h-8 w-8"
+                    iconSize={16}
+                  />
                   <div className="text-left">
                     <p className="text-sm font-medium">{liability.name}</p>
                     <p className="text-muted-foreground text-xs">
@@ -163,9 +168,13 @@ export const LinkedLiabilitiesSection: React.FC<LinkedLiabilitiesSectionProps> =
               className="bg-muted/50 hover:bg-muted flex w-full items-center justify-between rounded-lg p-2 transition-colors"
             >
               <div className="flex items-center gap-3">
-                <div className="bg-muted flex h-8 w-8 items-center justify-center rounded-full">
-                  <Icons.LiabilityDuotone size={16} />
-                </div>
+                <AltAssetIcon
+                  assetId={liability.id}
+                  kind="liability"
+                  name={liability.name}
+                  className="h-8 w-8"
+                  iconSize={16}
+                />
                 <div className="text-left">
                   <p className="text-sm font-medium">{liability.name}</p>
                   <p className="text-muted-foreground text-xs">
@@ -227,9 +236,6 @@ export const LinkedAssetSection: React.FC<LinkedAssetSectionProps> = ({
     navigate(`/holdings/${encodeURIComponent(assetId)}`);
   };
 
-  // Get icon based on asset kind
-  const AssetIcon =
-    assetKind?.toLowerCase() === "vehicle" ? Icons.VehicleDuotone : Icons.RealEstateDuotone;
   const kindLabel =
     assetKind?.toLowerCase() === "vehicle"
       ? t("asset:linkedLiabilities.vehicle")
@@ -247,9 +253,13 @@ export const LinkedAssetSection: React.FC<LinkedAssetSectionProps> = ({
         className="bg-muted/50 hover:bg-muted flex w-full items-center justify-between rounded-lg p-2 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <div className="bg-muted flex h-8 w-8 items-center justify-center rounded-full">
-            <AssetIcon size={16} />
-          </div>
+          <AltAssetIcon
+            assetId={assetId}
+            kind={assetKind?.toLowerCase() === "vehicle" ? "vehicle" : "property"}
+            name={assetName}
+            className="h-8 w-8"
+            iconSize={16}
+          />
           <div className="text-left">
             <p className="text-sm font-medium">{assetName}</p>
             <p className="text-muted-foreground text-xs">{kindLabel}</p>

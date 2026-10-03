@@ -19,6 +19,10 @@ import {
   MoneyInput,
   QuantityInput,
 } from "@wealthfolio/ui";
+import { AltAssetIcon } from "@/components/alt-asset-icon";
+import { AltAssetIconDialog } from "@/components/alt-asset-icon-dialog";
+import { useAssetLogoMutations } from "@/hooks/use-asset-logos";
+import type { NormalizedLogoImage } from "@/lib/normalize-logo-image";
 import { cn } from "@/lib/utils";
 import { useSettingsContext } from "@/lib/settings-provider";
 
@@ -34,6 +38,8 @@ import {
 export interface LinkableAsset {
   id: string;
   name: string;
+  /** money-hub: for its icon in the pick list ("property", "vehicle"). */
+  kind?: string;
 }
 
 // Asset type configuration using theme colors; labels/descriptions resolved via i18n
@@ -164,6 +170,10 @@ export function AlternativeAssetQuickAddModal({
   const [hasMortgageChecked, setHasMortgageChecked] = useState(false);
   const [savedPurchaseDate, setSavedPurchaseDate] = useState<Date | undefined>(undefined);
   const [savedPropertyName, setSavedPropertyName] = useState<string | undefined>(undefined);
+  // money-hub: its icon, picked before the asset exists, saved once it is made.
+  const [icon, setIcon] = useState<NormalizedLogoImage | null>(null);
+  const [iconOpen, setIconOpen] = useState(false);
+  const { setLogo } = useAssetLogoMutations({ quiet: true });
   const [formData, setFormData] = useState<FormData>({
     kind: defaultKind || AlternativeAssetKind.PROPERTY,
     name: "",
@@ -176,6 +186,7 @@ export function AlternativeAssetQuickAddModal({
 
   const { createMutation } = useAlternativeAssetMutations({
     onCreateSuccess: (response) => {
+      if (icon) setLogo.mutate({ assetId: response.assetId, dataBase64: icon.dataBase64 });
       onAssetCreated?.(response);
 
       // If mortgage checkbox was checked, chain to liability creation
@@ -200,6 +211,7 @@ export function AlternativeAssetQuickAddModal({
       setHasMortgageChecked(false);
       setSavedPurchaseDate(undefined);
       setSavedPropertyName(undefined);
+      setIcon(null);
       setFormData({
         kind: defaultKind || AlternativeAssetKind.PROPERTY,
         name: defaultName || "",
@@ -293,6 +305,15 @@ export function AlternativeAssetQuickAddModal({
     return linkableAssets.map((asset) => ({
       value: asset.id,
       label: asset.name,
+      icon: (
+        <AltAssetIcon
+          assetId={asset.id}
+          kind={asset.kind ?? "property"}
+          name={asset.name}
+          className="h-5 w-5"
+          iconSize={12}
+        />
+      ),
     }));
   }, [linkableAssets]);
 
@@ -510,11 +531,41 @@ export function AlternativeAssetQuickAddModal({
                   <Label className="text-foreground text-sm font-medium">
                     {t("asset:quickAdd.name")}
                   </Label>
-                  <Input
-                    value={formData.name}
-                    onChange={(e) => updateFormData("name", e.target.value)}
-                    placeholder={getPlaceholder()}
-                    className="h-11"
+                  <div className="flex items-center gap-2">
+                    {/* money-hub: its icon (a photo, a logo), optional */}
+                    <button
+                      type="button"
+                      onClick={() => setIconOpen(true)}
+                      aria-label="Icon"
+                      title="Icon"
+                      className="focus-visible:ring-ring relative shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2"
+                    >
+                      <AltAssetIcon
+                        kind={formData.kind}
+                        name={formData.name}
+                        src={icon?.dataUri}
+                        className="h-11 w-11"
+                      />
+                      {icon ? null : (
+                        <span className="bg-background text-muted-foreground absolute -bottom-0.5 -right-0.5 rounded-full border p-0.5">
+                          <Icons.Plus className="size-2.5" />
+                        </span>
+                      )}
+                    </button>
+                    <Input
+                      value={formData.name}
+                      onChange={(e) => updateFormData("name", e.target.value)}
+                      placeholder={getPlaceholder()}
+                      className="h-11"
+                    />
+                  </div>
+                  <AltAssetIconDialog
+                    open={iconOpen}
+                    onOpenChange={setIconOpen}
+                    kind={formData.kind}
+                    name={formData.name}
+                    draft={icon}
+                    onDraft={setIcon}
                   />
                 </div>
 

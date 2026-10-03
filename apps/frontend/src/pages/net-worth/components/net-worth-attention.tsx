@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { ResponsiveSelect } from "@wealthfolio/ui";
 import { Button } from "@wealthfolio/ui/components/ui/button";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
+import { AltAssetIcon } from "@/components/alt-asset-icon";
 import { useAlternativeHoldings, useLinkLiability } from "@/hooks/use-alternative-assets";
 import {
   AlternativeAssetKind,
@@ -59,18 +60,26 @@ export function NetWorthAttentionCard({
           </p>
           <div className="mt-2 space-y-1.5">
             {staleAssets.map((asset) => {
-              const isLiability =
-                holdings.find((holding) => holding.id === asset.assetId)?.kind.toLowerCase() ===
-                "liability";
+              const kind = holdings.find((holding) => holding.id === asset.assetId)?.kind;
+              const isLiability = kind?.toLowerCase() === "liability";
               return (
                 <Link
                   key={asset.assetId}
                   to={`/holdings/${encodeURIComponent(asset.assetId)}?tab=history`}
                   className="hover:bg-warning/10 -mx-2 block rounded-md px-2 py-1.5 transition-colors"
                 >
-                  <span className="flex items-baseline justify-between gap-2">
-                    <span className="min-w-0 break-words text-xs font-medium">
-                      {asset.name ?? asset.assetId}
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <AltAssetIcon
+                        assetId={asset.assetId}
+                        kind={kind}
+                        name={asset.name ?? undefined}
+                        className="h-4 w-4"
+                        iconSize={10}
+                      />
+                      <span className="min-w-0 break-words text-xs font-medium">
+                        {asset.name ?? asset.assetId}
+                      </span>
                     </span>
                     <span className="text-muted-foreground shrink-0 text-xs">
                       {t("insights:networth.days_ago", { count: asset.daysStale })}
@@ -96,7 +105,19 @@ export function NetWorthAttentionCard({
               value=""
               disabled={isLinking}
               options={[
-                ...properties.map((property) => ({ value: property.id, label: property.name })),
+                ...properties.map((property) => ({
+                  value: property.id,
+                  label: property.name,
+                  icon: (
+                    <AltAssetIcon
+                      assetId={property.id}
+                      kind={property.kind}
+                      name={property.name}
+                      className="h-5 w-5"
+                      iconSize={12}
+                    />
+                  ),
+                })),
                 {
                   value: ADD_PROPERTY_OPTION,
                   label: t("insights:networth.attention.add_property", { name: liability.name }),

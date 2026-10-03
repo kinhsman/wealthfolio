@@ -52,6 +52,8 @@ function normalized(tag: string): NormalizedLogoImage {
     height: 256,
     dataBase64: tag,
     dataUri: `data:image/png;base64,${tag}`,
+    sourceWidth: 256,
+    sourceHeight: 256,
   };
 }
 

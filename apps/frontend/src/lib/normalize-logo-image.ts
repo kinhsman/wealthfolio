@@ -37,7 +37,14 @@ export interface NormalizedLogoImage {
   height: number;
   dataBase64: string;
   dataUri: string;
+  /** The picked picture's own size (money-hub: tells a wide photo from a square logo). */
+  sourceWidth: number;
+  sourceHeight: number;
 }
+
+/** "contain": the whole picture inside the square (logos). "cover": the square filled, the
+ *  longer side's ends cut (money-hub: a photo of a house or a car as an asset's icon). */
+export type LogoFit = "contain" | "cover";
 
 export interface ContainRect {
   x: number;
@@ -52,6 +59,14 @@ export interface ContainRect {
  */
 export function computeContainRect(srcWidth: number, srcHeight: number, size: number): ContainRect {
   const scale = size / Math.max(srcWidth, srcHeight);
+  const width = Math.max(1, Math.round(srcWidth * scale));
+  const height = Math.max(1, Math.round(srcHeight * scale));
+  return { x: (size - width) / 2, y: (size - height) / 2, width, height };
+}
+
+/** Fill a `size×size` square, preserving aspect ratio; the longer side overflows evenly. */
+export function computeCoverRect(srcWidth: number, srcHeight: number, size: number): ContainRect {
+  const scale = size / Math.min(srcWidth, srcHeight);
   const width = Math.max(1, Math.round(srcWidth * scale));
   const height = Math.max(1, Math.round(srcHeight * scale));
   return { x: (size - width) / 2, y: (size - height) / 2, width, height };
@@ -107,7 +122,10 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
   return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
 }
 
-export async function normalizeLogoImage(file: Blob): Promise<NormalizedLogoImage> {
+export async function normalizeLogoImage(
+  file: Blob,
+  fit: LogoFit = "contain",
+): Promise<NormalizedLogoImage> {
   if (file.size > LOGO_MAX_INPUT_BYTES) {
     throw new LogoImageError("too_large_input");
   }
@@ -139,7 +157,10 @@ export async function normalizeLogoImage(file: Blob): Promise<NormalizedLogoImag
       context.imageSmoothingEnabled = true;
       context.imageSmoothingQuality = "high";
       context.clearRect(0, 0, size, size);
-      const rect = computeContainRect(srcWidth, srcHeight, size);
+      const rect =
+        fit === "cover"
+          ? computeCoverRect(srcWidth, srcHeight, size)
+          : computeContainRect(srcWidth, srcHeight, size);
       try {
         context.drawImage(image, rect.x, rect.y, rect.width, rect.height);
       } catch {
@@ -157,6 +178,8 @@ export async function normalizeLogoImage(file: Blob): Promise<NormalizedLogoImag
         height: size,
         dataBase64,
         dataUri: `data:image/png;base64,${dataBase64}`,
+        sourceWidth: srcWidth,
+        sourceHeight: srcHeight,
       };
     }
 

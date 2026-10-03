@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   computeContainRect,
+  computeCoverRect,
   LOGO_MAX_INPUT_BYTES,
   LOGO_MAX_OUTPUT_BYTES,
   LogoImageError,
@@ -111,6 +112,20 @@ describe("normalize-logo-image", () => {
 
     it("upscales small sources", () => {
       expect(computeContainRect(16, 16, 256)).toEqual({ x: 0, y: 0, width: 256, height: 256 });
+    });
+  });
+
+  describe("computeCoverRect", () => {
+    it("fills the square with a wide photo, cutting its ends evenly", () => {
+      expect(computeCoverRect(500, 100, 256)).toEqual({ x: -512, y: 0, width: 1280, height: 256 });
+    });
+
+    it("fills the square with a tall photo", () => {
+      expect(computeCoverRect(100, 400, 256)).toEqual({ x: 0, y: -384, width: 256, height: 1024 });
+    });
+
+    it("leaves a square picture whole", () => {
+      expect(computeCoverRect(1000, 1000, 128)).toEqual({ x: 0, y: 0, width: 128, height: 128 });
     });
   });
 

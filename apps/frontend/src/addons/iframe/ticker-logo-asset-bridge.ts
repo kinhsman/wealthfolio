@@ -51,6 +51,14 @@ export class TickerLogoAssetBridge {
     );
   }
 
+  /** money-hub: an asset's own picture by its id (a rental's house icon), or null. Ids only, so an
+   *  add-on gets exactly the asset it names; no bundled fallback (an asset id is not a ticker). */
+  async loadAssetLogo(assetId: unknown): Promise<Blob | null> {
+    if (typeof assetId !== "string" || !assetId || assetId.length > 200) return null;
+    const uri = await this.registry.load({ assetId });
+    return uri ? dataUriToBlob(uri) : null;
+  }
+
   private async loadCustomCandidates(symbols: string[]): Promise<Blob | null> {
     for (const symbol of symbols) {
       const uri = await this.registry.load({ symbol });

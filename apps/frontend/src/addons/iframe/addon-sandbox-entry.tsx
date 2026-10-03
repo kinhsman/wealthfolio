@@ -131,6 +131,15 @@ globalThis.__wealthfolioRequestTickerLogo = (
     instrumentType,
   }) as Promise<Blob | null>;
 
+// money-hub: an asset's icon by its id (a rental's house), as a Blob, or null when it has none.
+// The Rentals add-on looks for this and keeps its own drawing on a host without it.
+declare global {
+  var __wealthfolioRequestAssetLogo: ((assetId: string) => Promise<Blob | null>) | undefined;
+}
+
+globalThis.__wealthfolioRequestAssetLogo = (assetId: string) =>
+  callHost("hostAssetRequest", { kind: "assetLogo", assetId }) as Promise<Blob | null>;
+
 function createAddonAssetRegistry(assets: SandboxAddonAsset[] = []) {
   return new SandboxAddonAssetRegistry(
     assets,

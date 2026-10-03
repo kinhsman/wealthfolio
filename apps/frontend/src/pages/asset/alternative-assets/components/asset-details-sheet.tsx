@@ -51,6 +51,8 @@ import {
   LIABILITY_TYPES,
 } from "./asset-details-sheet-schema";
 import { type LinkableAsset } from "./alternative-asset-quick-add-modal";
+import { AltAssetIcon, AltAssetKindIcon, EditableAltAssetIcon } from "@/components/alt-asset-icon";
+import { AltAssetIconDialog } from "@/components/alt-asset-icon-dialog";
 import { AlternativeAssetKind, ALTERNATIVE_ASSET_KIND_DISPLAY_NAMES } from "@/lib/types";
 import { syncLoanAfterSave, termLabel } from "../../loan-schedule-section";
 import { updateAlternativeAssetValuation } from "@/adapters";
@@ -124,6 +126,7 @@ export function AssetDetailsSheet({
 }: AssetDetailsSheetProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [iconOpen, setIconOpen] = useState(false);
   // Use a fallback kind for the form when asset is null (form state won't be used anyway)
   const assetKind = asset?.kind ?? AlternativeAssetKind.OTHER;
   const assetName = asset?.name ?? "";
@@ -150,6 +153,15 @@ export function AssetDetailsSheet({
       ...linkableAssets.map((asset) => ({
         value: asset.id,
         label: asset.name,
+        icon: (
+          <AltAssetIcon
+            assetId={asset.id}
+            kind={asset.kind ?? "property"}
+            name={asset.name}
+            className="h-5 w-5"
+            iconSize={12}
+          />
+        ),
       })),
     ];
   }, [linkableAssets, t]);
@@ -201,9 +213,26 @@ export function AssetDetailsSheet({
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader className="pb-4">
           <div className="flex items-center gap-3">
-            <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-full">
-              <AssetKindIcon kind={asset.kind} className="text-primary" size={20} />
-            </div>
+            {/* money-hub: its icon, changed right here (components/alt-asset-icon-dialog.tsx) */}
+            <EditableAltAssetIcon
+              assetId={asset.id}
+              kind={asset.kind}
+              name={asset.name}
+              className="h-10 w-10"
+              onEdit={() => setIconOpen(true)}
+              fallback={
+                <div className="bg-primary/10 flex size-full items-center justify-center rounded-full">
+                  <AltAssetKindIcon kind={asset.kind} className="text-primary" size={20} />
+                </div>
+              }
+            />
+            <AltAssetIconDialog
+              open={iconOpen}
+              onOpenChange={setIconOpen}
+              assetId={asset.id}
+              kind={asset.kind}
+              name={asset.name}
+            />
             <div className="flex flex-col items-start">
               <SheetTitle className="flex items-center gap-2">
                 {t("asset:detailsSheet.edit", { kind: kindDisplayName })}
@@ -407,31 +436,6 @@ function SectionHeader({ title, description }: { title: string; description?: st
       {description && <p className="text-muted-foreground text-xs">{description}</p>}
     </div>
   );
-}
-
-function AssetKindIcon({
-  kind,
-  className,
-  size = 20,
-}: {
-  kind: AlternativeAssetKind;
-  className?: string;
-  size?: number;
-}) {
-  switch (kind) {
-    case AlternativeAssetKind.PROPERTY:
-      return <Icons.RealEstateDuotone size={size} className={className} />;
-    case AlternativeAssetKind.VEHICLE:
-      return <Icons.VehicleDuotone size={size} className={className} />;
-    case AlternativeAssetKind.COLLECTIBLE:
-      return <Icons.CollectibleDuotone size={size} className={className} />;
-    case AlternativeAssetKind.PRECIOUS_METAL:
-      return <Icons.PreciousDuotone size={size} className={className} />;
-    case AlternativeAssetKind.LIABILITY:
-      return <Icons.LiabilityDuotone size={size} className={className} />;
-    default:
-      return <Icons.OtherAssetDuotone size={size} className={className} />;
-  }
 }
 
 function getTypeSpecificDescription(kind: AlternativeAssetKind, t: TFunction): string {
@@ -937,7 +941,12 @@ function LiabilityFields({
               </FormControl>
             ) : linkedAssetName ? (
               <div className="bg-muted/30 flex items-center gap-2 rounded-lg border p-3">
-                <Icons.Link className="text-muted-foreground h-4 w-4" />
+                <AltAssetIcon
+                  assetId={field.value}
+                  name={linkedAssetName}
+                  className="h-5 w-5"
+                  fallback={<Icons.Link className="text-muted-foreground h-4 w-4" />}
+                />
                 <span className="text-sm font-medium">{linkedAssetName}</span>
               </div>
             ) : (
@@ -1147,7 +1156,12 @@ function PropertyMortgageSection({
             {linkedLiabilities.map((liability) => (
               <div key={liability.id} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
-                  <Icons.Link className="text-muted-foreground h-4 w-4" />
+                  <AltAssetIcon
+                    assetId={liability.id}
+                    name={liability.name}
+                    className="h-5 w-5"
+                    fallback={<Icons.Link className="text-muted-foreground h-4 w-4" />}
+                  />
                   <span className="font-medium">{liability.name}</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1198,6 +1212,15 @@ function PropertyMortgageSection({
                   options={availableMortgages.map((m) => ({
                     value: m.id,
                     label: m.name + (m.balance ? ` (${m.balance})` : ""),
+                    icon: (
+                      <AltAssetIcon
+                        assetId={m.id}
+                        kind="liability"
+                        name={m.name}
+                        className="h-5 w-5"
+                        iconSize={12}
+                      />
+                    ),
                   }))}
                   placeholder={t("asset:detailsSheet.select_mortgage_to_link")}
                   sheetTitle={t("asset:detailsSheet.link_mortgage")}

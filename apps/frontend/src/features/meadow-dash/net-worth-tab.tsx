@@ -7,10 +7,14 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
+import { AltAssetIcon } from "@/components/alt-asset-icon";
 import { DashboardCard } from "@/components/dashboard-card";
+import { RoundLogo } from "@/components/round-logo";
 import { PhoneFold } from "@/features/spending/components/phone-fold";
 import { formatZonedDateKey } from "@/features/spending/lib/timezone";
+import { useAccounts } from "@/hooks/use-accounts";
 import { useNetWorth, useNetWorthHistory } from "@/hooks/use-alternative-assets";
+import { accountLogoUrl } from "@/lib/account-logo";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { usePortfolioAllocations } from "@/hooks/use-portfolio-allocations";
@@ -87,6 +91,19 @@ function Mark({ color, icon }: { color: string; icon: keyof typeof Icons }) {
       <Glyph className="h-3.5 w-3.5" />
     </span>
   );
+}
+
+// A debt's own picture in the same tile as a Mark: a loan's icon (components/alt-asset-icon.tsx),
+// a card's bank logo; the category drawing when it has none.
+const TILE = "h-7 w-7 rounded-[10px] max-md:h-[26px] max-md:w-[26px]";
+
+function RowMark({ row }: { row: RowData }) {
+  const mark = <Mark {...row.mark} />;
+  if (row.logoUrl) return <RoundLogo url={row.logoUrl} name={row.name} className={TILE} />;
+  if (row.assetId) {
+    return <AltAssetIcon assetId={row.assetId} name={row.name} className={TILE} fallback={mark} />;
+  }
+  return mark;
 }
 
 export function MeadowNetWorthTab() {
@@ -477,6 +494,10 @@ interface RowData {
   key: string;
   name: string;
   mark: { color: string; icon: keyof typeof Icons };
+  /** money-hub: a loan's asset id, for its icon. */
+  assetId?: string;
+  /** money-hub: a card's bank logo. */
+  logoUrl?: string | null;
   share: number;
   value: number;
   negative?: boolean;
@@ -499,7 +520,7 @@ function BreakdownRow({
   const value = `${row.negative && row.value !== 0 ? "−" : ""}${money.short(row.value)}`;
   const inner = phone ? (
     <>
-      <Mark {...row.mark} />
+      <RowMark row={row} />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate">{row.name}</span>
         <span className="text-[12px] text-[var(--m-muted)]">
@@ -514,7 +535,7 @@ function BreakdownRow({
   ) : (
     <>
       <span className="flex min-w-0 items-center gap-2.5">
-        <Mark {...row.mark} />
+        <RowMark row={row} />
         <span className="truncate">{row.name}</span>
       </span>
       <span className="text-right tabular-nums text-[var(--m-muted)]">{row.share.toFixed(1)}%</span>
@@ -592,6 +613,13 @@ function Breakdown({
   const phone = useIsMobileViewport();
   const money = useMoney(currency);
   const newLabel = t("insights:networth.breakdown_table.new");
+  const { accounts } = useAccounts({ filterActive: false });
+  // A card's row is "CREDIT_CARD:<account id>" (the server's net worth); anything else is a loan's asset.
+  const debtPicture = (assetId?: string): Pick<RowData, "assetId" | "logoUrl"> => {
+    const card = assetId?.match(/^CREDIT_CARD:(.+)$/)?.[1];
+    if (card) return { logoUrl: accountLogoUrl(accounts.find((a) => a.id === card)) };
+    return { assetId };
+  };
   const [assetsOpen, setAssetsOpen] = useState(true);
   const [debtsOpen, setDebtsOpen] = useState(true);
   const hasDebts = data.liabilities.total > 0 || data.liabilities.breakdown.length > 0;
@@ -624,6 +652,7 @@ function Breakdown({
       color: "var(--m-down)",
       icon: /card/i.test(item.assetId ?? "") ? "CreditCard" : "Building",
     },
+    ...debtPicture(item.assetId),
     share: data.liabilities.total > 0 ? (item.value / data.liabilities.total) * 100 : 0,
     value: item.value,
     negative: true,

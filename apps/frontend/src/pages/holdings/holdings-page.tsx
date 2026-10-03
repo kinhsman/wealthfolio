@@ -320,7 +320,7 @@ export const HoldingsPage = () => {
   const linkableAssets: LinkableAsset[] = useMemo(() => {
     return assetsHoldings
       .filter((h) => h.kind === "property" || h.kind === "vehicle")
-      .map((h) => ({ id: h.id, name: h.name }));
+      .map((h) => ({ id: h.id, name: h.name, kind: h.kind }));
   }, [assetsHoldings]);
 
   // Get linked liabilities for a property (mortgages that have linked_asset_id matching the property)

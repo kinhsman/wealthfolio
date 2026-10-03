@@ -30,7 +30,15 @@ export interface SetAssetLogoInput {
 
 const describeError = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-export function useAssetLogoMutations() {
+/** money-hub: an asset's or a loan's picture is its "icon" in the owner's words, so its toasts say so. */
+export interface AssetLogoToastWords {
+  saved?: string;
+  reset?: string;
+  /** No toast on save (a new asset's icon, saved along with the asset's own toast). */
+  quiet?: boolean;
+}
+
+export function useAssetLogoMutations(words?: AssetLogoToastWords) {
   const queryClient = useQueryClient();
   const { t } = useTranslation("asset");
 
@@ -58,7 +66,7 @@ export function useAssetLogoMutations() {
         return [...previous.filter((entry) => entry.assetId !== logo.assetId), summary];
       });
       void queryClient.invalidateQueries({ queryKey: INDEX_KEY });
-      toast({ title: t("logo.saved"), variant: "success" });
+      if (!words?.quiet) toast({ title: words?.saved ?? t("logo.saved"), variant: "success" });
     },
     onError: (error) => {
       logger.error(`Error saving asset logo: ${describeError(error)}`);
@@ -73,7 +81,7 @@ export function useAssetLogoMutations() {
         previous.filter((entry) => entry.assetId !== assetId),
       );
       void queryClient.invalidateQueries({ queryKey: INDEX_KEY });
-      toast({ title: t("logo.reset_done"), variant: "success" });
+      toast({ title: words?.reset ?? t("logo.reset_done"), variant: "success" });
     },
     onError: (error) => {
       logger.error(`Error resetting asset logo: ${describeError(error)}`);

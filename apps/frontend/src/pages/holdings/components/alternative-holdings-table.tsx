@@ -1,3 +1,4 @@
+import { AltAssetIcon } from "@/components/alt-asset-icon";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 import type { AlternativeAssetHolding } from "@/lib/types";
 import { ALTERNATIVE_ASSET_KIND_DISPLAY_NAMES } from "@/lib/types";
@@ -112,9 +113,7 @@ export function AlternativeHoldingsTable({
                   : undefined
               }
             >
-              <div className="bg-muted flex h-10 w-10 items-center justify-center rounded-full">
-                <AssetKindIcon kind={holding.kind} size={20} />
-              </div>
+              <AltAssetIcon assetId={holding.id} kind={holding.kind} name={holding.name} />
               <div className="flex flex-col">
                 <span className="text-sm font-medium">{holding.name}</span>
                 <span className="text-muted-foreground text-xs">{kindDisplay}</span>
@@ -387,26 +386,6 @@ export function AlternativeHoldingsTable({
       </AlertDialog>
     </>
   );
-}
-
-/**
- * Icon component for alternative asset kinds (duotone style)
- */
-function AssetKindIcon({ kind, size = 20 }: { kind: string; size?: number }) {
-  switch (kind.toLowerCase()) {
-    case "property":
-      return <Icons.RealEstateDuotone size={size} />;
-    case "vehicle":
-      return <Icons.VehicleDuotone size={size} />;
-    case "collectible":
-      return <Icons.CollectibleDuotone size={size} />;
-    case "precious":
-      return <Icons.PreciousDuotone size={size} />;
-    case "liability":
-      return <Icons.LiabilityDuotone size={size} />;
-    default:
-      return <Icons.OtherAssetDuotone size={size} />;
-  }
 }
 
 export default AlternativeHoldingsTable;

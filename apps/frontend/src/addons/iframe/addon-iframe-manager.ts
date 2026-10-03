@@ -1023,6 +1023,12 @@ export class AddonIframeManager {
     if (!message.requestId) {
       return;
     }
+    // money-hub: an asset's icon by id (components/alt-asset-icon.tsx), for the Rentals add-on.
+    if (message.kind === "assetLogo") {
+      const logo = await tickerLogoAssetBridge.loadAssetLogo(message.assetId);
+      this.respond(runtime, message.requestId, true, logo);
+      return;
+    }
     if (message.kind !== "tickerLogo") {
       this.respond(runtime, message.requestId, true, null);
       return;

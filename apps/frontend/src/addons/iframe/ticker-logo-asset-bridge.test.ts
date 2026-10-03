@@ -290,4 +290,18 @@ describe("TickerLogoAssetBridge", () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain("/ticker-logos/crypto/BTC-USD.png");
     expect(String(fetchMock.mock.calls[1][0])).toContain("/ticker-logos/crypto/BTC.png");
   });
+
+  it("serves an asset's own icon by its id, never by a shared type name, and nothing else", async () => {
+    const fetchMock = vi.fn();
+    const registry = registryWith("home-1", "Rental", "house-bytes");
+    const bridge = new TickerLogoAssetBridge(fetchMock as unknown as typeof fetch, 2, registry);
+
+    const blob = await bridge.loadAssetLogo("home-1");
+    await expect(blob!.text()).resolves.toBe("house-bytes");
+    await expect(bridge.loadAssetLogo("home-2")).resolves.toBeNull();
+    await expect(bridge.loadAssetLogo("Rental")).resolves.toBeNull();
+    await expect(bridge.loadAssetLogo(42)).resolves.toBeNull();
+    await expect(bridge.loadAssetLogo("")).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
