@@ -44,3 +44,17 @@ describe("credit cards", () => {
     );
   });
 });
+
+import { dueLine, type CardDue } from "./credit-cards";
+
+describe("card due line", () => {
+  const due: CardDue = { statementBalance: 251.27, statementDate: "2026-09-28", minimum: 35, dueDate: "2026-10-25", lastPayment: null, overdue: false, apr: null, paid: false };
+  it("says when it is due, soon in amber, overdue in red, paid plainly", () => {
+    expect(dueLine(due, "2026-10-10")).toEqual({ when: "Due Oct 25", tone: "plain" });
+    expect(dueLine(due, "2026-10-22")).toEqual({ when: "Due Oct 25", tone: "soon" });
+    expect(dueLine(due, "2026-10-24")).toEqual({ when: "Due tomorrow", tone: "soon" });
+    expect(dueLine(due, "2026-10-26")).toEqual({ when: "Overdue since Oct 25", tone: "late" });
+    expect(dueLine({ ...due, paid: true }, "2026-10-22")).toEqual({ when: "Paid · next due Oct 25", tone: "paid" });
+    expect(dueLine(null, "2026-10-22")).toBeNull();
+  });
+});

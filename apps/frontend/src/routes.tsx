@@ -40,6 +40,7 @@ import AgentAccessPage from "./pages/settings/agent-access/agent-access-page";
 import WheelTradrSettingsPage from "./pages/settings/wheeltradr/wheeltradr-page";
 import BanksSettingsPage from "./pages/settings/banks/banks-page";
 import OwlySettingsPage from "./pages/settings/owly/owly-page";
+import GoogleSettingsPage from "./pages/settings/google/google-page";
 import AlertsSettingsPage from "./pages/settings/alerts/alerts-page";
 import AiProvidersPage from "./pages/settings/ai-providers/ai-providers-page";
 import ContributionLimitPage from "./pages/settings/contribution-limits/contribution-limits-page";
@@ -169,6 +170,7 @@ export function AppRoutes() {
             <Route path="agent-access" element={<AgentAccessPage />} />
             <Route path="wheeltradr" element={<WheelTradrSettingsPage />} />
             <Route path="banks" element={<BanksSettingsPage />} />
+            <Route path="google" element={<GoogleSettingsPage />} />
             <Route path="owly" element={<OwlySettingsPage />} />
             <Route path="alerts" element={<AlertsSettingsPage />} />
             <Route path="addons" element={<AddonSettingsPage />} />

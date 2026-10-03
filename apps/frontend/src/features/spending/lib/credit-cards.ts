@@ -24,6 +24,8 @@ export interface CreditCard {
   asOf: string | null;
   needsLogin: boolean;
   error: string | null;
+  /** The due date, statement and minimum once the bank shares them (Banks, Get card due dates). */
+  due?: CardDue | null;
 }
 
 export interface CreditCardsView {
@@ -38,6 +40,40 @@ export interface CreditCardsView {
     usedPct: number | null;
   };
   asOf: string | null;
+}
+
+/** A card's statement as the bank tells it (Plaid Liabilities, server/drive-backup/lib/plaidSync.js). */
+export interface CardDue {
+  statementBalance: number | null;
+  statementDate: string | null;
+  minimum: number | null;
+  dueDate: string | null;
+  lastPayment: { amount: number; date: string | null } | null;
+  overdue: boolean;
+  apr: number | null;
+  /** Paid since the statement: a payment after it at least as big as it, or nothing owed on it. */
+  paid: boolean;
+}
+
+/** Due this soon (days) reads as needing a look. */
+export const DUE_SOON_DAYS = 5;
+
+const dayDiff = (from: string, to: string) =>
+  Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000);
+const shortDay = (iso: string) =>
+  new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+/**
+ * The card's due line: "Due Oct 25" (`soon` within DUE_SOON_DAYS, `late` past it unpaid), or "Paid, next
+ * due Oct 25" once the statement is paid. Null when the bank shares no due date.
+ */
+export function dueLine(due: CardDue | null | undefined, today: string): { when: string; tone: "plain" | "soon" | "late" | "paid" } | null {
+  if (!due?.dueDate) return null;
+  const left = dayDiff(today, due.dueDate);
+  if (due.paid || !(Number(due.statementBalance) > 0)) return { when: `Paid · next due ${shortDay(due.dueDate)}`, tone: "paid" };
+  if (due.overdue || left < 0) return { when: `Overdue since ${shortDay(due.dueDate)}`, tone: "late" };
+  const word = left === 0 ? "today" : left === 1 ? "tomorrow" : shortDay(due.dueDate);
+  return { when: `Due ${word}`, tone: left <= DUE_SOON_DAYS ? "soon" : "plain" };
 }
 
 export const CREDIT_CARDS_KEY = ["money-hub", "credit-cards"] as const;

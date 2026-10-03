@@ -17,6 +17,7 @@ import {
   asOfLabel,
   cardName,
   cardTransactionsHref,
+  dueLine,
   pctLabel,
   usedShare,
   useCreditCards,
@@ -469,7 +470,8 @@ function FoldedCards({
   const [open, setOpen] = useState(false);
   const needsLook = (c: CreditCard) => {
     const share = usedShare(c);
-    return c.needsLogin || (share != null && share >= HIGH_USE);
+    const due = dueLine(c.due, todayIso());
+    return c.needsLogin || (share != null && share >= HIGH_USE) || due?.tone === "soon" || due?.tone === "late";
   };
   const shown = cards.filter((c, i) => i < keep || needsLook(c));
   const folded = cards.filter((c) => !shown.includes(c));
@@ -547,6 +549,9 @@ function Logo({
   );
 }
 
+/** Today in the reader's zone (YYYY-MM-DD). */
+const todayIso = () => new Date().toLocaleDateString("en-CA");
+
 function CardRow({
   c,
   name,
@@ -562,6 +567,7 @@ function CardRow({
   const share = usedShare(c);
   const high = share != null && share >= HIGH_USE;
   const credit = c.owed < 0;
+  const due = dueLine(c.due, todayIso());
   const limit = c.limit ?? 0;
   const pct = (x: number) => (limit > 0 ? Math.min(100, Math.max(0, (x / limit) * 100)) : 0);
   const owedW = pct(c.owed);
@@ -591,9 +597,16 @@ function CardRow({
     c.pending !== 0
       ? `${c.pending > 0 ? "+ " : "- "}${cents(Math.abs(c.pending))}${c.pending > 0 ? " pending" : " pending refund"}`
       : null,
+    // money-hub patch: the statement's due date (Plaid Liabilities; owner, 10-02, from Monarch).
+    due
+      ? due.tone === "paid"
+        ? due.when
+        : `${due.when}${c.due?.statementBalance != null ? `: ${cents(c.due.statementBalance)}` : ""}${c.due?.minimum ? `, min ${cents(c.due.minimum)}` : ""}`
+      : null,
   ]
     .filter(Boolean)
     .join(", ");
+  const dueLook = due?.tone === "soon" || due?.tone === "late";
   // money-hub patch: on desktop a card row is ONE line (logo, name, how much of the limit is used, the
   // amount); on a phone it is two (name over the full words). The usage bar is a thin line along the
   // row's foot (owner, 10-02).
@@ -628,21 +641,24 @@ function CardRow({
         <div
           className={cn(
             "truncate text-[11.5px] text-[var(--m-mint-muted)] md:hidden",
-            (c.needsLogin || high) && "text-[var(--m-warn)]",
+            (c.needsLogin || high || dueLook) && "text-[var(--m-warn)]",
           )}
         >
           {detail}
         </div>
       </div>
+      {/* One line on desktop: a payment due in a few days (or overdue) takes the usage figure's place. */}
       <span
         className={cn(
           "hidden shrink-0 text-[11.5px] text-[var(--m-mint-muted)] md:inline",
-          (c.needsLogin || high) && "text-[var(--m-warn)]",
+          (c.needsLogin || high || dueLook) && "text-[var(--m-warn)]",
         )}
       >
         {c.needsLogin
           ? "Sign in again"
-          : credit
+          : dueLook && due
+            ? due.when
+            : credit
             ? "credit"
             : share != null
               ? pctLabel(share)

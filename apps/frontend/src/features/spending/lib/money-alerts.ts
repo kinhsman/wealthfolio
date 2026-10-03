@@ -7,6 +7,7 @@ export type BigAlertKind = "out" | "in";
 export type BudgetAlertKind = "near" | "over";
 export type ConnectionAlertKind = "signIn" | "broken" | "back";
 export type RecapAlertKind = "weekly";
+export type CardAlertKind = "dueSoon" | "overdue";
 
 type Switches<K extends string> = { on: boolean } & Record<K, boolean>;
 
@@ -15,11 +16,13 @@ export interface MoneyAlertsView {
   budget: { alerts: Switches<BudgetAlertKind>; nearPct: number };
   connections: { alerts: Switches<ConnectionAlertKind>; down: number };
   recap: { alerts: Switches<RecapAlertKind> };
+  /** Optional: a service from before the card reminders sends none. */
+  cards?: { alerts: Switches<CardAlertKind>; daysBefore: number };
   went?: { discord: boolean; ntfy: boolean };
   sample?: string;
 }
 
-export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap";
+export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap" | "cards";
 
 const BASE = "/api/money-hub/money-alerts";
 export const MONEY_ALERTS_KEY = ["money-hub", "money-alerts"] as const;
@@ -83,3 +86,11 @@ export const RECAP_ALERT_LABELS: Record<RecapAlertKind, { title: string; text: s
 
 /** How much of a budget is spent before the warning, for the picker. */
 export const NEAR_STEPS = [50, 75, 80, 90];
+
+export const CARD_ALERT_LABELS: Record<CardAlertKind, { title: string; text: string }> = {
+  dueSoon: { title: "Payment coming up", text: "A card's statement is due within the days above and not paid yet." },
+  overdue: { title: "Payment overdue", text: "A card's due date passed and its statement is not paid." },
+};
+
+/** How many days before a card's due date the reminder comes, for the picker. */
+export const DUE_STEPS = [1, 2, 3, 5, 7];

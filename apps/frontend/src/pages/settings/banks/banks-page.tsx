@@ -23,6 +23,8 @@ interface BankAccount {
 interface BankItem {
   id: string; institution: { name: string; plaidName: string; logoUrl: string | null }; env: string; error: string | null; needsLogin: boolean;
   historical: boolean; canAddInvestments: boolean; hasInvestments: boolean; accounts: BankAccount[];
+  /** Card due dates (Plaid Liabilities): a bank with a card that has not been asked to share them yet. */
+  canAddLiabilities?: boolean; hasLiabilities?: boolean; liabilitiesError?: string | null;
 }
 interface BanksStatus {
   configured: boolean; env: string; clientIdShown: string | null; secrets: { production: boolean; sandbox: boolean };
@@ -295,6 +297,11 @@ export default function BanksSettingsPage() {
                   <a className={`${btn} ${cta}`} href={`${BASE}/link?item=${encodeURIComponent(item.id)}&add=investments`}>
                     <Icons.Plus className="size-3.5" /> Get transactions
                   </a>
+                ) : item.canAddLiabilities ? (
+                  // money-hub patch: each card's due date, statement and minimum (owner, 10-02, from Monarch).
+                  <a className={`${btn} ${cta}`} href={`${BASE}/link?item=${encodeURIComponent(item.id)}&add=liabilities`}>
+                    <Icons.Calendar className="size-3.5" /> Get card due dates
+                  </a>
                 ) : item.error ? (
                   <StatusPill on={false} warn text="Needs a look" />
                 ) : (
@@ -307,6 +314,15 @@ export default function BanksSettingsPage() {
                   Plaid shares only this account's balance. Press Get transactions and allow investments in Plaid's window to
                   bring in its deposits and transfers, like paychecks. It reconnects this bank, so it uses none of your 10 links.
                 </p>
+              )}
+              {item.canAddLiabilities && !item.canAddInvestments && !item.error && !item.needsLogin && (
+                <p className="text-muted-foreground px-4 pb-3 text-xs leading-relaxed">
+                  Press Get card due dates and allow it in Plaid's window: each card's due date, statement balance and minimum
+                  then show on the dashboard. It reconnects this bank, so it uses none of your 10 links.
+                </p>
+              )}
+              {item.hasLiabilities && item.liabilitiesError && !item.error && (
+                <p className="text-warning px-4 pb-3 text-xs">Card due dates: {item.liabilitiesError}</p>
               )}
               <div className="divide-y border-t">
                 {item.accounts.map((a) => (

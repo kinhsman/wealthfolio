@@ -31,6 +31,8 @@ import { TAX_ALERT_LABELS, taxesApi, taxesKey, useTaxes, type TaxAlertKind } fro
 import {
   BIG_ALERT_LABELS,
   BUDGET_ALERT_LABELS,
+  CARD_ALERT_LABELS,
+  DUE_STEPS,
   CONNECTION_ALERT_LABELS,
   MONEY_ALERTS_KEY,
   NEAR_STEPS,
@@ -39,6 +41,7 @@ import {
   useMoneyAlerts,
   type BigAlertKind,
   type BudgetAlertKind,
+  type CardAlertKind,
   type ConnectionAlertKind,
   type MoneyAlertGroup,
   type RecapAlertKind,
@@ -716,6 +719,37 @@ export default function AlertsSettingsPage() {
                   </label>
                 }
               />
+              {more.cards ? (
+                <GroupAlerts<CardAlertKind>
+                  icon={<Icons.CreditCard className="text-muted-foreground size-4 shrink-0" />}
+                  title="Credit cards"
+                  to="/dashboard?tab=spending"
+                  text="A card's payment due date, from the bank (Banks, Get card due dates)"
+                  on={more.cards.alerts.on !== false}
+                  kinds={more.cards.alerts}
+                  labels={CARD_ALERT_LABELS}
+                  busyKey="cards"
+                  busy={busy}
+                  onSwitch={(patch) => setMore("cards", patch)}
+                  onTest={(k) => testMore("cards", k)}
+                  extra={
+                    <label className="flex flex-wrap items-center gap-2">
+                      <span className="text-muted-foreground">Remind</span>
+                      <select
+                        value={more.cards.daysBefore}
+                        disabled={!!busy}
+                        onChange={(e) => setMore("cards", { daysBefore: Number(e.target.value) })}
+                        className="h-8 rounded-md border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+                      >
+                        {[...new Set([...DUE_STEPS, more.cards.daysBefore])].sort((a, b) => a - b).map((d) => (
+                          <option key={d} value={d}>{d === 1 ? "1 day" : `${d} days`}</option>
+                        ))}
+                      </select>
+                      <span className="text-muted-foreground">before it is due</span>
+                    </label>
+                  }
+                />
+              ) : null}
               <GroupAlerts<ConnectionAlertKind>
                 icon={<Icons.Unlink className="text-muted-foreground size-4 shrink-0" />}
                 title="Bank connections"

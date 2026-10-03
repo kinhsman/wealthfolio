@@ -122,6 +122,13 @@ export default function SettingsLayout() {
             subtitle: "Bank and credit card accounts, through Plaid",
             icon: <Icons.Building className="size-5" />,
           },
+          // money-hub patch: the Google accounts the money app reads (owner, 10-03): bank emails, Amazon orders.
+          {
+            title: "Google",
+            href: "google",
+            subtitle: "Gmail, read only: bank emails and Amazon orders",
+            icon: <Icons.Mail className="size-5" />,
+          },
           // money-hub patch: what friends owe (Owly), and friends' Zelle out of spending.
           {
             title: "Owly",
