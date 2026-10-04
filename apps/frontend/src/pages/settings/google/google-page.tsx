@@ -15,6 +15,7 @@ import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { SettingsHeader } from "../settings-header";
+import { RECEIPT_MAIL, ReceiptMailCard, type ReceiptMailStatus } from "./receipt-mail-card";
 
 const EMAIL = "/api/money-hub/email";
 const AMAZON = "/api/money-hub/amazon";
@@ -192,6 +193,7 @@ export default function GoogleSettingsPage() {
   const [amazon, setAmazon] = useState<AmazonStatus | null>(null);
   const [returnEmails, setReturnEmails] = useState<ReturnEmailsStatus | null>(null);
   const [tiktok, setTikTok] = useState<TikTokStatus | null>(null);
+  const [receiptMail, setReceiptMail] = useState<ReceiptMailStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [confirmUnlink, setConfirmUnlink] = useState<string | null>(null);
@@ -201,6 +203,7 @@ export default function GoogleSettingsPage() {
     call<AmazonStatus>(AMAZON, "GET", "").then(setAmazon).catch(() => setAmazon(null));
     call<ReturnEmailsStatus>(RETURN_EMAILS, "GET", "").then(setReturnEmails).catch(() => setReturnEmails(null));
     call<TikTokStatus>(TIKTOK, "GET", "").then(setTikTok).catch(() => setTikTok(null));
+    call<ReceiptMailStatus>(RECEIPT_MAIL, "GET", "").then(setReceiptMail).catch(() => setReceiptMail(null));
   }, []);
 
   const run = async <T,>(what: string, fn: () => Promise<T>, take: (v: T) => void, ok?: string) => {
@@ -219,6 +222,7 @@ export default function GoogleSettingsPage() {
     call<AmazonStatus>(AMAZON, "GET", "").then(setAmazon).catch(() => {});
     call<ReturnEmailsStatus>(RETURN_EMAILS, "GET", "").then(setReturnEmails).catch(() => {});
     call<TikTokStatus>(TIKTOK, "GET", "").then(setTikTok).catch(() => {});
+    call<ReceiptMailStatus>(RECEIPT_MAIL, "GET", "").then(setReceiptMail).catch(() => {});
   };
 
   // What reads each account: its banks, and Amazon orders (the picked account, or every one).
@@ -227,7 +231,8 @@ export default function GoogleSettingsPage() {
     const amazonHere = amazon?.on && (!amazon.mailboxId || amazon.mailboxId === m.id);
     const returnsHere = returnEmails?.on && (!returnEmails.mailboxId || returnEmails.mailboxId === m.id);
     const tiktokHere = tiktok?.on && (!tiktok.mailboxId || tiktok.mailboxId === m.id);
-    return [banks.length ? `Bank emails: ${banks.join(", ")}` : null, amazonHere ? "Amazon orders" : null, tiktokHere ? "TikTok Shop orders" : null, returnsHere ? "Return emails" : null]
+    const receiptsHere = receiptMail?.on && (!receiptMail.mailboxId || receiptMail.mailboxId === m.id);
+    return [banks.length ? `Bank emails: ${banks.join(", ")}` : null, amazonHere ? "Amazon orders" : null, tiktokHere ? "TikTok Shop orders" : null, returnsHere ? "Return emails" : null, receiptsHere ? "Receipt emails" : null]
       .filter(Boolean).join(" · ") || "Nothing reads it yet";
   };
   const tiktokErrors = tiktok?.last?.errors?.length ?? 0;
@@ -423,6 +428,8 @@ export default function GoogleSettingsPage() {
             </div>
           </div>
         ) : null}
+
+        {receiptMail ? <ReceiptMailCard rm={receiptMail} setRm={setReceiptMail} busy={busy} run={run} Logo={Logo} /> : null}
 
         {email ? (
           <div className="bg-card flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3">

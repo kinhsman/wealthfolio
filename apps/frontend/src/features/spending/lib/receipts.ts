@@ -28,10 +28,23 @@ export interface ReceiptLine {
  *  held: the charge was split by hand (or could not be saved); filed: done. */
 export type ReceiptStatus = "reading" | "read" | "failed" | "waiting" | "unmatched" | "held" | "filed";
 
+/** The email a receipt was found in (owner, 10-04: receipts found in Gmail). */
+export interface ReceiptMail {
+  email: string | null;
+  from: string;
+  subject: string;
+  date: string;
+  /** Opens it in its Gmail. */
+  link: string | null;
+}
+
 export interface Receipt {
   id: string;
   at: string;
   photos: number;
+  /** photo: snapped or pasted; gmail: found in an email by the money-hub service. */
+  source?: "photo" | "gmail";
+  mail?: ReceiptMail | null;
   status: ReceiptStatus;
   error: string | null;
   held: string | null;

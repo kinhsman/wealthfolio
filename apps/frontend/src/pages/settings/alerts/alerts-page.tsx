@@ -791,7 +791,7 @@ export default function AlertsSettingsPage() {
                   icon={<Icons.ReceiptText className="text-muted-foreground size-4 shrink-0" />}
                   title="Receipts"
                   to="/spending/receipts"
-                  text="A snapped receipt that waited for its card charge and has filed it"
+                  text="A snapped receipt that waited for its card charge and has filed it, or a receipt found in Gmail"
                   on={more.receipts.alerts.on !== false}
                   kinds={more.receipts.alerts}
                   labels={RECEIPT_ALERT_LABELS}

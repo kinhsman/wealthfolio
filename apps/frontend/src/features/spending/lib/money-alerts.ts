@@ -106,7 +106,7 @@ export const DUE_STEPS = [1, 2, 3, 5, 7];
 // money-hub patch: a receipt that waited for its card charge and filed it (owner, 10-03: "add the bell
 // notice/alert when a waiting receipt gets filed").
 export const RECEIPT_ALERT_LABELS: Record<ReceiptAlertKind, { title: string; text: string }> = {
-  filed: { title: "Receipt filed", text: "A receipt that waited for its card charge found it, and the charge is filed or split to match." },
+  filed: { title: "Receipt filed", text: "A receipt that waited for its card charge found it, or one was found in your Gmail, and the charge is filed or split to match." },
 };
 
 export const LOAN_ALERT_LABELS: Record<LoanAlertKind, { title: string; text: string }> = {

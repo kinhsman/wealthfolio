@@ -291,6 +291,29 @@ export function SnapReceiptButton({
   );
 }
 
+/** The picture of a receipt: its photo, or for one found in Gmail a mail tile that opens the email. */
+export function ReceiptThumb({ receipt: r, className }: { receipt: Receipt; className?: string }) {
+  if (r.source === "gmail") {
+    const tile = (
+      <span className={cn("bg-muted text-muted-foreground flex h-12 w-9 shrink-0 items-center justify-center rounded border", className)}>
+        <Icons.Mail className="size-4" />
+      </span>
+    );
+    return r.mail?.link ? (
+      <a href={r.mail.link} target="_blank" rel="noreferrer" className="shrink-0" title="Open the email in Gmail">
+        {tile}
+      </a>
+    ) : (
+      tile
+    );
+  }
+  return (
+    <a href={photoUrl(r.id)} target="_blank" rel="noreferrer" className="shrink-0" title="Open the photo">
+      <img src={photoUrl(r.id)} alt="Receipt" className={cn("bg-muted h-12 w-9 rounded border object-cover object-top", className)} />
+    </a>
+  );
+}
+
 /** A receipt's lines with their categories, and what it did to its charge. */
 export function ReceiptDetails({
   receipt: r,
@@ -338,9 +361,7 @@ export function ReceiptDetails({
     <div className={cn("space-y-2.5 text-xs", className)}>
       {showHead ? (
       <div className="flex items-start gap-2.5">
-        <a href={photoUrl(r.id)} target="_blank" rel="noreferrer" className="shrink-0" title="Open the photo">
-          <img src={photoUrl(r.id)} alt="Receipt" className="bg-muted h-12 w-9 rounded border object-cover object-top" />
-        </a>
+        <ReceiptThumb receipt={r} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="text-foreground truncate text-sm font-medium">{storeName(r.store)}</span>
@@ -348,7 +369,7 @@ export function ReceiptDetails({
             {review ? <span className={cn("shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium", STATE_TONE.look)}>To review</span> : null}
           </div>
           <div className="text-muted-foreground truncate">
-            {[r.date && day(r.date), r.total != null && usd(r.total), r.tax ? `tax ${usd(r.tax)}` : null, r.cardLast4 && `card ••${r.cardLast4}`]
+            {[r.date && day(r.date), r.total != null && usd(r.total), r.tax ? `tax ${usd(r.tax)}` : null, r.cardLast4 && `card ••${r.cardLast4}`, r.source === "gmail" ? "from Gmail" : null]
               .filter(Boolean)
               .join(" · ")}
           </div>
@@ -357,10 +378,20 @@ export function ReceiptDetails({
       ) : (
         <div className="text-muted-foreground flex flex-wrap items-center gap-x-3">
           <span>{[r.total != null && usd(r.total), r.tax ? `tax ${usd(r.tax)}` : null, r.cardLast4 && `card ••${r.cardLast4}`].filter(Boolean).join(" · ")}</span>
-          <a href={photoUrl(r.id)} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
-            Photo{r.photos > 1 ? "s" : ""}
-          </a>
-          {r.photos > 1
+          {r.source === "gmail" ? (
+            r.mail?.link ? (
+              <a href={r.mail.link} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline" title={r.mail.subject}>
+                Open the email
+              </a>
+            ) : (
+              <span>From Gmail</span>
+            )
+          ) : (
+            <a href={photoUrl(r.id)} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
+              Photo{r.photos > 1 ? "s" : ""}
+            </a>
+          )}
+          {r.source !== "gmail" && r.photos > 1
             ? Array.from({ length: r.photos - 1 }, (_, i) => (
                 <a key={i} href={photoUrl(r.id, i + 1)} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
                   {i + 2}
@@ -386,7 +417,7 @@ export function ReceiptDetails({
       <>
       {review ? (
         <p className="rounded-md bg-[var(--m-warn-soft)] px-2.5 py-1.5 text-[var(--m-warn)]">
-          Read by AI. Check the lines, fix anything with Edit, then press Looks good.
+          {r.source === "gmail" ? "Found in your Gmail and read by AI. " : "Read by AI. "}Check the lines, fix anything with Edit, then press Looks good.
         </p>
       ) : null}
       {split.length ? (
@@ -504,7 +535,7 @@ export function ReceiptDetails({
         <span className="flex-1" />
         {sure ? (
           <span className="flex items-center gap-2">
-            <span className="text-muted-foreground">The charge keeps its categories.</span>
+            <span className="text-muted-foreground">{r.source === "gmail" ? "The charge goes back to how it was." : "The charge keeps its categories."}</span>
             <button type="button" className="text-destructive hover:underline" disabled={busy !== null} onClick={() => void act("remove", () => receiptsApi.remove(r.id))}>
               Delete
             </button>

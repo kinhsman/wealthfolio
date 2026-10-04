@@ -105,7 +105,13 @@ export default function SpendingReceiptsPage() {
                         className="hover:bg-muted/40 flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors md:px-5"
                         aria-expanded={isOpen}
                       >
-                        <img src={photoUrl(r.id)} alt="" className="bg-muted h-10 w-8 shrink-0 rounded border object-cover object-top" loading="lazy" />
+                        {r.source === "gmail" ? (
+                          <span className="bg-muted text-muted-foreground flex h-10 w-8 shrink-0 items-center justify-center rounded border">
+                            <Icons.Mail className="size-4" />
+                          </span>
+                        ) : (
+                          <img src={photoUrl(r.id)} alt="" className="bg-muted h-10 w-8 shrink-0 rounded border object-cover object-top" loading="lazy" />
+                        )}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
                             <span className="text-foreground truncate text-sm font-medium">{storeName(r.store)}</span>
@@ -121,7 +127,7 @@ export default function SpendingReceiptsPage() {
                             ) : null}
                           </div>
                           <div className="text-muted-foreground truncate text-xs">
-                            {[r.date ? day(r.date) : `Snapped ${day(r.at)}`, r.items.length ? `${r.items.filter((x) => x.price > 0).length} items` : null].filter(Boolean).join(" · ")}
+                            {[r.date ? day(r.date) : `Snapped ${day(r.at)}`, r.items.length ? `${r.items.filter((x) => x.price > 0).length} items` : null, r.source === "gmail" ? "Gmail" : null].filter(Boolean).join(" · ")}
                           </div>
                         </div>
                         <span className="text-foreground shrink-0 text-sm tabular-nums">{r.total != null ? usd(r.total) : ""}</span>
