@@ -29,7 +29,7 @@ const mkStream = (overrides: Partial<Stream>): Stream =>
   }) as unknown as Stream;
 
 describe("SubscriptionsCategoryWidget", () => {
-  it("renders category breakdown with pie chart and amounts", () => {
+  it("renders category breakdown with donut chart, center total, and amounts", () => {
     const items: Stream[] = [
       mkStream({ key: "s1", name: "Electric", categoryId: "cat-utilities", monthly: 150 }),
       mkStream({ key: "s2", name: "Water", categoryId: "cat-utilities", monthly: 50 }),
@@ -42,21 +42,22 @@ describe("SubscriptionsCategoryWidget", () => {
     render(<SubscriptionsCategoryWidget items={items} currency="USD" />);
 
     expect(screen.getByText("By category")).toBeInTheDocument();
+    expect(screen.getByText("Total")).toBeInTheDocument();
     expect(screen.getByText("Utilities")).toBeInTheDocument();
     expect(screen.getByText("Streaming")).toBeInTheDocument();
     expect(screen.getByText("Uncategorized")).toBeInTheDocument();
 
     // Total monthly is 150 + 50 + 20 + 30 = 250
     expect(screen.getByText("$250.00")).toBeInTheDocument();
-    // Utilities: 200 (80%)
+    // Utilities: 200 (80.0%)
     expect(screen.getByText("$200.00")).toBeInTheDocument();
-    expect(screen.getByText("80%")).toBeInTheDocument();
-    // Uncategorized: 30 (12%)
+    expect(screen.getByText("(80.0%)")).toBeInTheDocument();
+    // Uncategorized: 30 (12.0%)
     expect(screen.getByText("$30.00")).toBeInTheDocument();
-    expect(screen.getByText("12%")).toBeInTheDocument();
-    // Streaming: 20 (8%)
+    expect(screen.getByText("(12.0%)")).toBeInTheDocument();
+    // Streaming: 20 (8.0%)
     expect(screen.getByText("$20.00")).toBeInTheDocument();
-    expect(screen.getByText("8%")).toBeInTheDocument();
+    expect(screen.getByText("(8.0%)")).toBeInTheDocument();
   });
 
   it("returns null when no active items exist", () => {
