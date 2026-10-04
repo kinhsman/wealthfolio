@@ -14,6 +14,7 @@ export function PhoneFold({
   openLabel,
   hero = false,
   bleed = true,
+  alwaysOpen = false,
   className,
   children,
 }: {
@@ -27,12 +28,14 @@ export function PhoneFold({
   hero?: boolean;
   /** The row runs to the card's edges (the card's side padding, 12px on a phone). */
   bleed?: boolean;
+  /** money-hub patch: the Cash page has room, so nothing is folded there, phone included. */
+  alwaysOpen?: boolean;
   className?: string;
   children: ReactNode;
 }) {
   const isMobile = useIsMobileViewport();
   const [open, setOpen] = usePersistentState<boolean>(`dashboard-fold-${id}`, false);
-  if (!isMobile) return <>{children}</>;
+  if (!isMobile || alwaysOpen) return <>{children}</>;
   return (
     <>
       {open ? children : null}

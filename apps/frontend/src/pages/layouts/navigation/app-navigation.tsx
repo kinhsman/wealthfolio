@@ -57,6 +57,15 @@ function buildStaticNavigation(t: TFunction): NavigationProps {
         label: "View transactions",
       },
       {
+        // money-hub patch: Cash (features/spending/pages/cash-page.tsx), next to Transactions so the phone's
+        // bar keeps Dashboard and Transactions (owner, 10-04); plain words, no translation key.
+        icon: <Icons.Wallet className="size-6" />,
+        title: "Cash",
+        href: "/cash",
+        keywords: ["cash", "free cash", "forecast", "cards", "balance", "bills", "cushion"],
+        label: "Free cash, your cards and the cash forecast",
+      },
+      {
         icon: <Icons.Goals className="size-6" />,
         title: t("common:goals"),
         href: "/goals",

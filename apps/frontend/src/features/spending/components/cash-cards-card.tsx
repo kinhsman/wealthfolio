@@ -31,9 +31,12 @@ export function CashCardsCard({
   currency = "USD",
   className,
   onShowBills,
+  expanded = false,
 }: {
   currency?: string;
   className?: string;
+  /** money-hub patch: on the Cash page every account and card shows, nothing folds (phone included). */
+  expanded?: boolean;
   /** Takes the reader to the bills (Next due in Subscriptions & bills). */
   onShowBills?: () => void;
 }) {
@@ -118,6 +121,7 @@ export function CashCardsCard({
           <PhoneFold
             id="cash-cards"
             hero
+            alwaysOpen={expanded}
             closedLabel={foldLabel || "Accounts and cards"}
             openLabel="Hide accounts and cards"
           >
@@ -137,7 +141,7 @@ export function CashCardsCard({
                 >
                   <FoldedList
                     items={fc.accounts}
-                    keep={LIST_KEEP}
+                    keep={expanded ? fc.accounts.length : LIST_KEEP}
                     noun="account"
                     render={(a) => {
                       const account = accounts?.find((x) => x.id === a.id);
@@ -179,9 +183,11 @@ export function CashCardsCard({
                     keep={
                       // Desktop: four, level with Cash; a fifth folds. Phone: two-line rows, as many as
                       // the Cash list shows, at least 3 (owner, 10-02).
-                      isMobile
-                        ? Math.max(3, Math.min(LIST_KEEP, hasCash && fc ? fc.accounts.length : 0))
-                        : LIST_KEEP
+                      expanded
+                        ? cc.cards.length
+                        : isMobile
+                          ? Math.max(3, Math.min(LIST_KEEP, hasCash && fc ? fc.accounts.length : 0))
+                          : LIST_KEEP
                     }
                     noun="card"
                     pin={needsLook}
@@ -209,7 +215,7 @@ export function CashCardsCard({
   );
 }
 
-function Verdict({ short }: { short: boolean }) {
+export function Verdict({ short }: { short: boolean }) {
   return short ? (
     <span
       data-m="warn-chip"

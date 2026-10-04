@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState, type FC } from "react";
+import { useCallback, useEffect, useMemo, useState, type FC } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
 
 import { DashboardCard } from "@/components/dashboard-card";
@@ -67,8 +67,7 @@ import {
   zonedCalendarDateBoundaryToDate,
 } from "../lib/timezone";
 import { BudgetLineChartCard } from "./budget-line-chart-card";
-import { CashCardsCard } from "./cash-cards-card";
-import { CashForecastCard } from "./cash-forecast-card";
+import { FreeCashStrip } from "./free-cash-strip";
 import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
 import { SubscriptionsCard } from "./subscriptions-card";
@@ -890,9 +889,21 @@ export default function SpendingTabContent() {
     () => categoryRows.filter((r) => r.id !== SAVINGS_ROW_ID),
     [categoryRows],
   );
-  const showBills = useCallback(() => {
-    document.getElementById("next-due")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, []);
+  // money-hub patch: the Cash page's Bills link lands here as /dashboard#next-due. Next due draws once
+  // the bills arrive, so look for it for a few seconds before giving up.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash !== "#next-due") return;
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      const el = document.getElementById("next-due");
+      if (el || ++tries > 30) {
+        window.clearInterval(timer);
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [hash]);
   const periodWord = selectedIntervalDescription?.startsWith("spending:")
     ? t(selectedIntervalDescription)
     : selectedIntervalDescription;
@@ -1029,12 +1040,8 @@ export default function SpendingTabContent() {
         />
       </div>
 
-      <CashCardsCard currency={currency} onShowBills={showBills} />
-
-      {/* money-hub patch: where the cash is heading, the payments that repeat and the cards' due dates
-          (lib/cash-forecast.ts; owner, 10-03). */}
-      <CashForecastCard currency={currency} />
-
+      {/* money-hub patch: Cash & cards and Cash forecast are the Cash page now (owner, 10-04); one line here. */}
+      <FreeCashStrip currency={currency} />
 
       <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
         <div className="min-w-0 lg:col-span-2">

@@ -54,7 +54,14 @@ function Toggle({ value, onChange }: { value: number; onChange: (v: number) => v
   );
 }
 
-export function CashForecastCard({ currency }: { currency: string }) {
+export function CashForecastCard({
+  currency,
+  expanded = false,
+}: {
+  currency: string;
+  /** money-hub patch: on the Cash page every payment ahead shows, in two columns when wide. */
+  expanded?: boolean;
+}) {
   const isMobile = useIsMobileViewport();
   const [days, setDays] = usePersistentState<number>("cash-forecast-days", 60);
   const { data, isLoading, isError } = useCashForecast(days);
@@ -69,13 +76,13 @@ export function CashForecastCard({ currency }: { currency: string }) {
       ) : isError || !data ? (
         <p className="text-muted-foreground text-sm">The money app helper did not answer.</p>
       ) : (
-        <Body f={data} currency={currency} isMobile={isMobile} />
+        <Body f={data} currency={currency} isMobile={isMobile} expanded={expanded} />
       )}
     </DashboardCard>
   );
 }
 
-function Body({ f, currency, isMobile }: { f: CashForecast; currency: string; isMobile: boolean }) {
+function Body({ f, currency, isMobile, expanded }: { f: CashForecast; currency: string; isMobile: boolean; expanded: boolean }) {
   const under = f.under != null;
   const lowIsToday = f.low.date === f.now;
   return (
@@ -99,8 +106,8 @@ function Body({ f, currency, isMobile }: { f: CashForecast; currency: string; is
         <Verdict f={f} currency={currency} under={under} />
       </div>
       <Chart f={f} currency={currency} isMobile={isMobile} />
-      <PhoneFold id="cash-forecast" closedLabel={`${f.events.length} payments ahead`} openLabel="Hide the payments" bleed>
-        <Upcoming f={f} currency={currency} isMobile={isMobile} />
+      <PhoneFold id="cash-forecast" closedLabel={`${f.events.length} payments ahead`} openLabel="Hide the payments" bleed alwaysOpen={expanded}>
+        <Upcoming f={f} currency={currency} isMobile={isMobile} expanded={expanded} />
       </PhoneFold>
       {!isMobile ? (
         <p className="text-muted-foreground text-[11.5px] leading-relaxed">
@@ -258,21 +265,22 @@ function Chart({ f, currency, isMobile }: { f: CashForecast; currency: string; i
   );
 }
 
-function Upcoming({ f, currency, isMobile }: { f: CashForecast; currency: string; isMobile: boolean }) {
+function Upcoming({ f, currency, isMobile, expanded }: { f: CashForecast; currency: string; isMobile: boolean; expanded: boolean }) {
   const { data: merchants } = useMerchants();
   const { accounts } = useAccounts({ filterActive: false });
   const [open, setOpen] = useState(false);
-  const keep = isMobile ? 6 : 8;
+  const keep = expanded ? f.events.length : isMobile ? 6 : 8;
   const shown = open ? f.events : f.events.slice(0, keep);
   if (!f.events.length) return <p className="text-muted-foreground text-xs">Nothing that repeats in this window.</p>;
   return (
     <div className="space-y-0.5">
       <div className="text-muted-foreground pb-1 text-xs">Coming up</div>
+      <div className={cn("space-y-0.5", expanded && "lg:block lg:columns-2 lg:gap-x-10 lg:space-y-0")}>
       {shown.map((e, i) => {
         const { label, logo } = forecastLabel(e, merchants, accounts);
         const sub = e.card ? cardWhy(e.why) : [e.parts && e.parts > 1 ? `${e.parts} deposits` : null, e.every === "biweekly" ? "every 2 weeks" : "monthly", "estimated"].filter(Boolean).join(", ");
         return (
-          <div key={`${e.date}-${i}`} className="flex items-center gap-2.5 rounded-lg px-1 py-1">
+          <div key={`${e.date}-${i}`} className="flex break-inside-avoid items-center gap-2.5 rounded-lg px-1 py-1">
             <span className="text-muted-foreground w-12 shrink-0 text-[11.5px] tabular-nums">{shortDay(e.date)}</span>
             {logo ? (
               <MerchantLogo url={logo.url} name={logo.name} whole={logo.whole} className="h-6 w-6" />
@@ -292,6 +300,7 @@ function Upcoming({ f, currency, isMobile }: { f: CashForecast; currency: string
           </div>
         );
       })}
+      </div>
       {f.events.length > keep ? (
         <button type="button" onClick={() => setOpen(!open)} className="text-muted-foreground hover:text-foreground px-1 pt-1 text-xs underline-offset-4 hover:underline">
           {open ? "Show less" : `Show ${f.events.length - keep} more`}
