@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FC } from "react";
+import { useCallback, useMemo, useState, type FC } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
@@ -213,26 +213,15 @@ function selectionFromParams(
   return { kind: "period", code: restoreCode };
 }
 
-function budgetMonthStateForSelection(
-  selection: SpendingSelection,
-  currentMonthKey: string,
-): { monthKey: string; touched: boolean } {
-  if (selection.kind === "period" && selection.code === "LAST_MONTH") {
-    return { monthKey: addMonthsToMonthKey(currentMonthKey, -1), touched: true };
-  }
-  if (selection.kind === "month" && selection.monthKey <= currentMonthKey) {
-    return { monthKey: selection.monthKey, touched: true };
-  }
-  return { monthKey: currentMonthKey, touched: false };
-}
-
-function budgetSelectionSyncKey(selection: SpendingSelection, currentMonthKey: string): string {
-  if (selection.kind === "month") return `month:${selection.monthKey}`;
-  if (selection.kind === "range") {
-    return `range:${formatDateISO(selection.range.from)}:${formatDateISO(selection.range.to)}`;
-  }
-  if (selection.code === "LAST_MONTH") return `period:${selection.code}:${currentMonthKey}`;
-  return `period:${selection.code}`;
+// money-hub patch (owner, 10-04: "make them consistent, maybe only 1 place to switch time range"): the
+// Monthly budget card has no month of its own. It shows the month the page's range ends in, so the
+// card, the Spent strip and every other card follow the one switch at the top.
+function budgetMonthForSelection(selection: SpendingSelection, currentMonthKey: string): string {
+  let monthKey = currentMonthKey;
+  if (selection.kind === "month") monthKey = selection.monthKey;
+  else if (selection.kind === "range") monthKey = monthKeyFromParts(localDateParts(selection.range.to));
+  else if (selection.code === "LAST_MONTH") monthKey = addMonthsToMonthKey(currentMonthKey, -1);
+  return monthKey > currentMonthKey ? currentMonthKey : monthKey;
 }
 
 function selectionData(
@@ -432,30 +421,10 @@ export default function SpendingTabContent() {
   const { data: budget, isError: budgetErrored } = useBudget();
   const todayParts = useMemo(() => getZonedDateParts(new Date(), appTimezone), [appTimezone]);
   const currentBudgetMonthKey = useMemo(() => monthKeyFromParts(todayParts), [todayParts]);
-  const budgetSyncKey = useMemo(
-    () => budgetSelectionSyncKey(selection, currentBudgetMonthKey),
+  const budgetMonthKey = useMemo(
+    () => budgetMonthForSelection(selection, currentBudgetMonthKey),
     [selection, currentBudgetMonthKey],
   );
-  const lastBudgetSyncKey = useRef(budgetSyncKey);
-  const [budgetMonthKey, setBudgetMonthKey] = useState(() => {
-    return budgetMonthStateForSelection(selection, currentBudgetMonthKey).monthKey;
-  });
-  const [budgetMonthTouched, setBudgetMonthTouched] = useState(() => {
-    return budgetMonthStateForSelection(selection, currentBudgetMonthKey).touched;
-  });
-  useEffect(() => {
-    if (lastBudgetSyncKey.current === budgetSyncKey) return;
-    lastBudgetSyncKey.current = budgetSyncKey;
-    const next = budgetMonthStateForSelection(selection, currentBudgetMonthKey);
-    setBudgetMonthKey(next.monthKey);
-    setBudgetMonthTouched(next.touched);
-  }, [budgetSyncKey, currentBudgetMonthKey, selection]);
-  useEffect(() => {
-    setBudgetMonthKey((monthKey) => {
-      if (!budgetMonthTouched) return currentBudgetMonthKey;
-      return monthKey > currentBudgetMonthKey ? currentBudgetMonthKey : monthKey;
-    });
-  }, [budgetMonthTouched, currentBudgetMonthKey]);
   const { data: budgetCardBudget, isError: budgetCardBudgetErrored } = useBudget(budgetMonthKey);
   const { accounts = [] } = useAccounts({ filterActive: false });
   const { data: categorizationRules = [], isLoading: categorizationRulesLoading } =
@@ -492,14 +461,6 @@ export default function SpendingTabContent() {
     }),
     [budgetMonthRange],
   );
-  const shiftBudgetMonth = (months: number) => {
-    setBudgetMonthTouched(true);
-    setBudgetMonthKey((monthKey) => {
-      const next = addMonthsToMonthKey(monthKey, months);
-      return next > currentBudgetMonthKey ? currentBudgetMonthKey : next;
-    });
-  };
-
   const historyReportReq = useMemo(() => {
     const month = parseMonthKey(budgetMonthKey) ?? todayParts;
     const monthStart = { year: month.year, month: month.month, day: 1 };
@@ -642,13 +603,6 @@ export default function SpendingTabContent() {
       },
       { replace: true },
     );
-    if (code === "LAST_MONTH") {
-      setBudgetMonthKey(addMonthsToMonthKey(currentBudgetMonthKey, -1));
-      setBudgetMonthTouched(true);
-    } else {
-      setBudgetMonthKey(currentBudgetMonthKey);
-      setBudgetMonthTouched(false);
-    }
   };
 
   const handleCustomMonthSelect = (monthKey: string | null) => {
@@ -670,13 +624,6 @@ export default function SpendingTabContent() {
       },
       { replace: true },
     );
-    if (monthKey && monthKey <= currentBudgetMonthKey) {
-      setBudgetMonthKey(monthKey);
-      setBudgetMonthTouched(true);
-    } else {
-      setBudgetMonthKey(currentBudgetMonthKey);
-      setBudgetMonthTouched(false);
-    }
   };
 
   const handleCustomRangeSelect = (range: DateRange | undefined) => {
@@ -699,8 +646,15 @@ export default function SpendingTabContent() {
       },
       { replace: true },
     );
-    setBudgetMonthKey(currentBudgetMonthKey);
-    setBudgetMonthTouched(false);
+  };
+
+  // money-hub patch: the card's arrows are a shortcut into that same switch (last month lights the
+  // Last month button, anything older a picked month), so the card can never show another month.
+  const stepBudgetMonth = (months: number) => {
+    const target = addMonthsToMonthKey(budgetMonthKey, months);
+    if (target >= currentBudgetMonthKey) handleIntervalSelect("MTD");
+    else if (target === maxPickerMonth) handleIntervalSelect("LAST_MONTH");
+    else handleCustomMonthSelect(target);
   };
 
   const granularity: "day" | "week" | "month" = useMemo(() => {
@@ -1088,8 +1042,8 @@ export default function SpendingTabContent() {
             monthKey={budgetMonthKey}
             today={todayParts}
             isCurrentMonth={budgetMonthKey === currentBudgetMonthKey}
-            onPreviousMonth={() => shiftBudgetMonth(-1)}
-            onNextMonth={() => shiftBudgetMonth(1)}
+            onPreviousMonth={() => stepBudgetMonth(-1)}
+            onNextMonth={() => stepBudgetMonth(1)}
             canGoNextMonth={budgetMonthKey < currentBudgetMonthKey}
             activityRange={budgetMonthActivityRange}
             target={budgetCardBudget?.computed.totals.spendingPlanned ?? 0}
