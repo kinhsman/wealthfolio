@@ -147,7 +147,6 @@ export function CashCardsCard({
                           name={account?.name ?? a.name}
                           logo={accountLogoUrl(account)}
                           known={a.known}
-                          pending={a.pending}
                           cash={a.cash}
                           currency={currency}
                         />
@@ -564,26 +563,19 @@ function CashRow({
   name,
   logo,
   known,
-  pending,
   cash,
   currency,
 }: {
   name: string;
   logo: string | null | undefined;
   known: boolean;
-  pending: number;
   cash: number;
   currency: string;
 }) {
-  const { isBalanceHidden } = useBalancePrivacy();
-  const formatting = useAmountFormatting();
-  const pendingAmount = `${pending < 0 ? "- " : "+ "}${isBalanceHidden ? "••••" : formatting.formatAmount(Math.abs(pending), currency)}`;
-  const note = !known ? "no balance yet" : pending !== 0 ? `${pendingAmount} pending` : null;
-  // The same one-line row as a card on desktop (the pending amount sits where a card shows its usage, the
-  // full words in the tooltip); on a phone the note goes under the name.
+  // The same one-line row as a card on desktop; on a phone a missing balance goes under the name. What is
+  // pending is not shown (owner, 10-03).
   return (
     <div
-      title={note ? `${name}: ${note}` : undefined}
       className={cn(
         ROW,
         "flex items-center gap-2.5 rounded-xl bg-[var(--m-mint-tile)] px-2.5 md:pb-2 md:pt-1.5",
@@ -592,13 +584,15 @@ function CashRow({
       <Logo url={logo} name={name} className="md:h-[22px] md:w-[22px]" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13.5px]">{name}</div>
-        {note ? (
-          <div className="truncate text-[11.5px] text-[var(--m-mint-muted)] md:hidden">{note}</div>
+        {!known ? (
+          <div className="truncate text-[11.5px] text-[var(--m-mint-muted)] md:hidden">
+            no balance yet
+          </div>
         ) : null}
       </div>
-      {note ? (
+      {!known ? (
         <span className="hidden shrink-0 text-[11.5px] text-[var(--m-mint-muted)] md:inline">
-          {known ? pendingAmount : "no balance"}
+          no balance
         </span>
       ) : null}
       <span className="shrink-0 text-[13.5px] font-medium">
