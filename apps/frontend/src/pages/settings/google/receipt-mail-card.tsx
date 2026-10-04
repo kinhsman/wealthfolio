@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 
 import { Link } from "react-router-dom";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
+import { StoresSkipped, type StoreRow, type StoreTemplate } from "./stores-skipped";
 
 export const RECEIPT_MAIL = "/api/money-hub/receipt-mail";
 
@@ -17,6 +18,9 @@ interface SkipStore {
   name: string;
   words: string[];
   on: boolean;
+  /** The template this row was copied from (the row's own edits never change it). */
+  templateId: string | null;
+  icon: string | null;
 }
 interface ReceiptMailConfig {
   days: number;
@@ -41,6 +45,8 @@ export interface ReceiptMailStatus {
   custom: boolean;
   config: ReceiptMailConfig;
   defaults: ReceiptMailConfig;
+  /** Built in (read only) and the owner's own, kept apart from the filters. */
+  templates: { builtIn: StoreTemplate[]; mine: StoreTemplate[] };
   last: {
     at: string;
     looked: number;
@@ -61,7 +67,7 @@ interface Draft {
   skipWords: string;
   skipSenders: string;
   skipSubjects: string;
-  skipStores: { id: string; name: string; words: string; on: boolean }[];
+  skipStores: StoreRow[];
 }
 
 const toDraft = (c: ReceiptMailConfig): Draft => ({
@@ -78,6 +84,8 @@ const toDraft = (c: ReceiptMailConfig): Draft => ({
     name: s.name,
     words: s.words.join(", "),
     on: s.on,
+    templateId: s.templateId ?? null,
+    icon: s.icon ?? null,
   })),
 });
 
@@ -178,12 +186,21 @@ function ConfigPanel({
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
   const isTemplate = JSON.stringify(saved) === JSON.stringify(toDraft(rm.defaults));
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
-  const setStore = (i: number, patch: Partial<Draft["skipStores"][number]>) =>
-    setDraft((d) => ({
-      ...d,
-      skipStores: d.skipStores.map((s, j) => (j === i ? { ...s, ...patch } : s)),
-    }));
-  const isBuiltIn = (id: string) => rm.defaults.skipStores.some((s) => s.id === id);
+  // The owner's own templates are kept at once (not with Save): a template saved is a template made.
+  const saveTemplates = async (list: StoreTemplate[]) => {
+    let out: StoreTemplate[] | null = null;
+    await run(
+      "receipt-templates",
+      async () => {
+        const s = await call<ReceiptMailStatus>("PUT", { templates: list });
+        out = s.templates.mine;
+        return s;
+      },
+      setRm,
+      "Templates saved.",
+    );
+    return out as StoreTemplate[] | null;
+  };
 
   const save = () =>
     run(
@@ -247,64 +264,14 @@ function ConfigPanel({
       </Group>
 
       <Group title="Stores skipped">
-        {draft.skipStores.map((s, i) => (
-          <div
-            key={s.id}
-            className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 py-1.5 sm:grid-cols-[2.25rem_9rem_minmax(0,1fr)_2rem] sm:gap-3"
-          >
-            <Switch
-              checked={s.on}
-              aria-label={`Skip ${s.name || "this store"}`}
-              onCheckedChange={(on) => setStore(i, { on })}
-            />
-            <input
-              value={s.name}
-              onChange={(e) => setStore(i, { name: e.target.value })}
-              placeholder="Store"
-              className={`${field} w-full`}
-              aria-label="Store name"
-            />
-            <input
-              value={s.words}
-              onChange={(e) => setStore(i, { words: e.target.value })}
-              placeholder="Words its charges start with, separated by commas"
-              className={`${field} order-4 col-span-3 w-full sm:order-3 sm:col-span-1`}
-              aria-label={`Words for ${s.name || "this store"}`}
-            />
-            <button
-              type="button"
-              className={`${btn} order-3 h-8 px-2 sm:order-4`}
-              aria-label={`Remove ${s.name || "this store"}`}
-              title={isBuiltIn(s.id) ? "Remove (Reset brings it back)" : "Remove"}
-              onClick={() =>
-                setDraft((d) => ({ ...d, skipStores: d.skipStores.filter((_, j) => j !== i) }))
-              }
-            >
-              <Icons.Close className="size-3.5" />
-            </button>
-          </div>
-        ))}
-        <div className="flex flex-wrap items-center justify-between gap-2 py-1.5">
-          <span className="text-muted-foreground hidden text-[11px] sm:inline">
-            Amazon and TikTok Shop have their own readers above. A store off here is looked for
-            again.
-          </span>
-          <button
-            type="button"
-            className={`${btn} h-7`}
-            onClick={() =>
-              setDraft((d) => ({
-                ...d,
-                skipStores: [
-                  ...d.skipStores,
-                  { id: `new-${d.skipStores.length + 1}`, name: "", words: "", on: true },
-                ],
-              }))
-            }
-          >
-            <Icons.Plus className="size-3.5" /> Add a store
-          </button>
-        </div>
+        <StoresSkipped
+          rows={draft.skipStores}
+          setRows={(rows) => set("skipStores", rows)}
+          builtIn={rm.templates.builtIn}
+          mine={rm.templates.mine}
+          busy={!!busy}
+          saveTemplates={saveTemplates}
+        />
       </Group>
 
       <Group title="Which emails">
@@ -356,7 +323,13 @@ function ConfigPanel({
         {isTemplate && !dirty ? (
           <span className="text-muted-foreground text-[11px]">Built-in filters</span>
         ) : (
-          <button type="button" className={`${btn} h-8`} disabled={!!busy} onClick={reset}>
+          <button
+            type="button"
+            className={`${btn} h-8`}
+            disabled={!!busy}
+            onClick={reset}
+            title="Puts the built-in filters back. Your own templates stay."
+          >
             {busy === "receipt-reset" ? (
               <Icons.Spinner className="size-3.5 animate-spin" />
             ) : (
