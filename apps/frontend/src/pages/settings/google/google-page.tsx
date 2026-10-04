@@ -16,6 +16,7 @@ import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { SettingsHeader } from "../settings-header";
 import { RECEIPT_MAIL, ReceiptMailCard, type ReceiptMailStatus } from "./receipt-mail-card";
+import { GearButton, ReaderGearPanel, useWhileBusy, type ReaderConfig } from "./reader-gear";
 
 const EMAIL = "/api/money-hub/email";
 const AMAZON = "/api/money-hub/amazon";
@@ -39,6 +40,10 @@ interface AmazonStatus {
   kinds?: { kind: string; charges: number; last: string | null; categoryId: string | null }[];
   /** How many charges took their kind's category so far. */
   categorized?: number;
+  /** The gear (reader-gear.tsx): the settings in force, the built-in ones, whether the owner changed them. */
+  config: ReaderConfig;
+  defaults: ReaderConfig;
+  custom: boolean;
 }
 
 /** TikTok Shop orders (owner, 10-03: "add support for tiktokshop"; lib/tiktok.js): like Amazon's. */
@@ -51,6 +56,9 @@ interface TikTokStatus {
   matched: number;
   returns: number;
   last: { at: string; read: number; orders: number; charges: number; matched: number; returns: number; errors: string[] } | null;
+  config: ReaderConfig;
+  defaults: ReaderConfig;
+  custom: boolean;
 }
 
 interface ReturnEmailsStatus {
@@ -194,6 +202,7 @@ export default function GoogleSettingsPage() {
   const [returnEmails, setReturnEmails] = useState<ReturnEmailsStatus | null>(null);
   const [tiktok, setTikTok] = useState<TikTokStatus | null>(null);
   const [receiptMail, setReceiptMail] = useState<ReceiptMailStatus | null>(null);
+  const [gear, setGear] = useState({ amazon: false, tiktok: false });
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [confirmUnlink, setConfirmUnlink] = useState<string | null>(null);
@@ -224,6 +233,9 @@ export default function GoogleSettingsPage() {
     call<TikTokStatus>(TIKTOK, "GET", "").then(setTikTok).catch(() => {});
     call<ReceiptMailStatus>(RECEIPT_MAIL, "GET", "").then(setReceiptMail).catch(() => {});
   };
+
+  // A changed sender list reads all the mail again, which takes minutes: look again until it is done.
+  useWhileBusy(!!amazon?.busy || !!tiktok?.busy, refreshAmazon);
 
   // What reads each account: its banks, and Amazon orders (the picked account, or every one).
   const usedBy = (m: Mailbox) => {
@@ -310,6 +322,7 @@ export default function GoogleSettingsPage() {
               </div>
               <div className="ml-auto flex items-center gap-3">
                 {amazon.on ? <Pill tone={amazonErrors ? "warn" : "ok"} text={amazonErrors ? "Needs a look" : "Reading"} /> : <Pill tone="off" text="Off" />}
+                <GearButton open={gear.amazon} label="Amazon order settings" onClick={() => setGear((g) => ({ ...g, amazon: !g.amazon }))} />
                 <Switch checked={amazon.on} disabled={!!busy} aria-label="Read Amazon orders"
                   onCheckedChange={(on) => run("amazon-on", () => call<AmazonStatus>(AMAZON, "PUT", "", { on }), setAmazon)} />
               </div>
@@ -334,6 +347,7 @@ export default function GoogleSettingsPage() {
                 {amazonErrors ? <p className="text-warning">{amazon.last?.errors.join(" · ")}</p> : null}
               </div>
             ) : null}
+            {gear.amazon ? <ReaderGearPanel store="amazon" url={AMAZON} status={amazon} setStatus={setAmazon as never} busy={busy} run={run} /> : null}
             {amazon.on ? (
               <AmazonCategories amazon={amazon} busy={!!busy}
                 onPick={(kind, categoryId) => run(`amazon-cat:${kind}`, () => call<AmazonStatus>(AMAZON, "PUT", "", { kind, categoryId }), setAmazon,
@@ -356,6 +370,7 @@ export default function GoogleSettingsPage() {
               </div>
               <div className="ml-auto flex items-center gap-3">
                 {tiktok.on ? <Pill tone={tiktokErrors ? "warn" : "ok"} text={tiktokErrors ? "Needs a look" : "Reading"} /> : <Pill tone="off" text="Off" />}
+                <GearButton open={gear.tiktok} label="TikTok Shop order settings" onClick={() => setGear((g) => ({ ...g, tiktok: !g.tiktok }))} />
                 <Switch checked={tiktok.on} disabled={!!busy} aria-label="Read TikTok Shop orders"
                   onCheckedChange={(on) => run("tiktok-on", () => call<TikTokStatus>(TIKTOK, "PUT", "", { on }), setTikTok)} />
               </div>
@@ -380,6 +395,7 @@ export default function GoogleSettingsPage() {
                 {tiktokErrors ? <p className="text-warning">{tiktok.last?.errors.join(" · ")}</p> : null}
               </div>
             ) : null}
+            {gear.tiktok ? <ReaderGearPanel store="tiktok" url={TIKTOK} status={tiktok} setStatus={setTikTok as never} busy={busy} run={run} /> : null}
           </div>
         ) : null}
 

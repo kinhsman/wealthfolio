@@ -45,6 +45,16 @@ export interface ReceiptMailStatus {
   custom: boolean;
   config: ReceiptMailConfig;
   defaults: ReceiptMailConfig;
+  /** A scan of older charges (up to 2 years): how far it got. */
+  backfill: {
+    days: number;
+    status: "running" | "done" | "stopped" | "error" | "interrupted";
+    total: number | null;
+    done: number;
+    found: number;
+    remaining: number | null;
+    error: string | null;
+  } | null;
   /** Built in (read only) and the owner's own, kept apart from the filters. */
   templates: { builtIn: StoreTemplate[]; mine: StoreTemplate[] };
   last: {
@@ -138,7 +148,15 @@ function Pill({ tone, text }: { tone: "ok" | "warn" | "off"; text: string }) {
 }
 
 /** One label and its box(es), the label on top on a phone and beside the box from `sm` up. */
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function Row({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="grid grid-cols-[5.75rem_minmax(0,1fr)] items-center gap-2 py-1.5 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:gap-3">
       <div className="min-w-0">
@@ -154,7 +172,7 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
   );
 }
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
+export function Group({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="space-y-0.5">
       <div className="text-muted-foreground pt-1 text-[11px] font-semibold uppercase tracking-[0.08em]">
@@ -162,6 +180,122 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
       </div>
       <div className="divide-y">{children}</div>
     </div>
+  );
+}
+
+/**
+ * Scan older charges (owner, 10-04: "only 2 receipts was found for the past 2 years??": the usual look is 30 days). One
+ * scan, up to 2 years, in the background and gently on Gmail; the progress is shown here and it can be stopped. What
+ * it finds goes to Receipts, To review, without a bell for each.
+ */
+function ScanOlder({
+  rm,
+  busy,
+  run,
+  setRm,
+}: {
+  rm: ReceiptMailStatus;
+  busy: string | null;
+  run: Run;
+  setRm: (s: ReceiptMailStatus) => void;
+}) {
+  const [days, setDays] = useState("730");
+  const b = rm.backfill;
+  const running = b?.status === "running";
+  const shown = b ? Math.min(b.done, b.total ?? b.done) : 0;
+  const text = !b
+    ? null
+    : b.status === "running"
+      ? `Looked at ${b.done} of ${b.total ?? "…"} charges · ${b.found} found`
+      : b.status === "done"
+        ? `Done. Looked at ${b.done} charges and found ${b.found} ${b.found === 1 ? "receipt" : "receipts"}.`
+        : b.status === "stopped"
+          ? `Stopped after ${b.done} of ${b.total ?? "…"} charges, ${b.found} found. Scan again to carry on.`
+          : b.status === "interrupted"
+            ? `Stopped when the app restarted, after ${b.done} of ${b.total ?? "…"} charges. Scan again to carry on.`
+            : `Stopped: ${b.error ?? "something went wrong"}`;
+  return (
+    <Group title="Scan older charges">
+      <Row label="Go back" hint="One scan, in the background.">
+        <span className="inline-flex flex-wrap items-center gap-2">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={30}
+            max={730}
+            value={days}
+            onChange={(e) => setDays(e.target.value)}
+            className={`${field} w-20`}
+            aria-label="Days to scan back"
+            disabled={running}
+          />
+          <span className="text-muted-foreground">days</span>
+          {running ? (
+            <button
+              type="button"
+              className={`${btn} h-8`}
+              disabled={!!busy}
+              onClick={() =>
+                run(
+                  "receipt-scan-stop",
+                  () => call<ReceiptMailStatus>("POST", undefined, "/backfill/stop"),
+                  setRm,
+                  "Stopping after this round.",
+                )
+              }
+            >
+              <Icons.Close className="size-3.5" /> Stop
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`${btn} !border-primary/50 !text-primary h-8`}
+              disabled={!!busy || !rm.on}
+              onClick={() =>
+                run(
+                  "receipt-scan",
+                  () => call<ReceiptMailStatus>("POST", { days: Number(days) || 730 }, "/backfill"),
+                  setRm,
+                  "Scanning in the background. You can leave this page.",
+                )
+              }
+            >
+              {busy === "receipt-scan" ? (
+                <Icons.Spinner className="size-3.5 animate-spin" />
+              ) : (
+                <Icons.Search className="size-3.5" />
+              )}{" "}
+              Scan older charges
+            </button>
+          )}
+        </span>
+      </Row>
+      {text ? (
+        <div className="space-y-1.5 py-1.5 text-[11px]">
+          <p className={b?.status === "error" ? "text-warning" : "text-muted-foreground"}>{text}</p>
+          {running && b?.total ? (
+            <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+              <div
+                className="bg-primary h-full rounded-full transition-all"
+                style={{ width: `${Math.round((shown / b.total) * 100)}%` }}
+              />
+            </div>
+          ) : null}
+          {b && b.found > 0 && b.status !== "running" ? (
+            <p className="text-muted-foreground">
+              They are on{" "}
+              <Link
+                to="/spending/receipts"
+                className="text-foreground underline-offset-4 hover:underline"
+              >
+                Receipts
+              </Link>
+              , waiting for your Looks good.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </Group>
   );
 }
 
@@ -246,6 +380,7 @@ function ConfigPanel({
 
   return (
     <div className="space-y-2 border-t px-4 py-3 text-xs">
+      <ScanOlder rm={rm} busy={busy} run={run} setRm={setRm} />
       <Group title="Which charges">
         <Row label="Look back" hint="Charges this recent.">
           <span className="inline-flex items-center gap-1.5">
@@ -368,7 +503,7 @@ export function ReceiptMailCard({
   const errors = rm.last?.errors?.length ?? 0;
   // A check can take minutes (the AI reads each email), so it runs in the background: look again until it is done.
   useEffect(() => {
-    if (!rm.busy) return;
+    if (!rm.busy && rm.backfill?.status !== "running") return;
     const t = setInterval(
       () =>
         call<ReceiptMailStatus>("GET")
@@ -377,7 +512,7 @@ export function ReceiptMailCard({
       3000,
     );
     return () => clearInterval(t);
-  }, [rm.busy, setRm]);
+  }, [rm.busy, rm.backfill?.status, setRm]);
   return (
     <div className="bg-card rounded-xl border">
       <div className="flex flex-wrap items-center gap-3 px-4 py-3">
