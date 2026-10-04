@@ -3,7 +3,7 @@
 //! Detects missing or stale foreign exchange rates.
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
 
 use crate::errors::Result;
 use crate::health::model::{
@@ -27,6 +27,34 @@ pub struct FxPairInfo {
     pub latest_quote_time: Option<DateTime<Utc>>,
 }
 
+/// The weekly FX market closure, in hours after Monday 00:00 UTC: Friday 21:00 to Sunday 22:00. The market
+/// shuts at 5 pm New York on Friday and reopens at 5 pm on Sunday; the extra hour covers daylight saving.
+const FX_CLOSE_HOURS_FROM_MONDAY: i64 = 4 * 24 + 21;
+const FX_OPEN_HOURS_FROM_MONDAY: i64 = 6 * 24 + 22;
+
+/// How much of `from..to` fell inside the weekly FX market closure. No new rate can exist then, so a
+/// rate last saved at Friday's close must not count as stale on Saturday (money-hub patch).
+pub(crate) fn fx_market_closed_duration(from: DateTime<Utc>, to: DateTime<Utc>) -> Duration {
+    if to <= from {
+        return Duration::zero();
+    }
+    let into_week = Duration::seconds(
+        i64::from(from.weekday().num_days_from_monday()) * 86_400
+            + i64::from(from.num_seconds_from_midnight()),
+    );
+    let mut monday = from - into_week;
+    let mut closed = Duration::zero();
+    while monday < to {
+        let start = (monday + Duration::hours(FX_CLOSE_HOURS_FROM_MONDAY)).max(from);
+        let end = (monday + Duration::hours(FX_OPEN_HOURS_FROM_MONDAY)).min(to);
+        if end > start {
+            closed = closed + (end - start);
+        }
+        monday = monday + Duration::days(7);
+    }
+    closed
+}
+
 /// Health check that detects missing or stale FX rates.
 pub struct FxIntegrityCheck;
 
@@ -44,10 +72,9 @@ impl FxIntegrityCheck {
             return issues;
         }
 
-        // Calculate thresholds
-        let warning_threshold = ctx.now - Duration::hours(ctx.config.fx_stale_warning_hours as i64);
-        let critical_threshold =
-            ctx.now - Duration::hours(ctx.config.fx_stale_critical_hours as i64);
+        // Calculate thresholds (as ages: weekend hours, when the FX market is shut, do not count)
+        let warning_age = Duration::hours(ctx.config.fx_stale_warning_hours as i64);
+        let critical_age = Duration::hours(ctx.config.fx_stale_critical_hours as i64);
 
         // Track issues by type
         let mut missing_pairs: Vec<&FxPairInfo> = Vec::new();
@@ -60,10 +87,12 @@ impl FxIntegrityCheck {
         for pair in fx_pairs {
             match pair.latest_quote_time {
                 Some(quote_time) => {
-                    if quote_time < critical_threshold {
+                    let age =
+                        (ctx.now - quote_time) - fx_market_closed_duration(quote_time, ctx.now);
+                    if age > critical_age {
                         stale_error_pairs.push(pair);
                         stale_error_mv += pair.affected_mv;
-                    } else if quote_time < warning_threshold {
+                    } else if age > warning_age {
                         stale_warning_pairs.push(pair);
                         stale_warning_mv += pair.affected_mv;
                     }
@@ -341,6 +370,26 @@ fn compute_data_hash(pair_ids: &[String], severity: Severity, mv_pct: f64) -> St
 mod tests {
     use super::*;
     use crate::health::model::HealthConfig;
+    use chrono::TimeZone;
+
+    fn ctx_at(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> HealthContext {
+        let mut ctx = HealthContext::new(HealthConfig::default(), "USD", 100_000.0);
+        ctx.now = Utc
+            .with_ymd_and_hms(year, month, day, hour, minute, 0)
+            .single()
+            .expect("valid time");
+        ctx
+    }
+
+    fn pair_quoted_at(quote_time: DateTime<Utc>) -> Vec<FxPairInfo> {
+        vec![FxPairInfo {
+            pair_id: "USD:VND".to_string(),
+            from_currency: "USD".to_string(),
+            to_currency: "VND".to_string(),
+            affected_mv: 10_000.0,
+            latest_quote_time: Some(quote_time),
+        }]
+    }
 
     #[test]
     fn test_missing_fx_pair() {
@@ -376,7 +425,8 @@ mod tests {
     #[test]
     fn test_stale_fx_pair() {
         let check = FxIntegrityCheck::new();
-        let ctx = HealthContext::new(HealthConfig::default(), "USD", 100_000.0);
+        // A Wednesday, so 48 hours back crosses no weekend.
+        let ctx = ctx_at(2026, 9, 30, 12, 0);
 
         let stale_time = ctx.now - Duration::hours(48);
         let pairs = vec![FxPairInfo {
@@ -395,7 +445,7 @@ mod tests {
     #[test]
     fn test_fresh_fx_pair_no_issues() {
         let check = FxIntegrityCheck::new();
-        let ctx = HealthContext::new(HealthConfig::default(), "USD", 100_000.0);
+        let ctx = ctx_at(2026, 9, 30, 12, 0);
 
         let fresh_time = ctx.now - Duration::hours(1);
         let pairs = vec![FxPairInfo {
@@ -408,5 +458,77 @@ mod tests {
 
         let issues = check.analyze(&pairs, &ctx);
         assert!(issues.is_empty());
+    }
+
+    #[test]
+    fn test_weekend_closure_is_not_stale() {
+        let check = FxIntegrityCheck::new();
+        // Friday's close (21:18 UTC) seen from Sunday 03:18 UTC: 30 hours on the clock, under an hour of market time.
+        let ctx = ctx_at(2026, 10, 4, 3, 18);
+        let quote = Utc
+            .with_ymd_and_hms(2026, 10, 2, 21, 18, 0)
+            .single()
+            .expect("valid time");
+        assert!(check.analyze(&pair_quoted_at(quote), &ctx).is_empty());
+    }
+
+    #[test]
+    fn test_monday_morning_after_friday_close_is_not_stale() {
+        let check = FxIntegrityCheck::new();
+        let ctx = ctx_at(2026, 10, 5, 8, 0);
+        let quote = Utc
+            .with_ymd_and_hms(2026, 10, 2, 21, 18, 0)
+            .single()
+            .expect("valid time");
+        assert!(check.analyze(&pair_quoted_at(quote), &ctx).is_empty());
+    }
+
+    #[test]
+    fn test_old_rate_across_a_weekend_is_still_stale() {
+        let check = FxIntegrityCheck::new();
+        // Tuesday noon: about 87 hours on the clock, 49 of them closed, so about 38 hours of market time.
+        let ctx = ctx_at(2026, 10, 6, 12, 0);
+        let quote = Utc
+            .with_ymd_and_hms(2026, 10, 2, 21, 18, 0)
+            .single()
+            .expect("valid time");
+        let issues = check.analyze(&pair_quoted_at(quote), &ctx);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_market_closed_duration() {
+        let friday_8pm = Utc
+            .with_ymd_and_hms(2026, 10, 2, 20, 0, 0)
+            .single()
+            .expect("valid time");
+        let sunday_11pm = Utc
+            .with_ymd_and_hms(2026, 10, 4, 23, 0, 0)
+            .single()
+            .expect("valid time");
+        // Friday 21:00 to Sunday 22:00.
+        assert_eq!(
+            fx_market_closed_duration(friday_8pm, sunday_11pm),
+            Duration::hours(49)
+        );
+        // A midweek span has no closure.
+        let monday = Utc
+            .with_ymd_and_hms(2026, 9, 28, 0, 0, 0)
+            .single()
+            .expect("valid time");
+        let thursday = Utc
+            .with_ymd_and_hms(2026, 10, 1, 0, 0, 0)
+            .single()
+            .expect("valid time");
+        assert_eq!(
+            fx_market_closed_duration(monday, thursday),
+            Duration::zero()
+        );
+        // Backwards or empty spans are zero.
+        assert_eq!(
+            fx_market_closed_duration(thursday, monday),
+            Duration::zero()
+        );
     }
 }
