@@ -39,8 +39,8 @@ import {
   monthLabel,
   parseMonthKey,
   SPENDING_MONTH_PARAM,
-  SPENDING_MONTH_STORAGE_KEY,
 } from "../lib/month-period";
+import { usePersistedSpendingMonth } from "../lib/use-persisted-month";
 import {
   INSIGHTS_PERIOD_STORAGE_KEY,
   INSIGHTS_PERIOD_UPDATED_AT_STORAGE_KEY,
@@ -154,10 +154,7 @@ export default function SpendingInsightsPage() {
     INSIGHTS_PERIOD_UPDATED_AT_STORAGE_KEY,
     "0",
   );
-  const [persistedMonth, setPersistedMonth] = usePersistentState<string | null>(
-    SPENDING_MONTH_STORAGE_KEY,
-    null,
-  );
+  const [persistedMonth, setPersistedMonth] = usePersistedSpendingMonth();
   const period = normalizeReportsPeriod(persistedPeriod) ?? DEFAULT_REPORTS_PERIOD;
   const [stage, setStage] = usePersistentState<InsightsStage>(STAGE_STORAGE_KEY, "where");
   const urlMonth = parseMonthKey(searchParams.get(SPENDING_MONTH_PARAM))

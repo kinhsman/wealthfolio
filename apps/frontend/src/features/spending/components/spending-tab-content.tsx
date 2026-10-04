@@ -36,7 +36,6 @@ import {
 } from "../lib/date-range-params";
 import {
   SPENDING_MONTH_PARAM,
-  SPENDING_MONTH_STORAGE_KEY,
   addMonthsToMonthKey,
   localDateFromParts,
   monthKeyFromParts,
@@ -44,6 +43,7 @@ import {
   monthRange,
   parseMonthKey,
 } from "../lib/month-period";
+import { usePersistedSpendingMonth } from "../lib/use-persisted-month";
 import { spendingActivityHref } from "../lib/navigation";
 import {
   DASHBOARD_PERIOD_UPDATED_AT_STORAGE_KEY,
@@ -351,10 +351,7 @@ export default function SpendingTabContent() {
     INTERVAL_STORAGE_KEY,
     DEFAULT_INTERVAL,
   );
-  const [persistedMonth, setPersistedMonth] = usePersistentState<string | null>(
-    SPENDING_MONTH_STORAGE_KEY,
-    null,
-  );
+  const [persistedMonth, setPersistedMonth] = usePersistedSpendingMonth();
   const [persistedInsightPeriod] = usePersistentState<string | null>(
     INSIGHTS_PERIOD_STORAGE_KEY,
     null,

@@ -15,6 +15,28 @@ import {
 export const SPENDING_MONTH_PARAM = "spendingMonth";
 export const SPENDING_MONTH_STORAGE_KEY = "spending-month";
 
+// money-hub patch (owner, 10-03: "Monthly budget always stuck at July 2026"): a month picked once was
+// saved for good, so every visit reopened on it. The saved value now carries the pick time
+// ("2026-07@1759500000000") and is only restored for a while; a plain "2026-07" from before this
+// change has no time, so it counts as expired.
+export const PERSISTED_MONTH_TTL_MS = 12 * 60 * 60 * 1000;
+
+export function encodePersistedMonth(monthKey: string | null, now = Date.now()): string | null {
+  return monthKey && parseMonthKey(monthKey) ? `${monthKey}@${now}` : null;
+}
+
+export function decodePersistedMonth(
+  stored: string | null | undefined,
+  now = Date.now(),
+): string | null {
+  if (!stored) return null;
+  const [monthKey, pickedAt] = stored.split("@");
+  const picked = Number(pickedAt);
+  if (!parseMonthKey(monthKey) || !pickedAt || !Number.isFinite(picked)) return null;
+  const age = now - picked;
+  return age >= 0 && age < PERSISTED_MONTH_TTL_MS ? monthKey : null;
+}
+
 export function localDateFromParts(date: ZonedCalendarDate): Date {
   return new Date(date.year, date.month - 1, date.day);
 }

@@ -4,7 +4,10 @@ import { createFormatter } from "@wealthfolio/ui";
 import {
   addMonthsToMonthKey,
   compactMonthLabel,
+  PERSISTED_MONTH_TTL_MS,
   currentMonthKey,
+  decodePersistedMonth,
+  encodePersistedMonth,
   monthLabel,
   monthReportsRange,
   parseMonthKey,
@@ -61,5 +64,35 @@ describe("spending month periods", () => {
     vi.setSystemTime(new Date("2026-06-01T03:00:00.000Z"));
 
     expect(currentMonthKey("America/Toronto")).toBe("2026-05");
+  });
+});
+
+describe("persisted month", () => {
+  const now = Date.parse("2026-10-03T12:00:00.000Z");
+
+  it("is restored while fresh", () => {
+    const stored = encodePersistedMonth("2026-07", now);
+    expect(decodePersistedMonth(stored, now + 60_000)).toBe("2026-07");
+  });
+
+  it("is forgotten once the time is up", () => {
+    const stored = encodePersistedMonth("2026-07", now);
+    expect(decodePersistedMonth(stored, now + PERSISTED_MONTH_TTL_MS)).toBeNull();
+  });
+
+  it("treats a plain month saved before the change as expired", () => {
+    expect(decodePersistedMonth("2026-07", now)).toBeNull();
+  });
+
+  it("ignores junk and a time in the future", () => {
+    expect(decodePersistedMonth(null, now)).toBeNull();
+    expect(decodePersistedMonth("nope@123", now)).toBeNull();
+    expect(decodePersistedMonth("2026-07@abc", now)).toBeNull();
+    expect(decodePersistedMonth(`2026-07@${now + 5_000}`, now)).toBeNull();
+  });
+
+  it("saves nothing for a cleared or invalid month", () => {
+    expect(encodePersistedMonth(null, now)).toBeNull();
+    expect(encodePersistedMonth("2026-13", now)).toBeNull();
   });
 });
