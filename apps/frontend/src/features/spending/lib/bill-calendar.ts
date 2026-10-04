@@ -31,6 +31,8 @@ export const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${p
 const sumOf = (xs: BillDue[]) => Math.round(xs.reduce((a, b) => a + b.amount, 0) * 100) / 100;
 
 export interface BillSpan {
+  /** The range reaches this month, so something can still be left to pay; a past range has no such figure. */
+  open: boolean;
   paidTotal: number;
   leftTotal: number;
   /** How many subscriptions and bills have a charge in the span, and how many it has in all (with what is still to pay). */
@@ -41,7 +43,7 @@ export interface BillSpan {
 /**
  * The same sums over the Spending page's range (owner, 10-04: "changing the time on top doesnt move the
  * subscription and bills widget numbers"): what was charged from `from` to `to` (YYYY-MM-DD), counted the way a
- * month is, and what is still to pay only when the range reaches this month. Last month is September's
+ * month is, and what is still to pay only when the range reaches this month (`open`; a past range has no left to pay and the strip hides it). Last month is September's
  * charges and nothing left; this month and 3M/6M/YTD/1Y end today, so they carry this month's left to pay.
  */
 export function billSpan(items: Stream[], today: string, from: string, to: string): BillSpan {
@@ -62,7 +64,8 @@ export function billSpan(items: Stream[], today: string, from: string, to: strin
     );
   }
   let left: BillDue[] = [];
-  if (from.slice(0, 7) <= thisMonth && to.slice(0, 7) >= thisMonth) {
+  const open = from.slice(0, 7) <= thisMonth && to.slice(0, 7) >= thisMonth;
+  if (open) {
     const [ty, tm] = today.split("-").map(Number);
     const start = ymd(new Date(ty, tm - 1, 1));
     const end = ymd(new Date(ty, tm, 0));
@@ -70,6 +73,7 @@ export function billSpan(items: Stream[], today: string, from: string, to: strin
   }
   const paidKeys = new Set(paid.map((b) => b.key));
   return {
+    open,
     paidTotal: sumOf(paid),
     leftTotal: sumOf(left),
     paidCount: paidKeys.size,

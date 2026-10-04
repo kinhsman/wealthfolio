@@ -3,7 +3,7 @@
 // is due and every row live on the Subscriptions & Bills page (pages/spending-subscriptions-page.tsx), which
 // this whole strip opens. The numbers are the page's own: lib/subscriptions.ts totals, and paid and left to
 // pay from lib/bill-calendar.ts, counted the way the Monthly budget card counts them. Paid and left to pay
-// follow the Spending page's time range (owner, 10-04: "changing the time on top doesnt move the subscription
+// follow the Spending page's time range, and a past range (Last month) has no left to pay, so that tile is hidden (owner, 10-04: "changing the time on top doesnt move the subscription
 // and bills widget numbers"); a month and a year are what repeats, so they do not move with it.
 import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -78,10 +78,17 @@ export function SubscriptionsStrip({ currency = "USD", from, to, rangeLabel }: S
           Nothing repeating found yet. One shows up once it has come back a few months in a row.
         </span>
       ) : (
-        <div className="grid min-w-0 flex-1 grid-cols-4 gap-x-4 max-md:order-last max-md:basis-full max-md:grid-cols-3 max-md:gap-x-2">
-          <Stat label="Left to pay">
-            <PrivacyAmount value={m.leftTotal} currency={currency} />
-          </Stat>
+        <div
+          className={cn(
+            "grid min-w-0 flex-1 gap-x-4 max-md:order-last max-md:basis-full max-md:gap-x-2",
+            m.open ? "grid-cols-4 max-md:grid-cols-3" : "grid-cols-3 max-md:grid-cols-2",
+          )}
+        >
+          {m.open && (
+            <Stat label="Left to pay">
+              <PrivacyAmount value={m.leftTotal} currency={currency} />
+            </Stat>
+          )}
           <Stat label={`Paid, ${m.paidCount} of ${m.count}`}>
             <PrivacyAmount value={m.paidTotal} currency={currency} />
           </Stat>

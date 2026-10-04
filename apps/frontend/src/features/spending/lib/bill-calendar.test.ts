@@ -47,19 +47,20 @@ describe("bill span (the Spending page's range)", () => {
   it("this month equals the bill calendar's month", () => {
     const m = billMonth(items, today);
     const span = billSpan(items, today, "2026-10-01", today);
+    expect(span.open).toBe(true);
     expect([span.paidTotal, span.leftTotal, span.paidCount, span.count]).toEqual([m.paidTotal, m.leftTotal, m.paidCount, m.count]);
   });
 
   it("last month: what was charged then and nothing left to pay", () => {
     const span = billSpan(items, today, "2026-09-01", "2026-09-30");
-    expect([span.paidTotal, span.leftTotal, span.paidCount, span.count]).toEqual([2505.76, 0, 1, 1]);
+    expect([span.open, span.paidTotal, span.leftTotal, span.paidCount, span.count]).toEqual([false, 2505.76, 0, 1, 1]);
     const back = billMonth(items, today, -1);
     expect(span.paidTotal).toBe(back.paidTotal);
   });
 
   it("a range of months adds them up and keeps this month's left to pay", () => {
     const span = billSpan(items, today, "2026-08-02", today);
-    expect([span.paidTotal, span.leftTotal, span.paidCount, span.count]).toEqual([5011.52, 157, 1, 2]);
+    expect([span.open, span.paidTotal, span.leftTotal, span.paidCount, span.count]).toEqual([true, 5011.52, 157, 1, 2]);
   });
 
   it("a range starting mid-month leaves out the charges before it", () => {
@@ -69,6 +70,6 @@ describe("bill span (the Spending page's range)", () => {
 
   it("a month picked from the calendar (other than this one) has no left to pay", () => {
     const span = billSpan(items, today, "2026-08-01", "2026-08-31");
-    expect([span.paidTotal, span.leftTotal, span.count]).toEqual([0, 0, 0]);
+    expect([span.open, span.paidTotal, span.leftTotal, span.count]).toEqual([false, 0, 0, 0]);
   });
 });
