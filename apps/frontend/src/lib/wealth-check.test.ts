@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   expectedNetWorth,
+  isHoldingLeftOut,
   isLeftOutOfWealthCheck,
+  netWorthWithoutItems,
   netWorthWithout,
   setWealthCheckExcludeInMeta,
   wealthRatio,
@@ -49,5 +51,18 @@ describe("wealth check", () => {
     expect(netWorthWithout(100_000, [{ id: "card", accountType: "CREDIT_CARD" }], valuations)).toBe(102_000);
     // No valuation yet counts as zero.
     expect(netWorthWithout(100_000, [{ id: "new", accountType: "CASH" }], valuations)).toBe(100_000);
+  });
+
+  it("takes a left-out property out and adds a left-out loan back", () => {
+    expect(netWorthWithoutItems(138_000, [{ value: 685_000, liability: false }])).toBe(-547_000);
+    expect(netWorthWithoutItems(138_000, [{ value: 730_000, liability: true }])).toBe(868_000);
+    expect(netWorthWithoutItems(138_000, [])).toBe(138_000);
+  });
+
+  it("reads a held item's switch from its metadata", () => {
+    expect(isHoldingLeftOut(undefined)).toBe(false);
+    expect(isHoldingLeftOut({})).toBe(false);
+    expect(isHoldingLeftOut({ wealthCheckExclude: "true" })).toBe(true);
+    expect(isHoldingLeftOut({ wealthCheckExclude: "" })).toBe(false);
   });
 });

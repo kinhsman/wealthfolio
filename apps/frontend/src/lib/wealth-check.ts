@@ -65,3 +65,17 @@ export function netWorthWithout(
     netWorth,
   );
 }
+
+/** A property, loan or other held item's own switch (its metadata.wealthCheckExclude, saved as text). */
+export function isHoldingLeftOut(metadata: Record<string, unknown> | null | undefined): boolean {
+  const flag = metadata?.wealthCheckExclude;
+  return flag === true || flag === "true";
+}
+
+/** Net worth with left-out properties, loans and the like taken out: an asset leaves, a loan is added back. */
+export function netWorthWithoutItems(
+  netWorth: number,
+  leftOut: { value: number; liability: boolean }[],
+): number {
+  return leftOut.reduce((sum, item) => sum + (item.liability ? item.value : -item.value), netWorth);
+}

@@ -3,9 +3,8 @@
 // Age = the retirement goal's birth month (can be typed over here). Income = what you type, before tax: the
 // last 12 months of deposits is only shown as a hint, because it is after tax and counts everything that
 // came in (loans, transfers, rent), so it can be several times the real salary. Accounts can be left out in
-// their own settings.
+// the gear panel at the top of the page.
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
 import { getGoalPlan } from "@/adapters";
@@ -14,15 +13,11 @@ import { useSpendingReport } from "@/features/spending/hooks/use-spending-report
 import { zonedCalendarDateBoundaryToDate } from "@/features/spending/lib/timezone";
 import { ageFromBirthYearMonth, parseSettingsJson } from "@/features/goals/retirement-planner/lib/plan-adapter";
 import { useGoals } from "@/features/goals/hooks/use-goals";
-import { useAccounts } from "@/hooks/use-accounts";
-import { useLatestValuations } from "@/hooks/use-latest-valuations";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { QueryKeys } from "@/lib/query-keys";
 import type { GoalPlan } from "@/lib/types";
 import {
   expectedNetWorth,
-  isLeftOutOfWealthCheck,
-  netWorthWithout,
   PAW_MULTIPLE,
   UAW_MULTIPLE,
   wealthRatio,
@@ -34,6 +29,9 @@ import { useSettingsContext } from "@/lib/settings-provider";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 
 import { CompactAmount } from "@/pages/net-worth/components/compact-amount";
+import type { ParsedNetWorth } from "@/pages/net-worth/components/utils";
+
+import { useWealthCheckScope } from "./use-wealth-check-scope";
 
 // The bar runs 0 to 2.5x the expected amount, so the UAW line sits at 20%, expected at 40%, PAW at 80%.
 const BAR_MAX = 2.5;
@@ -49,27 +47,20 @@ const FIELD =
   "h-8 w-full rounded-md border border-[var(--m-line)] bg-transparent px-2 text-sm tabular-nums outline-none focus:border-[var(--m-muted)]";
 
 interface WealthCheckCardProps {
-  /** Net worth as the server counts it, base currency. */
-  netWorth: number;
+  /** The net worth breakdown, base currency. */
+  data: ParsedNetWorth;
   currency: string;
   /** Today, YYYY-MM-DD, in the app's timezone. */
   asOf: string;
 }
 
-export function WealthCheckCard({ netWorth, currency, asOf }: WealthCheckCardProps) {
+export function WealthCheckCard({ data, currency, asOf }: WealthCheckCardProps) {
   const [editing, setEditing] = useState(false);
   const [birthTyped, setBirthTyped] = usePersistentState<string>("wealth-check-birth", "");
   const [incomeTyped, setIncomeTyped] = usePersistentState<number | null>("wealth-check-income", null);
 
-  const { accounts } = useAccounts({ filterActive: false, includeArchived: false });
-  const leftOut = useMemo(() => accounts.filter(isLeftOutOfWealthCheck), [accounts]);
-  const { latestValuations, isLoading: valuationsLoading } = useLatestValuations(
-    useMemo(() => leftOut.map((a) => a.id), [leftOut]),
-  );
-  const counted = useMemo(
-    () => netWorthWithout(netWorth, leftOut, latestValuations ?? []),
-    [netWorth, leftOut, latestValuations],
-  );
+  // What counts: everything not switched off in the gear panel on the Net worth tab.
+  const { counted, leftOutCount, isLoading: scopeLoading } = useWealthCheckScope(data);
 
   // Birth month from the retirement goal's plan.
   const { goals } = useGoals();
@@ -110,7 +101,7 @@ export function WealthCheckCard({ netWorth, currency, asOf }: WealthCheckCardPro
   const status = ratio != null ? wealthStatus(ratio) : null;
   const pill = status ? PILL[status] : null;
 
-  const loading = incomeLoading || valuationsLoading;
+  const loading = incomeLoading || scopeLoading;
   const message =
     ratio == null || expected == null
       ? null
@@ -200,9 +191,7 @@ export function WealthCheckCard({ netWorth, currency, asOf }: WealthCheckCardPro
           </dl>
           <p className="text-muted-foreground mt-2.5 text-[11px] leading-snug max-md:hidden">
             Income is <CompactAmount value={income} currency={currency} /> a year before tax, as you typed it.
-            {leftOut.length > 0
-              ? ` ${leftOut.length} account${leftOut.length === 1 ? " is" : "s are"} left out.`
-              : ""}
+            {leftOutCount > 0 ? ` ${leftOutCount} ${leftOutCount === 1 ? "item is" : "items are"} left out.` : ""}
           </p>
         </>
       ) : (
@@ -246,10 +235,7 @@ export function WealthCheckCard({ netWorth, currency, asOf }: WealthCheckCardPro
             ) : null}
           </label>
           <p className="text-muted-foreground text-xs">
-            Leave an account out in its own settings, under Wealth check.{" "}
-            <Link to="/settings/accounts" className="underline underline-offset-4">
-              Open accounts
-            </Link>
+            Switch accounts, loans and properties off with the gear at the top of this page.
           </p>
         </div>
       ) : null}
