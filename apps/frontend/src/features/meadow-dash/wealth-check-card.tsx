@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getGoalPlan } from "@/adapters";
 import { DashboardCard } from "@/components/dashboard-card";
 import { useSpendingReport } from "@/features/spending/hooks/use-spending-report";
+import { zonedCalendarDateBoundaryToDate } from "@/features/spending/lib/timezone";
 import { ageFromBirthYearMonth, parseSettingsJson } from "@/features/goals/retirement-planner/lib/plan-adapter";
 import { useGoals } from "@/features/goals/hooks/use-goals";
 import { useAccounts } from "@/hooks/use-accounts";
@@ -26,7 +27,8 @@ import {
   wealthStatus,
   type WealthStatus,
 } from "@/lib/wealth-check";
-import { formatDateISO, parseLocalDate } from "@/lib/utils";
+import { parseLocalDate } from "@/lib/utils";
+import { useSettingsContext } from "@/lib/settings-provider";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 
 import { CompactAmount } from "@/pages/net-worth/components/compact-amount";
@@ -83,13 +85,20 @@ export function WealthCheckCard({ netWorth, currency, asOf }: WealthCheckCardPro
   const birth = birthTyped || planBirth || "";
   const age = birth ? ageFromBirthYearMonth(birth, today) : undefined;
 
-  // The last 12 months of income.
+  // The last 12 months of income. The report wants day boundaries in the app's timezone, as the Spending tab sends them.
+  const { settings } = useSettingsContext();
   const range = useMemo(() => {
-    const start = new Date(today);
-    start.setFullYear(start.getFullYear() - 1);
-    start.setDate(start.getDate() + 1);
-    return { startDate: formatDateISO(start), endDate: formatDateISO(today) };
-  }, [today]);
+    const [y, m, d] = asOf.split("-").map(Number);
+    const start = new Date(Date.UTC(y - 1, m - 1, d + 1));
+    return {
+      startDate: zonedCalendarDateBoundaryToDate(
+        { year: start.getUTCFullYear(), month: start.getUTCMonth() + 1, day: start.getUTCDate() },
+        "start",
+        settings?.timezone,
+      ).toISOString(),
+      endDate: zonedCalendarDateBoundaryToDate({ year: y, month: m, day: d }, "end", settings?.timezone).toISOString(),
+    };
+  }, [asOf, settings?.timezone]);
   const { data: report, isLoading: incomeLoading } = useSpendingReport(range);
   const reportIncome = report?.current.income ?? 0;
   const income = incomeTyped ?? (reportIncome > 0 ? reportIncome : null);
