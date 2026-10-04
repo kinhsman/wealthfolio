@@ -62,11 +62,11 @@ export function useWealthCheckScope(data: ParsedNetWorth) {
     return lines
       .filter((line) => line.assetId && !isAccountLine(line.assetId))
       .map((line) => ({
-        id: line.assetId as string,
+        id: line.assetId!,
         name: line.name,
         value: line.value,
         liability: line.liability,
-        leftOut: flags.get(line.assetId as string) === true,
+        leftOut: flags.get(line.assetId!) === true,
       }))
       .sort((a, b) => b.value - a.value);
   }, [data, holdings]);
