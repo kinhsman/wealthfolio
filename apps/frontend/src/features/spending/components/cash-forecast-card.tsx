@@ -30,6 +30,9 @@ const LINE = "var(--m-chart, var(--m-forest, hsl(73 84% 27%)))";
 const W = 600;
 const H = 140;
 
+/** The scale's top and bottom on a phone, over the plot's left corners. */
+const ON_PLOT_LABEL = "text-muted-foreground pointer-events-none absolute left-0 text-[10.5px] leading-none tabular-nums";
+
 function Toggle({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
     <div role="group" aria-label="How far ahead" className="bg-card/40 border-border/60 inline-flex items-center gap-0.5 rounded-full border p-0.5">
@@ -174,11 +177,15 @@ function Chart({ f, currency, isMobile }: { f: CashForecast; currency: string; i
   const mid = f.days[Math.floor(f.days.length / 2)];
   return (
     <div>
-      <div className="flex gap-2">
-        <div className="text-muted-foreground flex w-12 shrink-0 flex-col justify-between py-0.5 text-right text-[10.5px] tabular-nums">
-          <span>{money(max, currency, isBalanceHidden, true)}</span>
-          <span>{money(min, currency, isBalanceHidden, true)}</span>
-        </div>
+      {/* Not a flex row on a phone: the phone's ".flex { overflow-x: hidden }" would cut the markers
+          that sit on the plot's two edges in half. */}
+      <div className={isMobile ? undefined : "flex gap-2"}>
+        {isMobile ? null : (
+          <div className="text-muted-foreground flex w-12 shrink-0 flex-col justify-between py-0.5 text-right text-[10.5px] tabular-nums">
+            <span>{money(max, currency, isBalanceHidden, true)}</span>
+            <span>{money(min, currency, isBalanceHidden, true)}</span>
+          </div>
+        )}
         <div
           ref={box}
           className={cn("relative min-w-0 flex-1 touch-pan-y select-none", isMobile ? "h-[110px]" : "h-[140px]")}
@@ -196,6 +203,14 @@ function Chart({ f, currency, isMobile }: { f: CashForecast; currency: string; i
             ) : null}
             <path d={path} fill="none" stroke={LINE} strokeWidth={2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
           </svg>
+          {isMobile ? (
+            // A phone has no room for a column of its own (it left the chart a sixth narrower and
+            // blank on the left; owner, 10-03): the top and bottom of the scale sit on the plot.
+            <>
+              <span className={ON_PLOT_LABEL} style={{ top: 0 }}>{money(max, currency, isBalanceHidden, true)}</span>
+              <span className={ON_PLOT_LABEL} style={{ bottom: 0 }}>{money(min, currency, isBalanceHidden, true)}</span>
+            </>
+          ) : null}
           {f.cushion > 0 && f.cushion >= min && f.cushion <= max ? (
             <span className="text-muted-foreground absolute right-0 -translate-y-full pb-0.5 text-[10.5px]" style={{ top: `${yPct(f.cushion)}%` }}>
               cushion {money(f.cushion, currency, isBalanceHidden, true)}
@@ -234,7 +249,7 @@ function Chart({ f, currency, isMobile }: { f: CashForecast; currency: string; i
           ) : null}
         </div>
       </div>
-      <div className="text-muted-foreground mt-1 flex justify-between pl-14 text-[10.5px] tabular-nums">
+      <div className={cn("text-muted-foreground mt-1 flex justify-between text-[10.5px] tabular-nums", !isMobile && "pl-14")}>
         <span>Today</span>
         {mid ? <span>{shortDay(mid.date)}</span> : null}
         <span>{shortDay(f.until)}</span>
