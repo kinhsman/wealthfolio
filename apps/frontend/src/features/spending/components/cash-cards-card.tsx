@@ -135,35 +135,25 @@ export function CashCardsCard({
                     )
                   }
                 >
-                  {fc.accounts.map((a) => {
-                    const account = accounts?.find((x) => x.id === a.id);
-                    const logo = accountLogoUrl(account);
-                    return (
-                      <div
-                        key={a.id}
-                        className="flex items-center gap-2.5 rounded-xl bg-[var(--m-mint-tile)] px-2.5 py-2"
-                      >
-                        <Logo url={logo} name={account?.name ?? a.name} />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13.5px]">{account?.name ?? a.name}</div>
-                          {!a.known ? (
-                            <div className="text-[11.5px] text-[var(--m-mint-muted)]">
-                              no balance yet
-                            </div>
-                          ) : a.pending !== 0 ? (
-                            <div className="text-[11.5px] text-[var(--m-mint-muted)]">
-                              {a.pending < 0 ? "- " : "+ "}
-                              <PrivacyAmount value={Math.abs(a.pending)} currency={currency} />{" "}
-                              pending
-                            </div>
-                          ) : null}
-                        </div>
-                        <span className="shrink-0 text-[13.5px] font-medium">
-                          <PrivacyAmount value={a.cash} currency={currency} />
-                        </span>
-                      </div>
-                    );
-                  })}
+                  <FoldedList
+                    items={fc.accounts}
+                    keep={LIST_KEEP}
+                    noun="account"
+                    render={(a) => {
+                      const account = accounts?.find((x) => x.id === a.id);
+                      return (
+                        <CashRow
+                          key={a.id}
+                          name={account?.name ?? a.name}
+                          logo={accountLogoUrl(account)}
+                          known={a.known}
+                          pending={a.pending}
+                          cash={a.cash}
+                          currency={currency}
+                        />
+                      );
+                    }}
+                  />
                 </List>
               ) : null}
               {hasCards && cc ? (
@@ -185,13 +175,17 @@ export function CashCardsCard({
                     )
                   }
                 >
-                  <FoldedCards
-                    cards={cc.cards}
+                  <FoldedList
+                    items={cc.cards}
                     keep={
-                      // Desktop: one-line rows, so four cards end level with Cash; a fifth folds. Phone:
-                      // two-line rows, as many as the Cash list has accounts, at least 3 (owner, 10-02).
-                      isMobile ? Math.max(3, hasCash && fc ? fc.accounts.length : 0) : 4
+                      // Desktop: four, level with Cash; a fifth folds. Phone: two-line rows, as many as
+                      // the Cash list shows, at least 3 (owner, 10-02).
+                      isMobile
+                        ? Math.max(3, Math.min(LIST_KEEP, hasCash && fc ? fc.accounts.length : 0))
+                        : LIST_KEEP
                     }
+                    noun="card"
+                    pin={needsLook}
                     render={(c) => {
                       const account = accounts?.find((a) => a.id === c.wfAccountId);
                       return (
@@ -455,29 +449,29 @@ function Legend({
   return <div className="flex min-w-0 flex-col">{body}</div>;
 }
 
-// money-hub patch: the Cards list shows the first `keep` cards (four on desktop; on a phone as many as the
-// Cash list has accounts, at least 3) and folds the rest behind a Show more row (owner, 10-02). A card that needs a
-// sign-in or is heavily used always stays in view, so a warning never hides behind the fold.
-function FoldedCards({
-  cards,
+// money-hub patch: the Cash and Cards lists each show their first `keep` rows (four; on a phone the Cards list
+// as many as the Cash list shows, at least 3) and fold the rest behind a Show more row (owner, 10-02, 10-03).
+// A card that needs a sign-in or is heavily used always stays in view (`pin`), so a warning never hides
+// behind the fold.
+function FoldedList<T>({
+  items,
   keep,
+  noun,
+  pin,
   render,
 }: {
-  cards: CreditCard[];
+  items: T[];
   keep: number;
-  render: (c: CreditCard) => ReactNode;
+  noun: string;
+  pin?: (item: T) => boolean;
+  render: (item: T) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const needsLook = (c: CreditCard) => {
-    const share = usedShare(c);
-    const due = dueLine(c.due, todayIso());
-    return c.needsLogin || (share != null && share >= HIGH_USE) || due?.tone === "soon" || due?.tone === "late";
-  };
-  const shown = cards.filter((c, i) => i < keep || needsLook(c));
-  const folded = cards.filter((c) => !shown.includes(c));
+  const shown = items.filter((item, i) => i < keep || pin?.(item));
+  const folded = items.filter((item) => !shown.includes(item));
   return (
     <>
-      {(open ? cards : shown).map(render)}
+      {(open ? items : shown).map(render)}
       {folded.length > 0 ? (
         <button
           type="button"
@@ -488,7 +482,7 @@ function FoldedCards({
           <span>
             {open
               ? "Show less"
-              : `Show ${folded.length} more ${folded.length === 1 ? "card" : "cards"}`}
+              : `Show ${folded.length} more ${folded.length === 1 ? noun : `${noun}s`}`}
           </span>
           <span
             aria-hidden
@@ -552,6 +546,68 @@ function Logo({
 /** Today in the reader's zone (YYYY-MM-DD). */
 const todayIso = () => new Date().toLocaleDateString("en-CA");
 
+/** A card that needs a sign-in, is heavily used or is due soon: always shown, never folded. */
+const needsLook = (c: CreditCard) => {
+  const share = usedShare(c);
+  const due = dueLine(c.due, todayIso());
+  return c.needsLogin || (share != null && share >= HIGH_USE) || due?.tone === "soon" || due?.tone === "late";
+};
+
+/** How many rows each list shows before folding the rest. */
+const LIST_KEEP = 4;
+
+/** One fixed row height for the Cash and Cards lists, so the two columns run level: a one-line row on
+ *  desktop, a two-line row on a phone (owner, 10-03). */
+const ROW = "h-14 md:h-9";
+
+function CashRow({
+  name,
+  logo,
+  known,
+  pending,
+  cash,
+  currency,
+}: {
+  name: string;
+  logo: string | null | undefined;
+  known: boolean;
+  pending: number;
+  cash: number;
+  currency: string;
+}) {
+  const { isBalanceHidden } = useBalancePrivacy();
+  const formatting = useAmountFormatting();
+  const pendingAmount = `${pending < 0 ? "- " : "+ "}${isBalanceHidden ? "••••" : formatting.formatAmount(Math.abs(pending), currency)}`;
+  const note = !known ? "no balance yet" : pending !== 0 ? `${pendingAmount} pending` : null;
+  // The same one-line row as a card on desktop (the pending amount sits where a card shows its usage, the
+  // full words in the tooltip); on a phone the note goes under the name.
+  return (
+    <div
+      title={note ? `${name}: ${note}` : undefined}
+      className={cn(
+        ROW,
+        "flex items-center gap-2.5 rounded-xl bg-[var(--m-mint-tile)] px-2.5 md:pb-2 md:pt-1.5",
+      )}
+    >
+      <Logo url={logo} name={name} className="md:h-[22px] md:w-[22px]" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13.5px]">{name}</div>
+        {note ? (
+          <div className="truncate text-[11.5px] text-[var(--m-mint-muted)] md:hidden">{note}</div>
+        ) : null}
+      </div>
+      {note ? (
+        <span className="hidden shrink-0 text-[11.5px] text-[var(--m-mint-muted)] md:inline">
+          {known ? pendingAmount : "no balance"}
+        </span>
+      ) : null}
+      <span className="shrink-0 text-[13.5px] font-medium">
+        <PrivacyAmount value={cash} currency={currency} />
+      </span>
+    </div>
+  );
+}
+
 function CardRow({
   c,
   name,
@@ -606,7 +662,7 @@ function CardRow({
     <Link
       to={cardTransactionsHref(c)}
       title={`${name}: ${detail}`}
-      className="relative flex items-center gap-2.5 rounded-xl bg-[var(--m-mint-tile)] px-2.5 pb-2.5 pt-2 hover:opacity-90 md:pb-2 md:pt-1.5"
+      className={cn(ROW, "relative flex items-center gap-2.5 rounded-xl bg-[var(--m-mint-tile)] px-2.5 pb-2.5 pt-2 hover:opacity-90 md:pb-2 md:pt-1.5")}
     >
       <Logo url={logo} name={c.bank} square className="md:h-[22px] md:w-[22px]" />
       {c.limit != null ? (
