@@ -41,17 +41,40 @@ export function useWealthCheckScope(data: ParsedNetWorth) {
   );
   const { data: holdings } = useAlternativeHoldings();
 
+  // A card has no stored valuation, so what it adds to net worth comes from its own line in the breakdown
+  // (CREDIT_CARD:<id> owes, CASH:<id> holds), the same numbers the server counted.
+  const lineShares = useMemo(() => {
+    const shares = new Map<string, number>();
+    for (const category of data.assets.breakdown) {
+      for (const child of category.children ?? []) {
+        if (child.assetId?.startsWith("CASH:")) shares.set(child.assetId.slice(5), child.value);
+      }
+    }
+    for (const liability of data.liabilities.breakdown) {
+      if (liability.assetId?.startsWith("CREDIT_CARD:")) {
+        const id = liability.assetId.slice(12);
+        shares.set(id, (shares.get(id) ?? 0) - liability.value);
+      }
+    }
+    return shares;
+  }, [data]);
+
   const accountRows = useMemo<ScopeAccount[]>(() => {
     const byAccount = new Map((latestValuations ?? []).map((v) => [v.accountId, v]));
     return accounts
-      .map((account) => ({
-        account,
-        share: accountNetWorthShare(account, byAccount.get(account.id)),
-        leftOut: isLeftOutOfWealthCheck(account),
-      }))
+      .map((account) => {
+        const valued = account.accountType !== "CREDIT_CARD" && byAccount.has(account.id);
+        return {
+          account,
+          share: valued
+            ? accountNetWorthShare(account, byAccount.get(account.id))
+            : (lineShares.get(account.id) ?? 0),
+          leftOut: isLeftOutOfWealthCheck(account),
+        };
+      })
       .filter((row) => row.share !== 0 || row.leftOut)
       .sort((a, b) => Math.abs(b.share) - Math.abs(a.share));
-  }, [accounts, latestValuations]);
+  }, [accounts, latestValuations, lineShares]);
 
   const items = useMemo<ScopeItem[]>(() => {
     const flags = new Map((holdings ?? []).map((h) => [h.id, isHoldingLeftOut(h.metadata)]));
