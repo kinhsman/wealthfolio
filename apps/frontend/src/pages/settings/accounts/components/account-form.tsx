@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -11,6 +12,12 @@ import { newAccountSchema } from "@/lib/schemas";
 import { AccountType } from "@/lib/constants";
 import { RENTAL_DISPLAY_TYPE, isRentalMeta, setDisplayTypeInMeta } from "@/lib/account-display";
 import { countsAsFreeCash, setFreeCashInMeta } from "@/features/spending/lib/free-cash";
+import { useSpendingSettings } from "@/features/spending/hooks/use-spending-settings";
+import {
+  canTrackInSpending,
+  setAccountTracked,
+  trackingToApply,
+} from "@/features/spending/lib/tracked-accounts";
 import { isLeftOutOfWealthCheck, setWealthCheckExcludeInMeta } from "@/lib/wealth-check";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { cn } from "@/lib/utils";
@@ -24,6 +31,7 @@ import {
   type ResponsiveSelectOption,
 } from "@wealthfolio/ui";
 import { Alert, AlertDescription } from "@wealthfolio/ui/components/ui/alert";
+import { toast } from "@wealthfolio/ui/components/ui/use-toast";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -155,6 +163,18 @@ export function AccountForm({ defaultValues, onSuccess = () => undefined }: Acco
   const isCashAccount = currentAccountType === AccountType.CASH;
   const isRentalAccount = isCashAccount && isRentalMeta(form.watch("meta"));
 
+  // money-hub patch: Spending only lists accounts it tracks (lib/tracked-accounts.ts). null = the owner has
+  // not touched the switch: a new account follows the default (on), an existing one keeps what it has.
+  const queryClient = useQueryClient();
+  const { settings: spendingSettings } = useSpendingSettings();
+  const isNewAccount = !defaultValues?.id;
+  const [trackChoice, setTrackChoice] = useState<boolean | null>(null);
+  const canTrack = canTrackInSpending(currentAccountType, form.watch("meta"));
+  const trackedNow = isNewAccount
+    ? true
+    : (spendingSettings?.accountIds ?? []).includes(defaultValues?.id ?? "");
+  const trackInSpending = trackChoice ?? trackedNow;
+
   const { data: assetClassesTaxonomy } = useTaxonomy(isCashAccount ? "asset_classes" : null);
   const fixedIncomeCategoryName = useMemo(() => {
     return (
@@ -182,20 +202,45 @@ export function AccountForm({ defaultValues, onSuccess = () => undefined }: Acco
   const doSubmit = useCallback(
     (data: AccountFormOutput, options?: { async?: boolean }) => {
       const { id, trackingMode, ...rest } = data;
-
-      if (id) {
-        if (options?.async) {
-          return updateAccountMutation.mutateAsync({
-            id,
-            trackingMode,
-            ...rest,
+      const wantTracked = trackingToApply({
+        accountType: rest.accountType,
+        meta: rest.meta,
+        isNew: !id,
+        choice: trackChoice,
+      });
+      // The account is saved first; then Spending's list follows. A failure here is said out loud,
+      // never swallowed, because a missing account in Add transaction is exactly what this prevents.
+      const trackAfterSave = async (accountId: string) => {
+        if (wantTracked === null) return;
+        try {
+          await setAccountTracked(queryClient, accountId, wantTracked);
+        } catch {
+          toast({
+            title: "The account was saved, but Spending tracking did not change.",
+            description: "Switch it in Settings, Spending, Accounts.",
+            variant: "destructive",
           });
         }
-        return updateAccountMutation.mutate({ id, trackingMode, ...rest });
+      };
+
+      if (id) {
+        const saved = updateAccountMutation
+          .mutateAsync({ id, trackingMode, ...rest })
+          .then(async (account) => {
+            await trackAfterSave(id);
+            return account;
+          });
+        if (options?.async) return saved;
+        saved.catch(() => undefined); // the mutation's own onError already told the owner
+        return undefined;
       }
-      return createAccountMutation.mutate({ trackingMode, ...rest });
+      createAccountMutation
+        .mutateAsync({ trackingMode, ...rest })
+        .then((account) => trackAfterSave(account.id))
+        .catch(() => undefined); // the mutation's own onError already told the owner
+      return undefined;
     },
-    [createAccountMutation, updateAccountMutation],
+    [createAccountMutation, updateAccountMutation, queryClient, trackChoice],
   );
 
   function onSubmit(data: AccountFormOutput) {
@@ -491,6 +536,29 @@ export function AccountForm({ defaultValues, onSuccess = () => undefined }: Acco
                 </FormItem>
               )}
             />
+
+            {/* money-hub patch: whether Spending tracks this account (Settings, Spending, Accounts; lib/tracked-accounts.ts). */}
+            {canTrack ? (
+              <section className={formCardClassName}>
+                <h3 className={formSectionLabelClassName}>Spending</h3>
+                <div className="mt-4 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <label htmlFor="account-track-spending" className="text-sm font-normal">
+                      Track in Spending
+                    </label>
+                    <p className="text-muted-foreground text-xs">
+                      Shows in Spending and in Add transaction
+                    </p>
+                  </div>
+                  <Switch
+                    id="account-track-spending"
+                    checked={trackInSpending}
+                    disabled={!isNewAccount && !spendingSettings}
+                    onCheckedChange={setTrackChoice}
+                  />
+                </div>
+              </section>
+            ) : null}
 
             {/* money-hub patch: whether this account's cash pays the cards (Spending, Free cash; lib/free-cash.ts). */}
             {!isCreditCardAccount && currentAccountType ? (
