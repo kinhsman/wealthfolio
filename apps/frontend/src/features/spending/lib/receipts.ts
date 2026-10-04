@@ -42,8 +42,9 @@ export interface Receipt {
   id: string;
   at: string;
   photos: number;
-  /** photo: snapped or pasted; gmail: found in an email by the money-hub service. */
-  source?: "photo" | "gmail";
+  /** photo: snapped or pasted; gmail: found in an email by the money-hub service; amazon: made from an Amazon order
+   *  (owner, 10-04: "I need the receipts page also track amz orders"), `mail.link` opens the order on Amazon. */
+  source?: "photo" | "gmail" | "amazon";
   mail?: ReceiptMail | null;
   status: ReceiptStatus;
   error: string | null;
@@ -185,6 +186,8 @@ export function useReceiptsToReview() {
 
 /** Read by the AI and not yet marked good (a failed read has nothing to check). */
 export const toReview = (r: Pick<Receipt, "reviewed" | "status">) => !r.reviewed && r.status !== "failed" && r.status !== "reading";
+
+export const AMAZON_LOGO = "https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/amazon.png";
 
 export const photoUrl = (id: string, n = 0) => `${BASE}/${id}/photo/${n}`;
 

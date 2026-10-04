@@ -17,6 +17,7 @@ import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { SettingsHeader } from "../settings-header";
 import { RECEIPT_MAIL, ReceiptMailCard, type ReceiptMailStatus } from "./receipt-mail-card";
 import { GearButton, ReaderGearPanel, useWhileBusy, type ReaderConfig } from "./reader-gear";
+import { AmazonReceiptsRow } from "./amazon-receipts-row";
 
 const EMAIL = "/api/money-hub/email";
 const AMAZON = "/api/money-hub/amazon";
@@ -38,6 +39,10 @@ interface AmazonStatus {
   last: { at: string; read: number; orders: number; charges: number; matched: number; errors: string[] } | null;
   /** Each kind Amazon names on the matched charges, and the owner's category for it (null: left as it is). */
   kinds?: { kind: string; charges: number; last: string | null; categoryId: string | null }[];
+  /** On the Receipts page: the switch, whether the AI is set up, how many orders it sorted (owner, 10-04). */
+  onReceipts?: boolean;
+  aiReady?: boolean;
+  itemsAnswered?: number;
   /** How many charges took their kind's category so far. */
   categorized?: number;
   /** The gear (reader-gear.tsx): the settings in force, the built-in ones, whether the owner changed them. */
@@ -348,6 +353,11 @@ export default function GoogleSettingsPage() {
               </div>
             ) : null}
             {gear.amazon ? <ReaderGearPanel store="amazon" url={AMAZON} status={amazon} setStatus={setAmazon as never} busy={busy} run={run} /> : null}
+            {amazon.on ? (
+              <AmazonReceiptsRow on={!!amazon.onReceipts} ready={!!amazon.aiReady} sorted={amazon.itemsAnswered ?? 0} busy={!!busy}
+                onToggle={(onReceipts) => run("amazon-receipts", () => call<AmazonStatus>(AMAZON, "PUT", "", { onReceipts }), setAmazon,
+                  onReceipts ? "Saved. Your Amazon orders are being made into receipts." : "Saved. The receipts you have not touched are being removed.")} />
+            ) : null}
             {amazon.on ? (
               <AmazonCategories amazon={amazon} busy={!!busy}
                 onPick={(kind, categoryId) => run(`amazon-cat:${kind}`, () => call<AmazonStatus>(AMAZON, "PUT", "", { kind, categoryId }), setAmazon,

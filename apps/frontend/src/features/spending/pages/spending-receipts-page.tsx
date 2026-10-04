@@ -14,7 +14,7 @@ import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 
 import { PasteReceiptButton, ReceiptDetails, SnapReceiptButton, STATE_TONE, usePastedReceipt, useReceiptUpload } from "../components/receipt-panel";
 import { useDashboardSkins } from "../lib/dashboard-skin";
-import { photoUrl, receiptState, storeName, toReview, useReceipts, type Receipt } from "../lib/receipts";
+import { AMAZON_LOGO, photoUrl, receiptState, storeName, toReview, useReceipts, type Receipt } from "../lib/receipts";
 
 const day = (iso: string) =>
   new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -105,7 +105,11 @@ export default function SpendingReceiptsPage() {
                         className="hover:bg-muted/40 flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors md:px-5"
                         aria-expanded={isOpen}
                       >
-                        {r.source === "gmail" ? (
+                        {r.source === "amazon" ? (
+                          <span className="flex h-10 w-8 shrink-0 items-center justify-center rounded border bg-white">
+                            <img src={AMAZON_LOGO} alt="" aria-hidden="true" className="size-5 object-contain" />
+                          </span>
+                        ) : r.source === "gmail" ? (
                           <span className="bg-muted text-muted-foreground flex h-10 w-8 shrink-0 items-center justify-center rounded border">
                             <Icons.Mail className="size-4" />
                           </span>
@@ -127,7 +131,7 @@ export default function SpendingReceiptsPage() {
                             ) : null}
                           </div>
                           <div className="text-muted-foreground truncate text-xs">
-                            {[r.date ? day(r.date) : `Snapped ${day(r.at)}`, r.items.length ? `${r.items.filter((x) => x.price > 0).length} items` : null, r.source === "gmail" ? "Gmail" : null].filter(Boolean).join(" · ")}
+                            {[r.date ? day(r.date) : `Snapped ${day(r.at)}`, r.items.length ? `${r.items.filter((x) => x.price > 0).length} ${r.items.filter((x) => x.price > 0).length === 1 ? "item" : "items"}` : null, r.source === "gmail" ? "Gmail" : r.source === "amazon" ? "Amazon" : null].filter(Boolean).join(" · ")}
                           </div>
                         </div>
                         <span className="text-foreground shrink-0 text-sm tabular-nums">{r.total != null ? usd(r.total) : ""}</span>

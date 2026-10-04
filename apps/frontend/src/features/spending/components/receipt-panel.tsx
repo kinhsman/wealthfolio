@@ -13,6 +13,7 @@ import { useUsd } from "@/lib/app-currency";
 import { cn } from "@/lib/utils";
 
 import {
+  AMAZON_LOGO,
   chargeLink,
   photoUrl,
   receiptSplit,
@@ -291,8 +292,23 @@ export function SnapReceiptButton({
   );
 }
 
-/** The picture of a receipt: its photo, or for one found in Gmail a mail tile that opens the email. */
+/** The picture of a receipt: its photo, for one found in Gmail a mail tile that opens the email, for an Amazon
+ *  order the Amazon logo that opens the order. */
 export function ReceiptThumb({ receipt: r, className }: { receipt: Receipt; className?: string }) {
+  if (r.source === "amazon") {
+    const tile = (
+      <span className={cn("flex h-12 w-9 shrink-0 items-center justify-center rounded border bg-white", className)}>
+        <img src={AMAZON_LOGO} alt="" aria-hidden="true" className="size-6 object-contain" />
+      </span>
+    );
+    return r.mail?.link ? (
+      <a href={r.mail.link} target="_blank" rel="noreferrer" className="shrink-0" title="Open the order on Amazon">
+        {tile}
+      </a>
+    ) : (
+      tile
+    );
+  }
   if (r.source === "gmail") {
     const tile = (
       <span className={cn("bg-muted text-muted-foreground flex h-12 w-9 shrink-0 items-center justify-center rounded border", className)}>
@@ -369,7 +385,7 @@ export function ReceiptDetails({
             {review ? <span className={cn("shrink-0 rounded-full px-1.5 py-px text-[10px] font-medium", STATE_TONE.look)}>To review</span> : null}
           </div>
           <div className="text-muted-foreground truncate">
-            {[r.date && day(r.date), r.total != null && usd(r.total), r.tax ? `tax ${usd(r.tax)}` : null, r.cardLast4 && `card ••${r.cardLast4}`, r.source === "gmail" ? "from Gmail" : null]
+            {[r.date && day(r.date), r.total != null && usd(r.total), r.tax ? `tax ${usd(r.tax)}` : null, r.cardLast4 && `card ••${r.cardLast4}`, r.source === "gmail" ? "from Gmail" : r.source === "amazon" ? "Amazon order" : null]
               .filter(Boolean)
               .join(" · ")}
           </div>
@@ -378,13 +394,13 @@ export function ReceiptDetails({
       ) : (
         <div className="text-muted-foreground flex flex-wrap items-center gap-x-3">
           <span>{[r.total != null && usd(r.total), r.tax ? `tax ${usd(r.tax)}` : null, r.cardLast4 && `card ••${r.cardLast4}`].filter(Boolean).join(" · ")}</span>
-          {r.source === "gmail" ? (
+          {r.source === "gmail" || r.source === "amazon" ? (
             r.mail?.link ? (
               <a href={r.mail.link} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline" title={r.mail.subject}>
-                Open the email
+                {r.source === "amazon" ? "Open the order" : "Open the email"}
               </a>
             ) : (
-              <span>From Gmail</span>
+              <span>{r.source === "amazon" ? "From Amazon" : "From Gmail"}</span>
             )
           ) : (
             <a href={photoUrl(r.id)} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
@@ -417,7 +433,7 @@ export function ReceiptDetails({
       <>
       {review ? (
         <p className="rounded-md bg-[var(--m-warn-soft)] px-2.5 py-1.5 text-[var(--m-warn)]">
-          {r.source === "gmail" ? "Found in your Gmail and read by AI. " : "Read by AI. "}Check the lines, fix anything with Edit, then press Looks good.
+          {r.source === "gmail" ? "Found in your Gmail and read by AI. " : r.source === "amazon" ? "Made from your Amazon order and sorted by AI. " : "Read by AI. "}Check the lines, fix anything with Edit, then press Looks good.
         </p>
       ) : null}
       {split.length ? (
@@ -530,12 +546,12 @@ export function ReceiptDetails({
           disabled={busy !== null}
           onClick={() => void act("read", () => receiptsApi.readAgain(r.id))}
         >
-          {busy === "read" ? "Reading…" : "Read again"}
+          {r.source === "amazon" ? (busy === "read" ? "Sorting…" : "Sort again") : busy === "read" ? "Reading…" : "Read again"}
         </button>
         <span className="flex-1" />
         {sure ? (
           <span className="flex items-center gap-2">
-            <span className="text-muted-foreground">{r.source === "gmail" ? "The charge goes back to how it was." : "The charge keeps its categories."}</span>
+            <span className="text-muted-foreground">{r.source === "gmail" || r.source === "amazon" ? "The charge goes back to how it was." : "The charge keeps its categories."}</span>
             <button type="button" className="text-destructive hover:underline" disabled={busy !== null} onClick={() => void act("remove", () => receiptsApi.remove(r.id))}>
               Delete
             </button>
