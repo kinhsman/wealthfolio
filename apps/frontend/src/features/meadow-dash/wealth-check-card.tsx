@@ -202,6 +202,8 @@ export function WealthCheckCard({ data, currency, asOf }: WealthCheckCardProps) 
         </p>
       )}
 
+      {/* Focusing a field pins the panel open: without that, the first digit made the income valid, the panel
+          closed and the field vanished mid-typing. */}
       {editing || income == null || age == null ? (
         <div className="mt-3.5 grid gap-3 border-t border-[var(--m-line)] pt-3.5">
           <label className="grid gap-1 text-xs">
@@ -210,6 +212,7 @@ export function WealthCheckCard({ data, currency, asOf }: WealthCheckCardProps) 
               type="month"
               className={FIELD}
               value={birth}
+              onFocus={() => setEditing(true)}
               onChange={(e) => setBirthTyped(e.target.value)}
             />
             {planBirth && !birthTyped ? (
@@ -225,6 +228,7 @@ export function WealthCheckCard({ data, currency, asOf }: WealthCheckCardProps) 
               className={FIELD}
               placeholder="For example 150000"
               value={incomeTyped ?? ""}
+              onFocus={() => setEditing(true)}
               onChange={(e) => setIncomeTyped(e.target.value === "" ? null : Math.max(0, Number(e.target.value)))}
             />
             {reportIncome > 0 ? (
