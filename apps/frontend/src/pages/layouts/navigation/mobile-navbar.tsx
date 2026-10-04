@@ -336,8 +336,8 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                     </button>
                   </div>
                 )}
-                {/* money-hub patch: the sidebar's USD / VND switch (components/currency-switch.tsx). */}
-                <div className="border-border/70 flex h-16 items-center justify-between gap-4 border-b">
+                {/* money-hub patch: the sidebar's USD / VND / Original switch (components/currency-switch.tsx). */}
+                <div className="border-border/70 flex flex-col gap-2 border-b py-3">
                   <span className="text-lg font-semibold">Currency</span>
                   <CurrencyPills size="sheet" />
                 </div>

@@ -1,8 +1,10 @@
-// money-hub patch: one switch for the whole app, USD or VND (owner, 10-03: "add an app-wide button in the side
-// bar to switch values between USD and VND. this will use the app's exchange rate configured, and apply to all
-// currency values of any page"). USD is the app as it always was: each amount in its own currency (the ACB and
-// MB accounts in dong unless their own "Show in USD" is on). VND shows every amount in dong at the app's latest
-// rate (Settings, Exchange rates). Nothing stored changes; only what is shown. Kept per device and profile.
+// money-hub patch: one switch for the whole app, USD, VND or Original (owner, 10-03: "add an app-wide button in
+// the side bar to switch values between USD and VND. this will use the app's exchange rate configured, and apply
+// to all currency values of any page", then "add a third option to show their original currency value (no FX
+// translation)"). USD shows every amount in dollars and VND every amount in dong, at the app's latest rate
+// (Settings, Exchange rates). Original does no translation at all: each amount in the currency it is kept in
+// (dong for ACB and MB, dollars for the rest); an account's own "Show in USD" switch still applies on its page.
+// Nothing stored changes; only what is shown. Kept per device and profile.
 // The formatters do the converting (@wealthfolio/ui FormattingProvider, given this setting by settings-provider);
 // the Rental add-on gets the currency and rate with the app's colours (addon-sandbox-theme.ts).
 import { useCallback, useEffect, useMemo } from "react";
@@ -12,18 +14,18 @@ import { getExchangeRates } from "@/adapters";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 import { rateBetween } from "@/lib/display-currency";
 
-export type AppCurrency = "USD" | "VND";
-export const APP_CURRENCIES: AppCurrency[] = ["USD", "VND"];
+export type AppCurrency = "USD" | "VND" | "ORIGINAL";
+export const APP_CURRENCIES: AppCurrency[] = ["USD", "VND", "ORIGINAL"];
 
 const KEY = "app-currency";
 
 export function useAppCurrency() {
   const [stored, setCurrency] = usePersistentState<AppCurrency>(KEY, "USD");
-  const currency: AppCurrency = stored === "VND" ? "VND" : "USD";
+  const currency: AppCurrency = stored === "VND" || stored === "ORIGINAL" ? stored : "USD";
   return [currency, setCurrency] as const;
 }
 
-/** The setting for the formatters: shows every amount in the chosen currency (USD or VND). */
+/** The setting for the formatters: every amount in the chosen currency (USD or VND), or null on Original. */
 export function useAppCurrencySetting(baseCurrency: string | undefined): DisplayCurrencySetting | null {
   const [currency] = useAppCurrency();
   const { data: rates } = useQuery({
@@ -31,11 +33,13 @@ export function useAppCurrencySetting(baseCurrency: string | undefined): Display
     queryKey: ["money-hub", "latest-exchange-rates"],
     queryFn: getExchangeRates,
     staleTime: 10 * 60_000,
+    // Original needs no rate.
+    enabled: currency !== "ORIGINAL",
   });
   const base = (baseCurrency || "USD").toUpperCase();
 
   const setting = useMemo<DisplayCurrencySetting | null>(() => {
-    if (!rates) return null;
+    if (currency === "ORIGINAL" || !rates) return null;
     const cache = new Map<string, number | null>();
     return {
       currency,
