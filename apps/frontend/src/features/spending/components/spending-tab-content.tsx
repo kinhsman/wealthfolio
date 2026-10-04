@@ -1056,7 +1056,12 @@ export default function SpendingTabContent() {
 
       {/* money-hub patch: Subscriptions & Bills is its own page (menu: after Cash); here only the summary numbers
           and the way in (owner, 10-04). The budget above is full width now that it has no card beside it. */}
-      <SubscriptionsStrip currency={currency} />
+      <SubscriptionsStrip
+        currency={currency}
+        from={dateRange?.from ? formatDateISO(dateRange.from) : undefined}
+        to={dateRange?.to ? formatDateISO(dateRange.to) : undefined}
+        rangeLabel={periodWord ? periodWord.charAt(0).toUpperCase() + periodWord.slice(1) : undefined}
+      />
 
       <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
         <div className="min-w-0 lg:col-span-2">

@@ -1,15 +1,17 @@
 // money-hub patch: the Spending tab's Subscriptions & Bills widget, now only the summary numbers (owner,
 // 10-04: "make the dashboard widget smaller just displaying summary stats"). The calendar, the list of what
 // is due and every row live on the Subscriptions & Bills page (pages/spending-subscriptions-page.tsx), which
-// this whole strip opens. The numbers are the page's own: lib/subscriptions.ts totals, and this month's paid
-// and left to pay from lib/bill-calendar.ts, counted the way the Monthly budget card counts them.
+// this whole strip opens. The numbers are the page's own: lib/subscriptions.ts totals, and paid and left to
+// pay from lib/bill-calendar.ts, counted the way the Monthly budget card counts them. Paid and left to pay
+// follow the Spending page's time range (owner, 10-04: "changing the time on top doesnt move the subscription
+// and bills widget numbers"); a month and a year are what repeats, so they do not move with it.
 import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
 import { Icons, PrivacyAmount, Skeleton } from "@wealthfolio/ui";
 
-import { billMonth, ymd } from "../lib/bill-calendar";
+import { billSpan, ymd } from "../lib/bill-calendar";
 import { useSubscriptions } from "../lib/subscriptions";
 
 function Stat({ label, children }: { label: string; children: ReactNode }) {
@@ -23,11 +25,28 @@ function Stat({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function SubscriptionsStrip({ currency = "USD" }: { currency?: string }) {
+interface SubscriptionsStripProps {
+  currency?: string;
+  /** The Spending page's range, YYYY-MM-DD; this month when left out. */
+  from?: string;
+  to?: string;
+  /** What the page calls a range that is not one calendar month, "Past 3 months". */
+  rangeLabel?: string;
+}
+
+export function SubscriptionsStrip({ currency = "USD", from, to, rangeLabel }: SubscriptionsStripProps) {
   const { data, isLoading, isError } = useSubscriptions();
   const today = useMemo(() => ymd(new Date()), []);
-  const month = useMemo(() => new Date().toLocaleDateString(undefined, { month: "long" }), []);
-  const m = useMemo(() => (data ? billMonth(data.items, today) : null), [data, today]);
+  const first = from ?? `${today.slice(0, 8)}01`;
+  const last = to ?? today;
+  const period = useMemo(() => {
+    const [fy, fm] = first.split("-").map(Number);
+    const [ly, lm] = last.split("-").map(Number);
+    if (fy !== ly || fm !== lm) return rangeLabel ?? `${first} to ${last}`;
+    const thisYear = fy === new Date().getFullYear();
+    return new Date(fy, fm - 1, 1).toLocaleDateString(undefined, { month: "long", ...(thisYear ? {} : { year: "numeric" }) });
+  }, [first, last, rangeLabel]);
+  const m = useMemo(() => (data ? billSpan(data.items, today, first, last) : null), [data, today, first, last]);
   const empty = !!data && data.totals.count === 0;
 
   return (
@@ -44,7 +63,7 @@ export function SubscriptionsStrip({ currency = "USD" }: { currency?: string }) 
       <div className="min-w-0 shrink-0 max-md:flex-1 lg:w-[11.5rem]">
         <div className="text-sm font-medium">Subscriptions &amp; Bills</div>
         <div className="text-muted-foreground truncate text-xs">
-          {data && !empty ? `${month}, ${data.totals.count} repeating` : month}
+          {data && !empty ? `${period}, ${data.totals.count} repeating` : period}
         </div>
       </div>
 

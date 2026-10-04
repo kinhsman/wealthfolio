@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { billMonth } from "./bill-calendar";
+import { billMonth, billSpan } from "./bill-calendar";
 import type { Stream } from "./subscriptions";
 
 const stream = (name: string, extra: Partial<Stream> = {}): Stream =>
@@ -38,5 +38,37 @@ describe("bill calendar month", () => {
   it("late from last month: on today's square, said as late", () => {
     const m = billMonth([stream("Water", { next: "2026-09-28" })], "2026-10-02");
     expect(m.byDay.get("2026-10-02")?.map((b) => `${b.name} ${b.late}`)).toEqual(["Water 2026-09-28"]);
+  });
+});
+
+describe("bill span (the Spending page's range)", () => {
+  const today = "2026-10-02";
+
+  it("this month equals the bill calendar's month", () => {
+    const m = billMonth(items, today);
+    const span = billSpan(items, today, "2026-10-01", today);
+    expect([span.paidTotal, span.leftTotal, span.paidCount, span.count]).toEqual([m.paidTotal, m.leftTotal, m.paidCount, m.count]);
+  });
+
+  it("last month: what was charged then and nothing left to pay", () => {
+    const span = billSpan(items, today, "2026-09-01", "2026-09-30");
+    expect([span.paidTotal, span.leftTotal, span.paidCount, span.count]).toEqual([2505.76, 0, 1, 1]);
+    const back = billMonth(items, today, -1);
+    expect(span.paidTotal).toBe(back.paidTotal);
+  });
+
+  it("a range of months adds them up and keeps this month's left to pay", () => {
+    const span = billSpan(items, today, "2026-08-02", today);
+    expect([span.paidTotal, span.leftTotal, span.paidCount, span.count]).toEqual([5011.52, 157, 1, 2]);
+  });
+
+  it("a range starting mid-month leaves out the charges before it", () => {
+    const span = billSpan(items, today, "2026-09-15", today);
+    expect([span.paidTotal, span.paidCount]).toEqual([2505.76, 1]);
+  });
+
+  it("a month picked from the calendar (other than this one) has no left to pay", () => {
+    const span = billSpan(items, today, "2026-08-01", "2026-08-31");
+    expect([span.paidTotal, span.leftTotal, span.count]).toEqual([0, 0, 0]);
   });
 });
