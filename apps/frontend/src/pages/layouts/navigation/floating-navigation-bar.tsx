@@ -1,6 +1,8 @@
 import { LiquidGlass } from "@/components/liquid-glass";
 import { CONNECT_HIDDEN } from "@/lib/money-hub";
 import { NotificationsBell } from "@/features/notifications/notifications-bell";
+import { FloatingCurrencyButton } from "@/components/currency-switch";
+import { FloatingPrivacyButton } from "@/components/privacy-toggle";
 import { ProfileMenu } from "@/features/profiles/profile-menu";
 import { SyncStatusIcon } from "@/features/wealthfolio-connect/components/sync-status-icon";
 import { useAggregatedSyncStatus } from "@/features/wealthfolio-connect/hooks";
@@ -133,6 +135,10 @@ export function FloatingNavigationBar({ navigation }: FloatingNavigationBarProps
             </button>
             {/* money-hub patch: the bell, every alert sent (features/notifications). */}
             <NotificationsBell variant="floating" className={baseButtonClass} />
+            {/* money-hub patch: the USD / VND / Original switch and the hide-numbers eye, like the sidebar's
+                (owner, 10-03: "floating bar doesnt have any buttons we worked on"). */}
+            <FloatingCurrencyButton className={baseButtonClass} />
+            <FloatingPrivacyButton className={baseButtonClass} />
             {/* Connect with status icon (money-hub patch: hidden, see lib/money-hub.ts) */}
             {!CONNECT_HIDDEN && (
             <Link

@@ -17,6 +17,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { type NavLink, type NavigationProps, isPathActive } from "./app-navigation";
 import { resolveNavigationIcon } from "./navigation-icons";
 import { CurrencyPills } from "@/components/currency-switch";
+import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 
 interface MobileNavBarProps {
   navigation: NavigationProps;
@@ -44,6 +45,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isBalanceHidden, toggleBalanceVisibility } = useBalancePrivacy();
   const [profileView, setProfileView] = useState(false);
   const [isLandscape, setIsLandscape] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(orientation: landscape)").matches,
@@ -341,6 +343,20 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                   <span className="text-lg font-semibold">Currency</span>
                   <CurrencyPills size="sheet" />
                 </div>
+                {/* money-hub patch: the hide-numbers eye (owner, 10-03: "add the eye to the phone More menu too");
+                    the icon is what a press does, as on the Dashboard's old eye. */}
+                <button
+                  type="button"
+                  onClick={toggleBalanceVisibility}
+                  className="border-border/70 text-foreground flex h-16 w-full items-center gap-4 border-b text-left"
+                >
+                  <span className="flex size-7 shrink-0 items-center justify-center">
+                    {isBalanceHidden ? <Icons.Eye className="size-6" /> : <Icons.EyeOff className="size-6" />}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-lg font-semibold">
+                    {isBalanceHidden ? t("common:component.show_balance") : t("common:component.hide_balance")}
+                  </span>
+                </button>
                 <div className="divide-border/70 divide-y">
                   {standardMenuItems.map((item) => {
                     const isActive = isPathActive(location.pathname, item.href);

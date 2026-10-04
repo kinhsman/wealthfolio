@@ -83,3 +83,22 @@ export function SidebarCurrencySwitch({ collapsed, rowClassName }: { collapsed: 
     </button>
   );
 }
+
+/** The floating bar's switch: one round button with the shown currency's sign; a press steps to the next. */
+export function FloatingCurrencyButton({ className }: { className?: string }) {
+  const [currency, setCurrency] = useAppCurrency();
+  const next = APP_CURRENCIES[(APP_CURRENCIES.indexOf(currency) + 1) % APP_CURRENCIES.length];
+  return (
+    <button
+      type="button"
+      onClick={() => setCurrency(next)}
+      title={`${NAME[currency]}. ${TITLE[next]}`}
+      aria-label={`Amounts in ${NAME[currency]}. ${TITLE[next]}`}
+      className={className}
+    >
+      <span aria-hidden="true" className="relative flex size-7 shrink-0 items-center justify-center text-[21px] font-medium leading-none">
+        {SIGN[currency]}
+      </span>
+    </button>
+  );
+}

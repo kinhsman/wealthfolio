@@ -76,6 +76,25 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
     ? t("common:layout.expand_sidebar")
     : t("common:layout.collapse_sidebar");
 
+  const toggleButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      onClick={() => setCollapsed(!collapsed)}
+      data-mside-icon=""
+      className={headButton(collapsed)}
+      title={toggleLabel}
+      aria-label={toggleLabel}
+    >
+      <Icons.PanelLeftOpen
+        className={cn(
+          "transition-transform duration-500 ease-in-out",
+          !collapsed && "rotate-180",
+        )}
+      />
+    </Button>
+  );
+
   return (
     <div
       data-mside=""
@@ -135,6 +154,8 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                     )}
                   </Link>
 
+                  {collapsed && toggleButton}
+
                   <Button
                     type="button"
                     variant="ghost"
@@ -163,22 +184,9 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                   {/* money-hub patch: the bell, every alert sent (features/notifications). */}
                   <NotificationsBell variant="sidebar" className={headButton(collapsed)} />
 
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setCollapsed(!collapsed)}
-                    data-mside-icon=""
-                    className={headButton(collapsed)}
-                    title={toggleLabel}
-                    aria-label={toggleLabel}
-                  >
-                    <Icons.PanelLeftOpen
-                      className={cn(
-                        "transition-transform duration-500 ease-in-out",
-                        !collapsed && "rotate-180",
-                      )}
-                    />
-                  </Button>
+                  {/* money-hub patch: on the narrow rail the expand button sits right under the logo (owner, 10-03),
+                      on the wide sidebar it stays last in the top row. */}
+                  {!collapsed && toggleButton}
                 </div>
 
                 {collapsed && <div className="bg-border mx-3 mb-2 h-px" aria-hidden="true" />}

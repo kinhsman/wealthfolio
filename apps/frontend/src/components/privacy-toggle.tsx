@@ -24,3 +24,16 @@ export function PrivacyToggle({ className }: PrivacyToggleProps) {
     </Button>
   );
 }
+
+/** The floating bar's eye: a round button like its others; the icon is what a press does (as on PrivacyToggle). */
+export function FloatingPrivacyButton({ className }: { className?: string }) {
+  const { isBalanceHidden, toggleBalanceVisibility } = useBalancePrivacy();
+  const label = isBalanceHidden ? "Show numbers" : "Hide numbers";
+  return (
+    <button type="button" onClick={toggleBalanceVisibility} title={label} aria-label={label} className={className}>
+      <span aria-hidden="true" className="relative flex size-7 shrink-0 items-center justify-center">
+        {isBalanceHidden ? <Icons.Eye className="size-6" /> : <Icons.EyeOff className="size-6" />}
+      </span>
+    </button>
+  );
+}
