@@ -29,6 +29,10 @@ export interface ForecastEvent {
   /** A card's last four and its bank's logo (when the account has none). */
   mask?: string | null;
   bankLogo?: string | null;
+  /** A bill no account shows (the loan in Vietnam), counted from Subscriptions & bills; `everyLabel`
+   *  says how often ("every 5 months"). Owner, 10-04: "cash forecast doesn't count Vietinbank". */
+  bill?: boolean;
+  everyLabel?: string | null;
 }
 
 export interface CashForecast {

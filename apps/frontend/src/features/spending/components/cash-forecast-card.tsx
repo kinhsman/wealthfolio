@@ -112,7 +112,8 @@ function Body({ f, currency, isMobile, expanded }: { f: CashForecast; currency: 
       {!isMobile ? (
         <p className="text-muted-foreground text-[11.5px] leading-relaxed">
           From what repeats in your cash accounts over the last 6 months, and each card's statement on its due date
-          (its usual payment after that). Money that does not repeat is not in it.
+          (its usual payment after that). A bill no account shows (a loan paid from a bank the app cannot see) comes from your Bills.
+          Money that does not repeat is not in it.
         </p>
       ) : null}
     </div>
@@ -278,7 +279,11 @@ function Upcoming({ f, currency, isMobile, expanded }: { f: CashForecast; curren
       <div className={cn("space-y-0.5", expanded && "lg:block lg:columns-2 lg:gap-x-10 lg:space-y-0")}>
       {shown.map((e, i) => {
         const { label, logo } = forecastLabel(e, merchants, accounts);
-        const sub = e.card ? cardWhy(e.why) : [e.parts && e.parts > 1 ? `${e.parts} deposits` : null, e.every === "biweekly" ? "every 2 weeks" : "monthly", "estimated"].filter(Boolean).join(", ");
+        const sub = e.card
+          ? cardWhy(e.why)
+          : e.bill
+            ? [e.everyLabel, "from Bills"].filter(Boolean).join(", ")
+            : [e.parts && e.parts > 1 ? `${e.parts} deposits` : null, e.every === "biweekly" ? "every 2 weeks" : "monthly", "estimated"].filter(Boolean).join(", ");
         return (
           <div key={`${e.date}-${i}`} className="flex break-inside-avoid items-center gap-2.5 rounded-lg px-1 py-1">
             <span className="text-muted-foreground w-12 shrink-0 text-[11.5px] tabular-nums">{shortDay(e.date)}</span>
