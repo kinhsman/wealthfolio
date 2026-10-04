@@ -1,7 +1,9 @@
 // money-hub patch: the Wealth check card on the Net worth tab (owner, 10-03, after the mock). Net worth against
 // age x pre-tax yearly income / 10 (lib/wealth-check.ts): a PAW holds double that, a UAW half or less.
-// Age = the retirement goal's birth month, income = the last 12 months of income (the Spending page's own
-// figure, so after tax); both can be typed over here. Accounts can be left out in their own settings.
+// Age = the retirement goal's birth month (can be typed over here). Income = what you type, before tax: the
+// last 12 months of deposits is only shown as a hint, because it is after tax and counts everything that
+// came in (loans, transfers, rent), so it can be several times the real salary. Accounts can be left out in
+// their own settings.
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -101,7 +103,7 @@ export function WealthCheckCard({ netWorth, currency, asOf }: WealthCheckCardPro
   }, [asOf, settings?.timezone]);
   const { data: report, isLoading: incomeLoading } = useSpendingReport(range);
   const reportIncome = report?.current.income ?? 0;
-  const income = incomeTyped ?? (reportIncome > 0 ? reportIncome : null);
+  const income = incomeTyped != null && incomeTyped > 0 ? incomeTyped : null;
 
   const expected = age != null && income != null ? expectedNetWorth(age, income) : null;
   const ratio = expected != null ? wealthRatio(counted, expected) : null;
@@ -197,8 +199,7 @@ export function WealthCheckCard({ netWorth, currency, asOf }: WealthCheckCardPro
             <Row label="UAW at or below" value={expected * UAW_MULTIPLE} currency={currency} last />
           </dl>
           <p className="text-muted-foreground mt-2.5 text-[11px] leading-snug max-md:hidden">
-            Income is <CompactAmount value={income} currency={currency} /> a year
-            {incomeTyped != null ? " (typed in)" : ", your last 12 months of income, after tax"}.
+            Income is <CompactAmount value={income} currency={currency} /> a year before tax, as you typed it.
             {leftOut.length > 0
               ? ` ${leftOut.length} account${leftOut.length === 1 ? " is" : "s are"} left out.`
               : ""}
@@ -208,11 +209,11 @@ export function WealthCheckCard({ netWorth, currency, asOf }: WealthCheckCardPro
         <p className="text-muted-foreground text-sm">
           {age == null
             ? "Add your birth month to see where you stand."
-            : "Add your yearly income to see where you stand."}
+            : "Type your yearly income before tax to see where you stand."}
         </p>
       )}
 
-      {editing ? (
+      {editing || income == null || age == null ? (
         <div className="mt-3.5 grid gap-3 border-t border-[var(--m-line)] pt-3.5">
           <label className="grid gap-1 text-xs">
             <span className="text-muted-foreground">Birth month</span>
@@ -233,10 +234,16 @@ export function WealthCheckCard({ netWorth, currency, asOf }: WealthCheckCardPro
               min={0}
               inputMode="numeric"
               className={FIELD}
-              placeholder={reportIncome > 0 ? `${Math.round(reportIncome)} (last 12 months)` : "0"}
+              placeholder="For example 150000"
               value={incomeTyped ?? ""}
               onChange={(e) => setIncomeTyped(e.target.value === "" ? null : Math.max(0, Number(e.target.value)))}
             />
+            {reportIncome > 0 ? (
+              <span className="text-muted-foreground/70">
+                Deposits over the last 12 months: <CompactAmount value={reportIncome} currency={currency} />, after
+                tax and counting everything that came in
+              </span>
+            ) : null}
           </label>
           <p className="text-muted-foreground text-xs">
             Leave an account out in its own settings, under Wealth check.{" "}
