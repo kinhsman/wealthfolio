@@ -1,6 +1,5 @@
 import { HealthStatusIndicator } from "@/components/health-status-icon";
 import { SwipablePage, SwipablePageView } from "@/components/page";
-import { PrivacyToggle } from "@/components/privacy-toggle";
 import { AlternativeAssetQuickAddModal } from "@/pages/asset/alternative-assets/components";
 import { useNavigationMode } from "@/pages/layouts/navigation/navigation-mode-context";
 import { AlternativeAssetKind } from "@/lib/types";
@@ -88,7 +87,6 @@ export default function PortfolioPage() {
           <Icons.Fullscreen className="size-5" />
         </Button>
       )}
-      <PrivacyToggle />
     </>
   );
 

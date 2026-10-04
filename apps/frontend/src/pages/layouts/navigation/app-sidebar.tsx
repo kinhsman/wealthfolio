@@ -2,6 +2,7 @@ import { isWeb } from "@/adapters";
 import { CONNECT_HIDDEN } from "@/lib/money-hub";
 import { NotificationsBell } from "@/features/notifications/notifications-bell";
 import { SidebarCurrencySwitch } from "@/components/currency-switch";
+import { PrivacyToggle } from "@/components/privacy-toggle";
 import { isAppleDevice } from "@/lib/device-utils";
 import { useAuth } from "@/context/auth-context";
 import { ProfileMenu } from "@/features/profiles/profile-menu";
@@ -206,8 +207,21 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
             </div>
 
             <div className={cn("flex shrink-0 flex-col py-2", collapsed ? "px-1" : "px-2")}>
-              {/* money-hub patch: every amount in USD or VND (components/currency-switch.tsx). */}
-              <SidebarCurrencySwitch collapsed={collapsed} rowClassName={cn(ROW, rowAlign(collapsed))} />
+              {/* money-hub patch: every amount in USD, VND or Original (components/currency-switch.tsx), and the
+                  eye that hides the numbers, moved here from the Dashboard's header (owner, 10-03). */}
+              {collapsed ? (
+                <>
+                  <SidebarCurrencySwitch collapsed rowClassName={cn(ROW, rowAlign(collapsed))} />
+                  <PrivacyToggle className="mx-auto mb-2" />
+                </>
+              ) : (
+                <div className="flex items-start gap-1.5">
+                  <div className="min-w-0 flex-1">
+                    <SidebarCurrencySwitch collapsed={false} rowClassName={cn(ROW, rowAlign(collapsed))} />
+                  </div>
+                  <PrivacyToggle className="mt-1.5 shrink-0" />
+                </div>
+              )}
               {navigation?.secondary?.map((item) => (
                 <NavItem key={item.title} item={item} collapsed={collapsed} />
               ))}
