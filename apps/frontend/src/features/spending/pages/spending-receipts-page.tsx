@@ -1,20 +1,21 @@
 // money-hub patch: Receipts (/spending/receipts; lib/receipts.ts, owner 2026-10-03: "build an auto category
 // for costco", "the only way is to snap the receipt"). Every receipt snapped, the ones that need a look
 // first, then the ones waiting for their card charge, then the filed ones; a row opens its lines. A photo
-// pasted anywhere on the page (Ctrl or Cmd V) or with the Paste button is snapped too.
+// pasted anywhere on the page (Ctrl or Cmd V) or with the Paste button is snapped too. The search box finds a
+// receipt by any field it shows (owner, 2026-10-04: "should be able to search for any field in the receipts").
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { DashboardCard } from "@/components/dashboard-card";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
-import { Icons, Page, PageContent, PageHeader } from "@wealthfolio/ui";
+import { Icons, Input, Page, PageContent, PageHeader } from "@wealthfolio/ui";
 import { useUsd } from "@/lib/app-currency";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 
 import { PasteReceiptButton, ReceiptDetails, SnapReceiptButton, STATE_TONE, usePastedReceipt, useReceiptUpload } from "../components/receipt-panel";
 import { useDashboardSkins } from "../lib/dashboard-skin";
-import { AMAZON_LOGO, photoUrl, receiptState, storeName, toReview, useReceipts, type Receipt } from "../lib/receipts";
+import { AMAZON_LOGO, photoUrl, receiptSearchIndex, receiptState, searchReceipts, storeName, toReview, useReceipts, type Receipt } from "../lib/receipts";
 
 const day = (iso: string) =>
   new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -31,6 +32,7 @@ export default function SpendingReceiptsPage() {
   const skins = useDashboardSkins();
   const { data, isLoading, isError, error } = useReceipts();
   const [open, setOpen] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const upload = useReceiptUpload({ onDone: (r) => setOpen(r.id) });
   usePastedReceipt((files) => void upload.send(files), !!data?.ready);
 
@@ -38,6 +40,9 @@ export default function SpendingReceiptsPage() {
     () => [...(data?.receipts ?? [])].sort((a, b) => rankOf(a) - rankOf(b) || String(b.date ?? b.at).localeCompare(String(a.date ?? a.at))),
     [data],
   );
+  const index = useMemo(() => receiptSearchIndex(rows, data?.categories ?? []), [rows, data?.categories]);
+  const shown = useMemo(() => searchReceipts(index, query), [index, query]);
+  const searching = query.trim() !== "";
   const look = rows.filter((r) => RANK[r.status] === 0).length;
   const reviews = rows.filter(toReview).length;
   const waiting = rows.filter((r) => r.status === "waiting").length;
@@ -88,13 +93,48 @@ export default function SpendingReceiptsPage() {
               </div>
             </DashboardCard>
           ) : rows.length ? (
+            <>
+            <div className="relative sm:max-w-sm">
+              <Icons.Search className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+              <Input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search store, item, amount, date"
+                className="px-9 [&::-webkit-search-cancel-button]:appearance-none"
+                autoComplete="off"
+                aria-label="Search receipts"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
+                  className="text-muted-foreground hover:text-foreground absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full"
+                >
+                  <Icons.X className="size-4" />
+                </button>
+              ) : null}
+            </div>
             <DashboardCard
               title="Receipts"
-              subtitle={[`${rows.length}`, reviews ? `${reviews} to review` : null, look ? `${look} to look at` : null, waiting ? `${waiting} waiting` : null].filter(Boolean).join(" · ")}
+              subtitle={
+                searching
+                  ? `${shown.length} of ${rows.length}`
+                  : [`${rows.length}`, reviews ? `${reviews} to review` : null, look ? `${look} to look at` : null, waiting ? `${waiting} waiting` : null].filter(Boolean).join(" · ")
+              }
               padded={false}
             >
+              {!shown.length ? (
+                <div className="flex items-center justify-between gap-3 px-4 py-6 md:px-5">
+                  <p className="text-muted-foreground min-w-0 truncate text-sm">No receipts match "{query.trim()}".</p>
+                  <button type="button" onClick={() => setQuery("")} className="text-primary shrink-0 text-sm underline-offset-4 hover:underline">
+                    Clear
+                  </button>
+                </div>
+              ) : null}
               <ul className="divide-border/60 divide-y">
-                {rows.map((r) => {
+                {shown.map((r) => {
                   const st = receiptState(r);
                   const isOpen = open === r.id;
                   return (
@@ -147,6 +187,7 @@ export default function SpendingReceiptsPage() {
                 })}
               </ul>
             </DashboardCard>
+            </>
           ) : null}
         </PageContent>
       </Page>

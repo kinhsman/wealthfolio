@@ -246,3 +246,69 @@ export function storeName(store: string | null): string {
   const shouty = letters && letters.replace(/[^\p{Lu}]/gu, "").length / letters.length > 0.7;
   return shouty ? store.toLowerCase().replace(/\b\p{L}/gu, (c) => c.toUpperCase()) : store;
 }
+
+// Search (owner, 2026-10-04: "enable searching on receipts page, should be able to search for any field in the
+// receipts"). Done in the browser over the receipts the page already holds: no server call, nothing to build.
+
+/** Lower case, no accents ("Phở" is found by "pho"). */
+const plain = (s: string) => s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d");
+
+/** A day the way it can be typed: 2026-10-04, Oct 4, 2026, October 4, 2026, 10/4/2026, 10/04/2026. */
+function dayWords(iso: string | null | undefined): string[] {
+  const ymd = iso?.slice(0, 10);
+  if (!ymd) return [];
+  const d = new Date(`${ymd}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return [ymd];
+  const named = (month: "short" | "long") => d.toLocaleDateString("en-US", { month, day: "numeric", year: "numeric", timeZone: "UTC" });
+  const [y, m, dd] = ymd.split("-");
+  return [ymd, named("short"), named("long"), `${Number(m)}/${Number(dd)}/${y}`, `${m}/${dd}/${y}`];
+}
+
+/** An amount the way it can be typed: 1234.5 -> 1234.50, $1,234.50 (a discount also without its minus). */
+function moneyWords(n: number | null | undefined): string[] {
+  if (n == null || !Number.isFinite(n)) return [];
+  const abs = Math.abs(n);
+  return [n.toFixed(2), abs.toFixed(2), `$${abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`];
+}
+
+/** Everything a receipt's row and its open lines show, as the page words it, ready to be searched. */
+export function receiptSearchText(r: Receipt, categories: ReceiptCategory[]): string {
+  const names = new Map(categories.map((c) => [c.id, c.name]));
+  const category = (id: string) => names.get(id) ?? id;
+  const st = receiptState(r);
+  return plain(
+    [
+      r.store,
+      storeName(r.store),
+      ...dayWords(r.date ?? r.at),
+      ...dayWords(r.chargeDate),
+      ...moneyWords(r.total),
+      ...(r.tax ? moneyWords(r.tax) : []),
+      r.cardLast4 ? `card ••${r.cardLast4} card ${r.cardLast4}` : null,
+      r.source === "gmail" ? "gmail email" : r.source === "amazon" ? "amazon order" : null,
+      st.text,
+      st.short,
+      toReview(r) ? "to review" : null,
+      r.error,
+      r.held,
+      r.check,
+      r.mail?.from,
+      r.mail?.subject,
+      r.mail?.email,
+      ...dayWords(r.mail?.date),
+      ...r.items.flatMap((it) => [it.what, it.name, it.code, category(it.categoryId), ...moneyWords(it.price)]),
+      ...(r.filed ? [...moneyWords(r.filed.charge), ...r.filed.lines.flatMap((l) => [category(l.categoryId), ...moneyWords(Number(l.amount))])] : []),
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+}
+
+/** The receipts with their search text, made once so each keystroke only compares. */
+export const receiptSearchIndex = (rows: Receipt[], categories: ReceiptCategory[]) => rows.map((receipt) => ({ receipt, text: receiptSearchText(receipt, categories) }));
+
+/** The receipts holding every word typed (any order, anywhere); nothing typed shows them all. A "$" before an amount is ignored. */
+export function searchReceipts(index: ReturnType<typeof receiptSearchIndex>, query: string): Receipt[] {
+  const words = plain(query).split(/\s+/).map((w) => w.replace(/^\$/, "")).filter(Boolean);
+  return (words.length ? index.filter((x) => words.every((w) => x.text.includes(w))) : index).map((x) => x.receipt);
+}
