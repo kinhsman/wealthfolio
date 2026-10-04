@@ -4,7 +4,6 @@ import { useIsMobile as defaultUseIsMobile } from "../../hooks/use-mobile";
 import { cn } from "../../lib/utils";
 import { Button } from "./button";
 import { Icons } from "./icons";
-import { ScrollArea } from "./scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./sheet";
 
@@ -82,50 +81,48 @@ export function ResponsiveSelect({
           <Icons.ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
 
+        {/* money-hub patch (owner, 10-04: "never anything waste of screen space"): the sheet is as tall as its
+            list (it was a fixed 80vh with 12px-padded cards), rows are 40px, the list scrolls only when it must. */}
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent side={mobileSide} className="rounded-t-4xl mx-1 h-[80vh] p-0">
-            <SheetHeader className="border-border border-b px-6 pb-4 pt-6">
-              <SheetTitle>{sheetTitle}</SheetTitle>
+          <SheetContent side={mobileSide} className="rounded-t-4xl mx-1 flex max-h-[80dvh] flex-col gap-0 p-0">
+            <SheetHeader className="border-border border-b px-4 pb-2 pt-3">
+              <SheetTitle className="text-base">{sheetTitle}</SheetTitle>
               {sheetDescription ? <SheetDescription>{sheetDescription}</SheetDescription> : null}
             </SheetHeader>
 
-            <div className="flex h-[calc(80vh-6.5rem)] flex-col">
-              <ScrollArea className="flex-1 px-2">
-                <div className="space-y-2 py-4">
-                  {options.map((option) => {
-                    const isSelected = option.value === value;
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => handleSelect(option.value)}
-                        className={cn(
-                          "card-mobile flex w-full items-center justify-between gap-3 border border-transparent px-4 py-3 text-left transition-colors",
-                          isSelected
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "hover:bg-accent active:bg-accent/80 focus:border-primary focus:outline-none",
-                        )}
-                      >
-                        {option.icon}
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-semibold">{option.label}</div>
-                          {option.description ? (
-                            <div className="text-muted-foreground mt-0.5 truncate text-sm">{option.description}</div>
-                          ) : null}
-                        </div>
-                        {isSelected ? <Icons.Check className="h-5 w-5 shrink-0" /> : null}
-                      </button>
-                    );
-                  })}
-
-                  {options.length === 0 ? (
-                    <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 py-12 text-sm">
-                      <Icons.Search className="h-10 w-10 opacity-20" />
-                      <span>{t("ui:search.noOptions", "No options available.")}</span>
+            <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] pt-2">
+              {options.map((option) => {
+                const isSelected = option.value === value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleSelect(option.value)}
+                    className={cn(
+                      "flex min-h-10 w-full items-center justify-between gap-3 rounded-lg border border-transparent px-3 py-1.5 text-left transition-colors",
+                      isSelected
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "hover:bg-accent active:bg-accent/80 focus:border-primary focus:outline-none",
+                    )}
+                  >
+                    {option.icon}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[15px] font-medium">{option.label}</div>
+                      {option.description ? (
+                        <div className="text-muted-foreground truncate text-xs">{option.description}</div>
+                      ) : null}
                     </div>
-                  ) : null}
+                    {isSelected ? <Icons.Check className="h-4 w-4 shrink-0" /> : null}
+                  </button>
+                );
+              })}
+
+              {options.length === 0 ? (
+                <div className="text-muted-foreground flex flex-col items-center justify-center gap-2 py-8 text-sm">
+                  <Icons.Search className="h-8 w-8 opacity-20" />
+                  <span>{t("ui:search.noOptions", "No options available.")}</span>
                 </div>
-              </ScrollArea>
+              ) : null}
             </div>
           </SheetContent>
         </Sheet>

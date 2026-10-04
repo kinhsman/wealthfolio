@@ -93,6 +93,9 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
   );
 
   const renderIcon = useCallback((icon?: ReactNode) => resolveNavigationIcon(icon, "size-6"), []);
+  // money-hub patch (owner, 10-04: "never anything waste of screen space"): the More sheet's rows are the
+  // sidebar's size (36px, 15px text), not 64px rows with a rule under each one.
+  const renderRowIcon = useCallback((icon?: ReactNode) => resolveNavigationIcon(icon, "size-[18px]"), []);
 
   const primaryItems = phoneOrder(navigation?.primary ?? []);
   const secondaryItems = navigation?.secondary ?? [];
@@ -281,22 +284,22 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
           data-dark-skin={skins.dark}
           className="bg-background inset-x-4 bottom-4 flex max-h-[min(82dvh,720px)] flex-col gap-0 overflow-hidden rounded-[2rem] border-0 px-0 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-0 shadow-2xl"
         >
-          <div className="bg-muted mx-auto mt-4 h-1.5 w-14 shrink-0 rounded-full" />
-          <div className="flex shrink-0 items-center justify-between px-8 pb-4 pt-7">
+          <div className="bg-muted mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full" />
+          <div className="flex shrink-0 items-center justify-between px-5 pb-2 pt-3">
             <div className="flex min-w-0 items-center gap-3">
               {profileView && (
                 <button
                   ref={backButtonRef}
                   type="button"
                   onClick={() => showProfileView(false)}
-                  className="hover:bg-muted flex size-11 shrink-0 items-center justify-center rounded-full"
+                  className="hover:bg-muted flex size-9 shrink-0 items-center justify-center rounded-full"
                   aria-label={t("common:back")}
                 >
                   <Icons.ArrowLeft className="size-5" />
                 </button>
               )}
               <SheetTitle
-                className={cn("truncate font-semibold", profileView ? "text-lg" : "text-2xl")}
+                className={cn("truncate font-semibold", profileView ? "text-base" : "text-xl")}
               >
                 {profileView ? t("common:profiles.yourProfile") : t("common:layout.more")}
               </SheetTitle>
@@ -304,20 +307,20 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(false)}
-              className="bg-muted text-foreground hover:bg-muted/80 flex size-11 items-center justify-center rounded-full transition-colors"
+              className="bg-muted text-foreground hover:bg-muted/80 flex size-9 items-center justify-center rounded-full transition-colors"
               aria-label={t("common:layout.close_more_menu")}
             >
               <Icons.Close className="size-5" />
             </button>
           </div>
 
-          <div className="scrollbar-hide min-h-0 overflow-y-auto px-8">
+          <div className="scrollbar-hide min-h-0 overflow-y-auto px-5">
             {profileView ? (
               <MobileProfileMenu onAction={closeMenu} />
             ) : (
               <>
                 {profileContext?.profile && (
-                  <div className="border-border/70 border-b pb-3">
+                  <div className="border-border/70 border-b pb-1.5">
                     <button
                       ref={profileButtonRef}
                       type="button"
@@ -325,22 +328,22 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                       aria-label={t("common:profiles.menuLabel", {
                         name: profileContext.profile.name,
                       })}
-                      className="hover:bg-muted flex min-h-14 w-full items-center gap-4 rounded-lg text-left"
+                      className="hover:bg-muted flex h-11 w-full items-center gap-3 rounded-lg text-left"
                     >
                       <ProfileAvatar
                         id={profileContext.profile.avatarId}
-                        className="mx-0 size-8 shrink-0 rounded-full"
+                        className="mx-0 size-7 shrink-0 rounded-full"
                       />
-                      <span className="min-w-0 flex-1 truncate font-semibold">
+                      <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
                         {profileContext.profile.name}
                       </span>
-                      <Icons.ChevronRight className="text-muted-foreground size-5 shrink-0" />
+                      <Icons.ChevronRight className="text-muted-foreground size-4 shrink-0" />
                     </button>
                   </div>
                 )}
                 {/* money-hub patch: the sidebar's USD / VND / Original switch (components/currency-switch.tsx). */}
-                <div className="border-border/70 flex flex-col gap-2 border-b py-3">
-                  <span className="text-lg font-semibold">Currency</span>
+                <div className="border-border/70 flex flex-col gap-1.5 border-b py-2">
+                  <span className="text-[15px] font-medium">Currency</span>
                   <CurrencyPills size="sheet" />
                 </div>
                 {/* money-hub patch: the hide-numbers eye (owner, 10-03: "add the eye to the phone More menu too");
@@ -348,16 +351,16 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                 <button
                   type="button"
                   onClick={toggleBalanceVisibility}
-                  className="border-border/70 text-foreground flex h-16 w-full items-center gap-4 border-b text-left"
+                  className="text-foreground mt-1 flex h-9 w-full items-center gap-3 text-left"
                 >
-                  <span className="flex size-7 shrink-0 items-center justify-center">
-                    {isBalanceHidden ? <Icons.Eye className="size-6" /> : <Icons.EyeOff className="size-6" />}
+                  <span className="flex size-[18px] shrink-0 items-center justify-center">
+                    {isBalanceHidden ? <Icons.Eye className="size-[18px]" /> : <Icons.EyeOff className="size-[18px]" />}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-lg font-semibold">
+                  <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
                     {isBalanceHidden ? t("common:component.show_balance") : t("common:component.hide_balance")}
                   </span>
                 </button>
-                <div className="divide-border/70 divide-y">
+                <div className="space-y-0.5 pb-1">
                   {standardMenuItems.map((item) => {
                     const isActive = isPathActive(location.pathname, item.href);
 
@@ -371,28 +374,28 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                         }}
                         aria-current={isActive ? "page" : undefined}
                         className={cn(
-                          "group flex h-16 items-center gap-4 transition-colors",
+                          "group hover:bg-muted/50 flex h-9 items-center gap-3 rounded-lg px-2 transition-colors",
                           isActive ? "text-primary" : "text-foreground",
                         )}
                       >
-                        <span className="flex size-7 shrink-0 items-center justify-center">
-                          {renderIcon(item.icon)}
+                        <span className="flex size-[18px] shrink-0 items-center justify-center">
+                          {renderRowIcon(item.icon)}
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-lg font-semibold">
+                        <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
                           {item.title}
                         </span>
-                        <Icons.ChevronRight className="text-muted-foreground/50 size-5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                        <Icons.ChevronRight className="text-muted-foreground/50 size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
                       </Link>
                     );
                   })}
                 </div>
 
                 {addonItems.length > 0 && (
-                  <div className="pt-6">
-                    <div className="text-muted-foreground pb-3 text-xs font-semibold uppercase tracking-[0.35em]">
+                  <div className="border-border/70 border-t pt-2">
+                    <div className="text-muted-foreground pb-1 text-xs font-medium uppercase tracking-[0.35em]">
                       {t("common:addons")}
                     </div>
-                    <div className="divide-border/70 divide-y">
+                    <div className="space-y-0.5 pb-1">
                       {addonItems.map((item) => {
                         const isActive = isPathActive(location.pathname, item.href);
 
@@ -406,17 +409,17 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                             }}
                             aria-current={isActive ? "page" : undefined}
                             className={cn(
-                              "group flex h-16 items-center gap-4 transition-colors",
+                              "group hover:bg-muted/50 flex h-9 items-center gap-3 rounded-lg px-2 transition-colors",
                               isActive ? "text-primary" : "text-foreground",
                             )}
                           >
-                            <span className="flex size-7 shrink-0 items-center justify-center">
-                              {renderIcon(item.icon)}
+                            <span className="flex size-[18px] shrink-0 items-center justify-center">
+                              {renderRowIcon(item.icon)}
                             </span>
-                            <span className="min-w-0 flex-1 truncate text-lg font-semibold">
+                            <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
                               {item.title}
                             </span>
-                            <Icons.ChevronRight className="text-muted-foreground/50 size-5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                            <Icons.ChevronRight className="text-muted-foreground/50 size-4 shrink-0 transition-transform group-hover:translate-x-0.5" />
                           </Link>
                         );
                       })}

@@ -17,11 +17,11 @@ export function MobileProfileMenu({ onAction }: MobileProfileMenuProps) {
     action();
   };
   const rowClassName =
-    "hover:bg-muted flex min-h-16 w-full items-center gap-4 rounded-lg py-3 text-left text-base font-medium";
+    "hover:bg-muted flex h-10 w-full items-center gap-3 rounded-lg text-left text-[15px] font-medium";
 
   return (
     <div className="divide-border/70 divide-y">
-      <div className="pb-3">
+      <div className="pb-1.5">
         {profiles.map((item) => (
           <button
             key={item.id}
@@ -32,29 +32,29 @@ export function MobileProfileMenu({ onAction }: MobileProfileMenuProps) {
               if (item.id !== profile.id) runAction(() => selectProfile(item.id));
             }}
           >
-            <ProfileAvatar id={item.avatarId} className="mx-0 size-9 shrink-0 rounded-full" />
+            <ProfileAvatar id={item.avatarId} className="mx-0 size-7 shrink-0 rounded-full" />
             <span className="min-w-0 flex-1 truncate">{item.name}</span>
             {item.id === profile.id ? (
-              <Icons.Check className="text-primary size-5 shrink-0" />
+              <Icons.Check className="text-primary size-4 shrink-0" />
             ) : item.lockEnabled ? (
-              <Icons.Lock className="text-muted-foreground size-5 shrink-0" />
+              <Icons.Lock className="text-muted-foreground size-4 shrink-0" />
             ) : null}
           </button>
         ))}
       </div>
-      <div className="py-3">
+      <div className="py-1.5">
         <button type="button" className={rowClassName} onClick={() => runAction(manageProfile)}>
-          <Icons.User className="size-6 shrink-0" />
+          <Icons.User className="size-[18px] shrink-0" />
           {t("profiles.settings")}
         </button>
         <button type="button" className={rowClassName} onClick={() => runAction(addProfile)}>
-          <Icons.Plus className="size-6 shrink-0" />
+          <Icons.Plus className="size-[18px] shrink-0" />
           {t("profiles.add")}
         </button>
       </div>
       {profile.lockEnabled && (
         <button type="button" className={rowClassName} onClick={() => runAction(lockProfile)}>
-          <Icons.Lock className="size-6 shrink-0" />
+          <Icons.Lock className="size-[18px] shrink-0" />
           {t("profiles.lock")}
         </button>
       )}
