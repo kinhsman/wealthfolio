@@ -55,7 +55,6 @@ import {
 } from "@wealthfolio/ui/components/ui/tooltip";
 
 import { WealthCheckCard } from "./wealth-check-card";
-import { WealthCheckScopeDialog } from "./wealth-check-scope-dialog";
 import {
   ChangeChip,
   Hero,
@@ -113,7 +112,6 @@ export function MeadowNetWorthTab() {
   const formatting = useNumberFormatting();
   const { settings } = useSettingsContext();
   const isMobile = useIsMobileViewport();
-  const [scopeOpen, setScopeOpen] = useState(false);
   const currentDateISO = formatZonedDateKey(new Date(), settings?.timezone);
   const { data: netWorthData, isLoading, isError, error } = useNetWorth({ date: currentDateISO });
 
@@ -354,27 +352,16 @@ export function MeadowNetWorthTab() {
 
   return (
     <MeadowTab>
-      <div className="flex items-center justify-end gap-2">
-        {parsedData ? (
-          <button
-            type="button"
-            onClick={() => setScopeOpen(true)}
-            aria-label="Choose what counts in the Wealth check"
-            title="Choose what counts in the Wealth check"
-            className="text-muted-foreground hover:text-foreground flex h-8 w-8 items-center justify-center rounded-full"
-          >
-            <Icons.Settings className="h-4 w-4" />
-          </button>
-        ) : null}
-        {historyData && historyData.length > 0 ? (
+      {historyData && historyData.length > 0 ? (
+        <div className="flex justify-end">
           <IntervalSelector
             className="w-auto max-w-full"
             value={periodCode}
             onIntervalSelect={(code) => setPeriodCode(code)}
             isLoading={isHistoryLoading}
           />
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <Hero label="Net worth">
         <div className="flex flex-wrap items-stretch gap-x-8 gap-y-3 max-md:flex-col max-md:gap-1.5">
@@ -446,15 +433,6 @@ export function MeadowNetWorthTab() {
           <NetWorthAttention staleAssets={stale} />
         </div>
       </div>
-
-      {parsedData ? (
-        <WealthCheckScopeDialog
-          open={scopeOpen}
-          onOpenChange={setScopeOpen}
-          data={parsedData}
-          currency={currency}
-        />
-      ) : null}
 
       <AllocationDetailSheet
         isOpen={!!selected && selected.isInvestment}

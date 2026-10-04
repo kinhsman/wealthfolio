@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getGoalPlan } from "@/adapters";
 import { DashboardCard } from "@/components/dashboard-card";
+import { Icons } from "@wealthfolio/ui";
 import { useSpendingReport } from "@/features/spending/hooks/use-spending-report";
 import { zonedCalendarDateBoundaryToDate } from "@/features/spending/lib/timezone";
 import { ageFromBirthYearMonth, parseSettingsJson } from "@/features/goals/retirement-planner/lib/plan-adapter";
@@ -32,6 +33,7 @@ import { CompactAmount } from "@/pages/net-worth/components/compact-amount";
 import type { ParsedNetWorth } from "@/pages/net-worth/components/utils";
 
 import { useWealthCheckScope } from "./use-wealth-check-scope";
+import { WealthCheckScopeDialog } from "./wealth-check-scope-dialog";
 
 // The bar runs 0 to 2.5x the expected amount, so the UAW line sits at 20%, expected at 40%, PAW at 80%.
 const BAR_MAX = 2.5;
@@ -56,6 +58,7 @@ interface WealthCheckCardProps {
 
 export function WealthCheckCard({ data, currency, asOf }: WealthCheckCardProps) {
   const [editing, setEditing] = useState(false);
+  const [scopeOpen, setScopeOpen] = useState(false);
   const [birthTyped, setBirthTyped] = usePersistentState<string>("wealth-check-birth", "");
   const [incomeTyped, setIncomeTyped] = usePersistentState<number | null>("wealth-check-income", null);
 
@@ -121,6 +124,15 @@ export function WealthCheckCard({ data, currency, asOf }: WealthCheckCardProps) 
               {pill.label}
             </span>
           ) : null}
+          <button
+            type="button"
+            onClick={() => setScopeOpen(true)}
+            aria-label="Choose what counts in the Wealth check"
+            title="Choose what counts in the Wealth check"
+            className="text-muted-foreground hover:text-foreground flex h-6 w-6 items-center justify-center rounded-full"
+          >
+            <Icons.Settings className="h-3.5 w-3.5" />
+          </button>
           <button
             type="button"
             onClick={() => setEditing((on) => !on)}
@@ -239,10 +251,11 @@ export function WealthCheckCard({ data, currency, asOf }: WealthCheckCardProps) 
             ) : null}
           </label>
           <p className="text-muted-foreground text-xs">
-            Switch accounts, loans and properties off with the gear at the top of this page.
+            Switch accounts, loans and properties off with the gear above.
           </p>
         </div>
       ) : null}
+      <WealthCheckScopeDialog open={scopeOpen} onOpenChange={setScopeOpen} data={data} currency={currency} />
     </DashboardCard>
   );
 }
