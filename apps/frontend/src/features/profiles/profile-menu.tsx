@@ -56,27 +56,26 @@ export function ProfileMenu({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-64 rounded-xl p-1">
-        <DropdownMenuLabel className="flex items-center gap-3 px-3 py-3">
-          <ProfileAvatar id={profile.avatarId} className="mx-0 size-10 shrink-0 rounded-full" />
+      {/* money-hub patch (owner, 10-04: "never anything waste of screen space"): the same compact
+          rows as every other menu; this one had 44px rows, a 40px picture and rounder corners. */}
+      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-56">
+        <DropdownMenuLabel className="flex items-center gap-2">
+          <ProfileAvatar id={profile.avatarId} className="mx-0 size-6 shrink-0 rounded-full" />
           <span className="min-w-0 truncate">{profile.name}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem className="h-11 gap-3 rounded-lg px-3" onSelect={manageProfile}>
+        <DropdownMenuItem onSelect={manageProfile}>
           <Icons.User className="size-4" />
           {t("profiles.settings")}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className="h-11 gap-3 rounded-lg px-3"
-          onSelect={singleProfile ? addProfile : switchProfile}
-        >
+        <DropdownMenuItem onSelect={singleProfile ? addProfile : switchProfile}>
           {singleProfile ? <Icons.Plus className="size-4" /> : <Icons.Users className="size-4" />}
           {t(singleProfile ? "profiles.add" : "profiles.switch")}
         </DropdownMenuItem>
         {profile.lockEnabled && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="h-11 gap-3 rounded-lg px-3" onSelect={lockProfile}>
+            <DropdownMenuItem onSelect={lockProfile}>
               <Icons.Lock className="size-4" />
               {t("profiles.lock")}
             </DropdownMenuItem>

@@ -308,9 +308,8 @@ function TransactionCardImpl({
           </div>
         </div>
 
-        {/* This card only renders on mobile, so the menu is always the touch
-            presentation — the dropdown's 32px rows are mouse-sized for a list
-            whose last entry is Delete. */}
+        {/* The same compact menu as the table row and Settings (components/action-palette.tsx);
+            Delete sits alone in its own group, under a divider. */}
         <ActionPalette
           open={menuOpen}
           onOpenChange={setMenuOpen}

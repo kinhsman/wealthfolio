@@ -1,10 +1,3 @@
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@wealthfolio/ui/components/ui/dropdown-menu";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 
 import type { Activity, ActivityDetails } from "@/lib/types";
@@ -13,7 +6,7 @@ import { HOVER_SLOT } from "@/lib/hover-slot";
 import { cn } from "@/lib/utils";
 import { ActionPalette, type ActionPaletteGroup } from "@/components/action-palette";
 import { Row } from "@tanstack/react-table";
-import { Fragment, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityDetailSheet } from "./activity-detail-sheet";
 
@@ -26,9 +19,8 @@ export interface ActivityOperationsProps<TData> {
   onLinkTransfer?: (activity: ActivityDetails) => void | undefined;
   onUnlinkTransfer?: (activity: ActivityDetails) => void | undefined;
   /**
-   * Presents the row menu for touch: a borderless trigger and the app's
-   * ActionPalette instead of the dropdown, whose 32px rows and 16px icons are
-   * mouse-sized — too small for a menu whose last entry is Delete.
+   * A borderless trigger for touch. The menu itself is the same compact one
+   * everywhere (components/action-palette.tsx), on a phone and a desktop alike.
    */
   touch?: boolean;
   /**
@@ -60,7 +52,6 @@ export function ActivityOperations<TData>({
   const isNew = (activity as ActivityDetails & { isNew?: boolean }).isNew === true;
   const canShowTransferActions = isTransfer && !isNew && (onLinkTransfer || onUnlinkTransfer);
 
-  /** One definition, rendered as either presentation below. */
   const groups: ActionPaletteGroup[] = [
     {
       items: [
@@ -128,38 +119,7 @@ export function ActivityOperations<TData>({
 
   return (
     <>
-      {touch ? (
-        <ActionPalette
-          open={menuOpen}
-          onOpenChange={setMenuOpen}
-          groups={groups}
-          trigger={trigger}
-        />
-      ) : (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {groups.map((group, groupIndex) => (
-              <Fragment key={groupIndex}>
-                {groupIndex > 0 && <DropdownMenuSeparator />}
-                {group.items.map((item) => (
-                  <DropdownMenuItem
-                    key={item.label}
-                    className={cn(
-                      item.variant === "destructive" &&
-                        "text-destructive focus:text-destructive flex cursor-pointer items-center",
-                    )}
-                    onClick={item.onClick}
-                  >
-                    <item.icon className="mr-2 h-4 w-4" />
-                    {item.label}
-                  </DropdownMenuItem>
-                ))}
-              </Fragment>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      <ActionPalette open={menuOpen} onOpenChange={setMenuOpen} groups={groups} trigger={trigger} />
 
       <ActivityDetailSheet
         activity={activity}

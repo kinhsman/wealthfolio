@@ -13,6 +13,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Icons,
   PrivacyAmount,
@@ -374,7 +375,8 @@ function TransactionRowImpl({
                 </DropdownMenuItem>
               ) : null
             ) : null}
-            <DropdownMenuItem className="text-destructive" onClick={() => onDelete(row)}>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onClick={() => onDelete(row)}>
               <Icons.Trash className="mr-2 h-4 w-4" aria-hidden="true" />
               {t("common:delete")}
             </DropdownMenuItem>

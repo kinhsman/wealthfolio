@@ -1522,14 +1522,12 @@ export default function PerformancePage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onSelect={() => setAccountSheetOpen(true)} className="py-4 md:py-2">
+              {/* money-hub patch (owner, 10-04): the same compact rows on a phone too (was py-4). */}
+              <DropdownMenuItem onSelect={() => setAccountSheetOpen(true)}>
                 <Icons.Briefcase className="mr-2 h-4 w-4" />
                 {t("performance:add_account")}
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => setBenchmarkSheetOpen(true)}
-                className="py-4 md:py-2"
-              >
+              <DropdownMenuItem onSelect={() => setBenchmarkSheetOpen(true)}>
                 <Icons.TrendingUp className="mr-2 h-4 w-4" />
                 {t("performance:add_benchmark")}
               </DropdownMenuItem>

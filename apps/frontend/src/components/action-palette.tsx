@@ -1,10 +1,15 @@
 import { useHapticFeedback } from "@/hooks";
 import { Button } from "@wealthfolio/ui/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@wealthfolio/ui/components/ui/dropdown-menu";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
-import { Popover, PopoverContent, PopoverTrigger } from "@wealthfolio/ui/components/ui/popover";
-import { cn } from "@wealthfolio/ui/lib/utils";
 import * as React from "react";
-import { useTranslation } from "react-i18next";
 
 export interface ActionPaletteItem {
   icon: React.ComponentType<{ className?: string }>;
@@ -22,6 +27,7 @@ export interface ActionPaletteGroup {
 interface ActionPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Names the menu for screen readers only: the button that opened it already says what it is. */
   title?: string;
   groups: ActionPaletteGroup[];
   trigger?: React.ReactNode;
@@ -29,6 +35,14 @@ interface ActionPaletteProps {
   side?: "top" | "bottom" | "left" | "right";
 }
 
+/**
+ * money-hub patch (owner, 10-04: "I like the compact version", "never anything waste of screen space"):
+ * the row/page action menu is the app's ONE compact dropdown (ui/dropdown-menu.tsx), on a phone and on
+ * a desktop alike. It used to be its own touch-sized popover (20px icons, 48px rows, a rule between every
+ * row, a header with a close button), so the same kind of menu looked different from page to page, and
+ * the theme's glass, which keys on `.bg-popover`, never reached it. A group is a divider and nothing
+ * else; a group title is a small muted line, and only when the group has one.
+ */
 export function ActionPalette({
   open,
   onOpenChange,
@@ -38,108 +52,43 @@ export function ActionPalette({
   align = "end",
   side = "bottom",
 }: ActionPaletteProps) {
-  const { t } = useTranslation();
   const { triggerHaptic } = useHapticFeedback();
 
-  const handleItemClick = React.useCallback(
-    (item: ActionPaletteItem) => {
-      triggerHaptic();
-      item.onClick();
-      onOpenChange(false);
-    },
-    [triggerHaptic, onOpenChange],
-  );
-
-  const handleClose = React.useCallback(() => {
-    onOpenChange(false);
-  }, [onOpenChange]);
-
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>
         {trigger ?? (
           <Button variant="outline" size="icon" className="h-9 w-9">
             <Icons.DotsThreeVertical className="h-5 w-5" weight="fill" />
           </Button>
         )}
-      </PopoverTrigger>
-      <PopoverContent
-        align={align}
-        side={side}
-        sideOffset={8}
-        className={cn(
-          "w-auto min-w-[260px] max-w-[320px] p-0",
-          "rounded-2xl",
-          "border-border/50 border dark:border-white/10",
-          "bg-card backdrop-blur-xl",
-          "shadow-lg",
-        )}
-      >
-        {/* Header - only show if title provided */}
-        {title && (
-          <div className="flex items-center justify-between px-5 pb-3 pt-5">
-            <h3 className="text-foreground text-lg font-bold">{title}</h3>
-            <button
-              onClick={handleClose}
-              className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full",
-                "bg-muted/80 hover:bg-muted",
-                "text-muted-foreground hover:text-foreground",
-                "transition-colors duration-150",
-                "focus-visible:ring-ring focus:outline-none focus-visible:ring-2",
-              )}
-              aria-label={t("common:close")}
-            >
-              <Icons.X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-
-        {/* Action Groups */}
-        <div className={cn("px-3 pb-4", !title && "pt-3")}>
-          {groups.map((group, groupIndex) => (
-            <div key={groupIndex}>
-              {group.title && (
-                <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium uppercase tracking-wider">
-                  {group.title}
-                </div>
-              )}
-              <div>
-                {group.items.map((item, itemIndex) => {
-                  const IconComponent = item.icon;
-                  const isDestructive = item.variant === "destructive";
-                  return (
-                    <React.Fragment key={itemIndex}>
-                      {itemIndex > 0 && <div className="bg-border/70 mx-3 h-px" />}
-                      <button
-                        data-testid={item.testId}
-                        onClick={() => handleItemClick(item)}
-                        className={cn(
-                          "flex w-full items-center gap-4 rounded-xl px-3 py-3",
-                          "transition-colors duration-150",
-                          isDestructive
-                            ? "text-destructive hover:bg-destructive/10 active:bg-destructive/15"
-                            : "text-foreground hover:bg-accent active:bg-accent/80",
-                          "focus-visible:ring-ring focus:outline-none focus-visible:ring-2 focus-visible:ring-inset",
-                        )}
-                      >
-                        <IconComponent
-                          className={cn(
-                            "h-5 w-5 shrink-0",
-                            isDestructive ? "text-destructive" : "text-muted-foreground",
-                          )}
-                        />
-                        <span className="text-[15px] font-medium">{item.label}</span>
-                      </button>
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-              {groupIndex < groups.length - 1 && <div className="bg-border/70 mx-3 my-1.5 h-px" />}
-            </div>
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align={align} side={side} aria-label={title}>
+        {groups.map((group, groupIndex) => (
+          <React.Fragment key={groupIndex}>
+            {groupIndex > 0 && <DropdownMenuSeparator />}
+            {group.title && (
+              <DropdownMenuLabel className="text-muted-foreground py-1 text-xs font-medium">
+                {group.title}
+              </DropdownMenuLabel>
+            )}
+            {group.items.map((item, itemIndex) => (
+              <DropdownMenuItem
+                key={itemIndex}
+                data-testid={item.testId}
+                variant={item.variant}
+                onSelect={() => {
+                  triggerHaptic();
+                  item.onClick();
+                }}
+              >
+                <item.icon />
+                {item.label}
+              </DropdownMenuItem>
+            ))}
+          </React.Fragment>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

@@ -364,7 +364,7 @@ function AddonsMenu({ addons, collapsed, onSetPinned }: AddonsMenuProps) {
       <DropdownMenuContent
         side={collapsed ? "right" : "bottom"}
         align="start"
-        className="w-max min-w-56 max-w-[calc(100vw-2rem)]"
+        className="w-max min-w-48 max-w-[calc(100vw-2rem)]"
       >
         {addons.map((addon) => {
           const isActive = isPathActive(location.pathname, addon.href);
@@ -377,20 +377,17 @@ function AddonsMenu({ addons, collapsed, onSetPinned }: AddonsMenuProps) {
             <div
               key={addon.id ?? addon.href}
               className={cn(
-                "hover:bg-accent focus-within:bg-accent group flex h-10 items-center rounded-sm transition-colors",
+                "hover:bg-accent focus-within:bg-accent group flex h-8 items-center rounded-sm transition-colors",
                 isActive && "bg-secondary",
               )}
             >
-              <DropdownMenuItem
-                asChild
-                className="h-10 min-w-0 flex-1 gap-3 px-3 py-2 text-sm font-medium"
-              >
+              <DropdownMenuItem asChild className="h-8 min-w-0 flex-1">
                 <Link to={addon.href} onClick={() => setOpen(false)}>
                   <span
                     aria-hidden="true"
-                    className="flex size-5 shrink-0 items-center justify-center"
+                    className="flex size-4 shrink-0 items-center justify-center"
                   >
-                    {resolveNavigationIcon(addon.icon, "h-5 w-5")}
+                    {resolveNavigationIcon(addon.icon, "h-4 w-4")}
                   </span>
                   <span className="whitespace-nowrap">{addon.title}</span>
                 </Link>
@@ -398,7 +395,7 @@ function AddonsMenu({ addons, collapsed, onSetPinned }: AddonsMenuProps) {
               {onSetPinned && (
                 <button
                   type="button"
-                  className="hover:bg-background focus:bg-background group-hover:bg-background hover:ring-border focus:ring-border group-hover:ring-border mr-1 flex size-8 shrink-0 items-center justify-center rounded-full opacity-0 outline-none transition-[background-color,box-shadow,opacity] hover:ring-1 focus:opacity-100 focus:ring-1 group-hover:opacity-100 group-hover:ring-1"
+                  className="hover:bg-background focus:bg-background group-hover:bg-background hover:ring-border focus:ring-border group-hover:ring-border mr-1 flex size-6 shrink-0 items-center justify-center rounded-full opacity-0 outline-none transition-[background-color,box-shadow,opacity] hover:ring-1 focus:opacity-100 focus:ring-1 group-hover:opacity-100 group-hover:ring-1"
                   title={t("common:layout.pin_to_sidebar")}
                   aria-label={t("common:layout.pin_addon_to_sidebar", { name: addon.title })}
                   onMouseDown={(event) => {
