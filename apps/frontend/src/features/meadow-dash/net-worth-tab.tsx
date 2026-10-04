@@ -54,6 +54,7 @@ import {
   TooltipTrigger,
 } from "@wealthfolio/ui/components/ui/tooltip";
 
+import { WealthCheckCard } from "./wealth-check-card";
 import {
   ChangeChip,
   Hero,
@@ -425,6 +426,9 @@ export function MeadowNetWorthTab() {
           ) : null}
           {momentum ? (
             <MomentumCard momentum={momentum} currency={currency} periodLabel={periodCode} />
+          ) : null}
+          {parsedData ? (
+            <WealthCheckCard netWorth={parsedData.netWorth} currency={currency} asOf={currentDateISO} />
           ) : null}
           <NetWorthAttention staleAssets={stale} />
         </div>

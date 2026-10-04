@@ -11,6 +11,7 @@ import { newAccountSchema } from "@/lib/schemas";
 import { AccountType } from "@/lib/constants";
 import { RENTAL_DISPLAY_TYPE, isRentalMeta, setDisplayTypeInMeta } from "@/lib/account-display";
 import { countsAsFreeCash, setFreeCashInMeta } from "@/features/spending/lib/free-cash";
+import { isLeftOutOfWealthCheck, setWealthCheckExcludeInMeta } from "@/lib/wealth-check";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { cn } from "@/lib/utils";
 import {
@@ -511,6 +512,30 @@ export function AccountForm({ defaultValues, onSuccess = () => undefined }: Acco
                     checked={countsAsFreeCash({ accountType: currentAccountType, meta: form.watch("meta") })}
                     onCheckedChange={(on) =>
                       form.setValue("meta", setFreeCashInMeta(form.getValues("meta"), on), { shouldDirty: true })
+                    }
+                  />
+                </div>
+              </section>
+            ) : null}
+
+            {/* money-hub patch: leave this account out of the Wealth check's net worth (Net worth tab; lib/wealth-check.ts). */}
+            {currentAccountType ? (
+              <section className={formCardClassName}>
+                <h3 className={formSectionLabelClassName}>Wealth check</h3>
+                <div className="mt-4 flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <label htmlFor="account-wealth-check-exclude" className="text-sm font-normal">
+                      Leave out of Wealth check
+                    </label>
+                    <p className="text-muted-foreground text-xs">
+                      Its balance is taken out of the net worth the Wealth check on the Net worth tab compares. Net worth itself does not change.
+                    </p>
+                  </div>
+                  <Switch
+                    id="account-wealth-check-exclude"
+                    checked={isLeftOutOfWealthCheck({ meta: form.watch("meta") })}
+                    onCheckedChange={(on) =>
+                      form.setValue("meta", setWealthCheckExcludeInMeta(form.getValues("meta"), on), { shouldDirty: true })
                     }
                   />
                 </div>
