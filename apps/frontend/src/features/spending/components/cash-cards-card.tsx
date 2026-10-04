@@ -451,7 +451,7 @@ function Legend({
 // money-hub patch: the Cash and Cards lists each show their first `keep` rows (four; on a phone the Cards list
 // as many as the Cash list shows, at least 3) and fold the rest behind a Show more row (owner, 10-02, 10-03).
 // A card that needs a sign-in or is heavily used always stays in view (`pin`), so a warning never hides
-// behind the fold.
+// behind the fold. A list one row over `keep` shows that row (owner, 10-03).
 function FoldedList<T>({
   items,
   keep,
@@ -466,7 +466,9 @@ function FoldedList<T>({
   render: (item: T) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const shown = items.filter((item, i) => i < keep || pin?.(item));
+  const cut = items.filter((item, i) => i < keep || pin?.(item));
+  // One row hidden behind a Show more row saves nothing (the button is a row tall): show it instead.
+  const shown = items.length - cut.length === 1 ? items : cut;
   const folded = items.filter((item) => !shown.includes(item));
   return (
     <>
@@ -476,7 +478,7 @@ function FoldedList<T>({
           type="button"
           onClick={() => setOpen(!open)}
           aria-expanded={open}
-          className="flex min-h-9 items-center justify-between gap-2 rounded-xl px-2.5 text-left text-[12.5px] text-[var(--m-mint-ink)] hover:bg-[var(--m-mint-tile)]"
+          className="flex h-9 items-center justify-between gap-2 rounded-xl px-2.5 text-left text-[12.5px] text-[var(--m-mint-ink)] hover:bg-[var(--m-mint-tile)]"
         >
           <span>
             {open
