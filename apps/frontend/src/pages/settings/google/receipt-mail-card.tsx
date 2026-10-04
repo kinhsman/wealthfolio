@@ -492,12 +492,15 @@ export function ReceiptMailCard({
   busy,
   run,
   Logo,
+  extra = null,
 }: {
   rm: ReceiptMailStatus;
   setRm: (s: ReceiptMailStatus) => void;
   busy: string | null;
   run: Run;
   Logo: (p: { children?: ReactNode }) => ReactElement;
+  /** More rows of the card (owner, 10-04: Amazon orders on the Receipts page lives here, not under Amazon orders). */
+  extra?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const errors = rm.last?.errors?.length ?? 0;
@@ -628,6 +631,7 @@ export function ReceiptMailCard({
         {!rm.ready ? <p className="text-warning">The AI is not set up on the server yet.</p> : null}
         {errors ? <p className="text-warning">{rm.last?.errors.join(" · ")}</p> : null}
       </div>
+      {extra}
       {open ? <ConfigPanel rm={rm} busy={busy} run={run} setRm={setRm} /> : null}
     </div>
   );

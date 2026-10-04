@@ -354,11 +354,6 @@ export default function GoogleSettingsPage() {
             ) : null}
             {gear.amazon ? <ReaderGearPanel store="amazon" url={AMAZON} status={amazon} setStatus={setAmazon as never} busy={busy} run={run} /> : null}
             {amazon.on ? (
-              <AmazonReceiptsRow on={!!amazon.onReceipts} ready={!!amazon.aiReady} sorted={amazon.itemsAnswered ?? 0} busy={!!busy}
-                onToggle={(onReceipts) => run("amazon-receipts", () => call<AmazonStatus>(AMAZON, "PUT", "", { onReceipts }), setAmazon,
-                  onReceipts ? "Saved. Your Amazon orders are being made into receipts." : "Saved. The receipts you have not touched are being removed.")} />
-            ) : null}
-            {amazon.on ? (
               <AmazonCategories amazon={amazon} busy={!!busy}
                 onPick={(kind, categoryId) => run(`amazon-cat:${kind}`, () => call<AmazonStatus>(AMAZON, "PUT", "", { kind, categoryId }), setAmazon,
                   categoryId ? `Saved. ${kind} charges are being filed now.` : `${kind} left as it is.`)} />
@@ -455,7 +450,14 @@ export default function GoogleSettingsPage() {
           </div>
         ) : null}
 
-        {receiptMail ? <ReceiptMailCard rm={receiptMail} setRm={setReceiptMail} busy={busy} run={run} Logo={Logo} /> : null}
+        {receiptMail ? (
+          <ReceiptMailCard rm={receiptMail} setRm={setReceiptMail} busy={busy} run={run} Logo={Logo}
+            extra={amazon ? (
+              <AmazonReceiptsRow amazonOn={amazon.on} on={!!amazon.onReceipts} ready={!!amazon.aiReady} sorted={amazon.itemsAnswered ?? 0} busy={!!busy}
+                onToggle={(onReceipts) => run("amazon-receipts", () => call<AmazonStatus>(AMAZON, "PUT", "", { onReceipts }), setAmazon,
+                  onReceipts ? "Saved. Your Amazon orders are being made into receipts." : "Saved. The receipts you have not touched are being removed.")} />
+            ) : null} />
+        ) : null}
 
         {email ? (
           <div className="bg-card flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3">
