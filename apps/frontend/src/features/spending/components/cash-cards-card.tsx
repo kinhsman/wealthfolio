@@ -2,7 +2,7 @@
 // cash and the card balance into a single widget ... they are related"; design A, the split bar). It
 // reads the same two views as the Free cash and Credit cards cards (lib/free-cash.ts, lib/credit-cards.ts):
 // Free cash = your cash less what is already promised (card balance, the bills due soon, your cushion).
-// The bills themselves are listed once, in Subscriptions & bills (Next due); here only their total.
+// The bills themselves are listed once, on the Subscriptions & Bills page; here only their total.
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -37,7 +37,7 @@ export function CashCardsCard({
   className?: string;
   /** money-hub patch: on the Cash page every account and card shows, nothing folds (phone included). */
   expanded?: boolean;
-  /** Takes the reader to the bills (Next due in Subscriptions & bills). */
+  /** Takes the reader to the bills (the Subscriptions & Bills page). */
   onShowBills?: () => void;
 }) {
   const cash = useFreeCash();

@@ -22,11 +22,11 @@ export default function CashPage() {
         <PageHeader heading="Cash" />
         <PageContent className="px-3 pb-[var(--mobile-nav-total-offset)] md:px-6 md:pb-8 lg:px-8">
           <div className="flex flex-col gap-3.5 max-md:gap-2">
-            {/* The bills themselves are listed once, in Next due on the Spending tab. */}
+            {/* The bills themselves are listed once, on the Subscriptions & Bills page. */}
             <CashCardsCard
               currency={currency}
               expanded
-              onShowBills={() => navigate("/dashboard#next-due")}
+              onShowBills={() => navigate("/spending/subscriptions")}
             />
             <CashForecastCard currency={currency} expanded />
           </div>

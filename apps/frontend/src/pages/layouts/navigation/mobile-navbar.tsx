@@ -158,6 +158,8 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
       transition={SLIDE}
     />
   );
+  // money-hub patch: the pill under the icon uses the short name where a page has one (NavLink.shortTitle).
+  const pillName = (item: { title: string; shortTitle?: string }) => item.shortTitle ?? item.title;
   const pageName = (name: string) => (
     <motion.span
       layout
@@ -235,7 +237,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                   >
                     {renderIcon(item.icon)}
                   </motion.span>
-                  {isActive && pageName(item.title)}
+                  {isActive && pageName(pillName(item))}
                 </MotionLink>
               );
             })}
@@ -267,7 +269,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                   <Icons.CirclesFour className="size-6" />
                 </motion.span>
                 {/* The page you are on lives in the More sheet: its name under the More icon. */}
-                {activeMoreItem && pageName(activeMoreItem.title)}
+                {activeMoreItem && pageName(pillName(activeMoreItem))}
               </motion.button>
             )}
           </nav>

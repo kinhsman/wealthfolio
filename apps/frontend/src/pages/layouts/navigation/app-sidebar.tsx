@@ -328,7 +328,7 @@ function NavItem({ item, collapsed, className, ...props }: NavItemProps) {
       >
         <span aria-hidden="true">{resolveNavigationIcon(item.icon, "size-[18px]")}</span>
 
-        <RowLabel collapsed={collapsed}>{item.title}</RowLabel>
+        <RowLabel collapsed={collapsed}>{collapsed ? (item.shortTitle ?? item.title) : item.title}</RowLabel>
       </Link>
     </Button>
   );

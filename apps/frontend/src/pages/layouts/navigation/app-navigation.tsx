@@ -7,6 +7,9 @@ import { getAddonNavPinKey, useAddonNavigationPins } from "./addon-navigation-pi
 export interface NavLink {
   id?: string;
   title: string;
+  /** money-hub patch: a shorter name for the 84px collapsed rail and the phone bar's page pill, where the
+   *  full title does not fit; everywhere else the full title shows. */
+  shortTitle?: string;
   href: string;
   icon?: ReactNode;
   keywords?: string[];
@@ -64,6 +67,18 @@ function buildStaticNavigation(t: TFunction): NavigationProps {
         href: "/cash",
         keywords: ["cash", "free cash", "forecast", "cards", "balance", "bills", "cushion"],
         label: "Free cash, your cards and the cash forecast",
+      },
+      {
+        // money-hub patch: Subscriptions & Bills (features/spending/pages/spending-subscriptions-page.tsx), the
+        // page that was only reachable from "See all" on the Spending tab (owner, 10-04: "the subs and bills
+        // page deserve their own page"; "Subscriptions and Bills" is its name). After Cash so the phone's bar
+        // keeps Dashboard and Transactions. The 84px rail and the phone pill show "Subs & Bills" (shortTitle).
+        icon: <Icons.Calendar className="size-6" />,
+        title: "Subscriptions & Bills",
+        shortTitle: "Subs & Bills",
+        href: "/spending/subscriptions",
+        keywords: ["subscriptions", "subs", "bills", "recurring", "repeating", "due", "netflix", "rent", "calendar"],
+        label: "Subscriptions and bills: what repeats, what is due and when",
       },
       {
         icon: <Icons.Goals className="size-6" />,

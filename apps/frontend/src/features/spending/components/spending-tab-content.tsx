@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type FC } from "react";
+import { useCallback, useMemo, useState, type FC } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
 
 import { DashboardCard } from "@/components/dashboard-card";
@@ -70,7 +70,7 @@ import { BudgetLineChartCard } from "./budget-line-chart-card";
 import { FreeCashStrip } from "./free-cash-strip";
 import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
-import { SubscriptionsCard } from "./subscriptions-card";
+import { SubscriptionsStrip } from "./subscriptions-strip";
 import { useSubscriptions } from "../lib/subscriptions";
 import { forecastParts } from "../lib/budget-forecast";
 import { ReturnsCard } from "./returns-card";
@@ -889,21 +889,6 @@ export default function SpendingTabContent() {
     () => categoryRows.filter((r) => r.id !== SAVINGS_ROW_ID),
     [categoryRows],
   );
-  // money-hub patch: the Cash page's Bills link lands here as /dashboard#next-due. Next due draws once
-  // the bills arrive, so look for it for a few seconds before giving up.
-  const { hash } = useLocation();
-  useEffect(() => {
-    if (hash !== "#next-due") return;
-    let tries = 0;
-    const timer = window.setInterval(() => {
-      const el = document.getElementById("next-due");
-      if (el || ++tries > 30) {
-        window.clearInterval(timer);
-        el?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }, 150);
-    return () => window.clearInterval(timer);
-  }, [hash]);
   const periodWord = selectedIntervalDescription?.startsWith("spending:")
     ? t(selectedIntervalDescription)
     : selectedIntervalDescription;
@@ -1043,40 +1028,35 @@ export default function SpendingTabContent() {
       {/* money-hub patch: Cash & cards and Cash forecast are the Cash page now (owner, 10-04); one line here. */}
       <FreeCashStrip currency={currency} />
 
-      <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2">
-          <BudgetLineChartCard
-            monthKey={budgetMonthKey}
-            today={todayParts}
-            isCurrentMonth={budgetMonthKey === currentBudgetMonthKey}
-            onPreviousMonth={() => stepBudgetMonth(-1)}
-            onNextMonth={() => stepBudgetMonth(1)}
-            canGoNextMonth={budgetMonthKey < currentBudgetMonthKey}
-            activityRange={budgetMonthActivityRange}
-            target={budgetCardBudget?.computed.totals.spendingPlanned ?? 0}
-            spent={monthReport?.current.outflow ?? 0}
-            currency={budgetCardBudget?.computed.currency ?? currency}
-            historicalDailyAvg={historicalDailyAvg}
-            forecastParts={budgetForecastParts}
-            forecastPending={subscriptionsPending || !historyReport || !monthReport}
-            allocations={
-              budgetCardBudget?.computed.groupRows.flatMap((row) => row.categories) ?? []
-            }
-            spendingBreakdown={monthReport?.spendingBreakdown ?? []}
-            categoriesMeta={categoriesMeta}
-            monthByDay={monthReport?.byDay ?? []}
-            historicalByDay={historyReport?.byDay ?? []}
-            fill
-            summary={{ head: spentHead, tiles: cashTiles, sameMonth: spentMatchesBudgetMonth }}
-          />
-        </div>
-        <div className="min-w-0">
-          {/* money-hub patch: the charges that repeat (lib/subscriptions.ts); Next due is the one list of
-              the bills coming up. Side by side, the two cards are one height (owner, 10-02: "scale the
-              monthly budget to match"): the budget's chart takes the extra. */}
-          <SubscriptionsCard currency={currency} fill />
-        </div>
+      <div className="min-w-0">
+        <BudgetLineChartCard
+          monthKey={budgetMonthKey}
+          today={todayParts}
+          isCurrentMonth={budgetMonthKey === currentBudgetMonthKey}
+          onPreviousMonth={() => stepBudgetMonth(-1)}
+          onNextMonth={() => stepBudgetMonth(1)}
+          canGoNextMonth={budgetMonthKey < currentBudgetMonthKey}
+          activityRange={budgetMonthActivityRange}
+          target={budgetCardBudget?.computed.totals.spendingPlanned ?? 0}
+          spent={monthReport?.current.outflow ?? 0}
+          currency={budgetCardBudget?.computed.currency ?? currency}
+          historicalDailyAvg={historicalDailyAvg}
+          forecastParts={budgetForecastParts}
+          forecastPending={subscriptionsPending || !historyReport || !monthReport}
+          allocations={
+            budgetCardBudget?.computed.groupRows.flatMap((row) => row.categories) ?? []
+          }
+          spendingBreakdown={monthReport?.spendingBreakdown ?? []}
+          categoriesMeta={categoriesMeta}
+          monthByDay={monthReport?.byDay ?? []}
+          historicalByDay={historyReport?.byDay ?? []}
+          summary={{ head: spentHead, tiles: cashTiles, sameMonth: spentMatchesBudgetMonth }}
+        />
       </div>
+
+      {/* money-hub patch: Subscriptions & Bills is its own page (menu: after Cash); here only the summary numbers
+          and the way in (owner, 10-04). The budget above is full width now that it has no card beside it. */}
+      <SubscriptionsStrip currency={currency} />
 
       <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
         <div className="min-w-0 lg:col-span-2">
