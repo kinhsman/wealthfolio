@@ -2,7 +2,10 @@
 // aside and "I want to be able to do it myself in the UI"). The owner picks Spending, Income,
 // Saving or Not counted from the row's menu; the money-hub service remembers it per bank
 // transaction (/api/money-hub/plaid/counts-as, server/drive-backup/lib/plaidSync.js setCountsAs)
-// so no bank sync undoes it, and rewrites the entry now. Only bank-imported entries (PLAID).
+// so no bank sync undoes it, and rewrites the entry now. Only bank-imported entries: PLAID, and
+// EMAIL for the banks read from their alert emails (MB, ACB; owner, 2026-10-03: "why i cant edit MB
+// bank transactions", an MB entry filed as a move between his own accounts opens the transfer
+// window, which has no merchant or category; Counts as, Spending, is the way to a normal entry).
 import type { CashActivity } from "../types/cash-activity";
 
 
@@ -12,7 +15,8 @@ export interface CountsAsTarget {
   activity: CashActivity;
 }
 
-export const canSetCountsAs = (a: CashActivity) => a.sourceSystem === "PLAID";
+export const canSetCountsAs = (a: CashActivity) =>
+  a.sourceSystem === "PLAID" || a.sourceSystem === "EMAIL";
 
 // The one open picker, for the dialog host (mounted once in App.tsx).
 let current: CountsAsTarget | null = null;
