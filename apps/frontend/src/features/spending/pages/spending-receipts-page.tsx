@@ -3,6 +3,8 @@
 // first, then the ones waiting for their card charge, then the filed ones; a row opens its lines. A photo
 // pasted anywhere on the page (Ctrl or Cmd V) or with the Paste button is snapped too. The search box finds a
 // receipt by any field it shows (owner, 2026-10-04: "should be able to search for any field in the receipts").
+// A PDF can be uploaded (Upload PDF, components/receipt-file.tsx), and an opened row shows the receipt's picture
+// beside its lines on a wide screen, with View and Download (owner, 2026-10-04: "i cannot see the receipt photos").
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -13,6 +15,7 @@ import { Icons, Input, Page, PageContent, PageHeader } from "@wealthfolio/ui";
 import { useUsd } from "@/lib/app-currency";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 
+import { ReceiptPhotoPanel, UploadPdfButton } from "../components/receipt-file";
 import { PasteReceiptButton, ReceiptDetails, SnapReceiptButton, STATE_TONE, usePastedReceipt, useReceiptUpload } from "../components/receipt-panel";
 import { useDashboardSkins } from "../lib/dashboard-skin";
 import { AMAZON_LOGO, photoUrl, receiptSearchIndex, receiptState, searchReceipts, storeName, toReview, useReceipts, type Receipt } from "../lib/receipts";
@@ -53,6 +56,10 @@ export default function SpendingReceiptsPage() {
         <Icons.Copy className="size-4 sm:mr-1.5" />
         <span className="hidden sm:inline">Paste</span>
       </PasteReceiptButton>
+      <UploadPdfButton send={upload.send} busy={upload.busy}>
+        <Icons.FileText className="size-4 sm:mr-1.5" />
+        <span className="hidden sm:inline">Upload PDF</span>
+      </UploadPdfButton>
       <SnapReceiptButton variant="default" size="sm" upload={upload}>
         <Icons.Receipt className="size-4 sm:mr-1.5" />
         <span className="hidden sm:inline">Snap a receipt</span>
@@ -65,7 +72,7 @@ export default function SpendingReceiptsPage() {
       <Page>
         <PageHeader
           heading="Receipts"
-          text={isMobile ? undefined : "Snap or paste a receipt; the card charge is split to match."}
+          text={isMobile ? undefined : "Snap, paste or upload a receipt; the card charge is split to match."}
           onBack={() => (window.history.length > 1 ? navigate(-1) : navigate("/activities?tab=spending"))}
           actions={data?.ready ? snap : undefined}
         />
@@ -83,7 +90,7 @@ export default function SpendingReceiptsPage() {
                 <div className="space-y-1">
                   <p className="text-foreground text-sm font-medium">No receipts yet</p>
                   <p className="text-muted-foreground mx-auto max-w-sm text-xs">
-                    Snap one at the store, or paste a photo here. Food stays Groceries, things for the house go to Maintenance & Repairs, and the card charge is split to match when it comes in.
+                    Snap one at the store, paste a photo here, or upload a PDF. Food stays Groceries, things for the house go to Maintenance & Repairs, and the card charge is split to match when it comes in.
                   </p>
                 </div>
                 <SnapReceiptButton variant="default" size="sm" upload={upload}>
@@ -178,8 +185,9 @@ export default function SpendingReceiptsPage() {
                         <Icons.ChevronDown className={cn("text-muted-foreground size-4 shrink-0 transition-transform", isOpen && "rotate-180")} />
                       </button>
                       {isOpen ? (
-                        <div className="px-4 pb-3 md:px-5">
-                          <ReceiptDetails receipt={r} categories={data?.categories ?? []} showHead={false} onChanged={(x) => setOpen(x ? x.id : null)} />
+                        <div className="px-4 pb-3 md:px-5 lg:flex lg:items-start lg:gap-4">
+                          <ReceiptDetails className="min-w-0 flex-1" receipt={r} categories={data?.categories ?? []} showHead={false} onChanged={(x) => setOpen(x ? x.id : null)} />
+                          <ReceiptPhotoPanel receipt={r} />
                         </div>
                       ) : null}
                     </li>

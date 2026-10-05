@@ -31,6 +31,7 @@ import {
   type ReceiptCategory,
   type ReceiptEdit,
 } from "../lib/receipts";
+import { ReceiptFileLinks } from "./receipt-file";
 
 // Kept in dollars where amounts are typed (the editor) and in toasts; elsewhere the app's USD / VND switch
 // applies (useUsd).
@@ -403,13 +404,13 @@ export function ReceiptDetails({
               <span>{r.source === "amazon" ? "From Amazon" : "From Gmail"}</span>
             )
           ) : (
-            <a href={photoUrl(r.id)} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
+            <a href={photoUrl(r.id)} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline lg:hidden">
               Photo{r.photos > 1 ? "s" : ""}
             </a>
           )}
           {r.source !== "gmail" && r.photos > 1
             ? Array.from({ length: r.photos - 1 }, (_, i) => (
-                <a key={i} href={photoUrl(r.id, i + 1)} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline">
+                <a key={i} href={photoUrl(r.id, i + 1)} target="_blank" rel="noreferrer" className="text-primary underline-offset-4 hover:underline lg:hidden">
                   {i + 2}
                 </a>
               ))
@@ -548,6 +549,7 @@ export function ReceiptDetails({
         >
           {r.source === "amazon" ? (busy === "read" ? "Sorting…" : "Sort again") : busy === "read" ? "Reading…" : "Read again"}
         </button>
+        <ReceiptFileLinks receipt={r} />
         <span className="flex-1" />
         {sure ? (
           <span className="flex items-center gap-2">
