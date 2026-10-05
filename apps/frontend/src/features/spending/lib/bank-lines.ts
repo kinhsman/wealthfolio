@@ -7,6 +7,7 @@
 // searchCashActivities keeps payee matches plus those, with the net summed the server's way.
 import { useQuery } from "@tanstack/react-query";
 
+import { renamedMatcher } from "./rule-renames";
 import type {
   CashActivity,
   CashActivitySearchRequest,
@@ -42,14 +43,20 @@ export function bankLineFor(lines: BankLines | undefined, activity: CashActivity
 
 /** Every word the bank wrote for one entry, plus the owner's note on it (lib/notes.ts): merchant logos
  *  match these when the payee matches none (owner, 2026-10-01: "include notes to all"). */
-export function bankWordsFor(lines: BankLines | undefined, id: string, notes?: Record<string, string>) {
+export function bankWordsFor(
+  lines: BankLines | undefined,
+  id: string,
+  notes?: Record<string, string>,
+) {
   const words = [lines?.[id]?.[1], notes?.[id]].filter(Boolean);
   return words.length ? words.join(" | ") : null;
 }
 
 async function bankHits(q: string): Promise<Set<string>> {
   try {
-    const res = await fetch(`${BASE}/search?q=${encodeURIComponent(q)}`, { credentials: "include" });
+    const res = await fetch(`${BASE}/search?q=${encodeURIComponent(q)}`, {
+      credentials: "include",
+    });
     if (!res.ok) return new Set();
     return new Set(((await res.json()) as { ids?: string[] }).ids ?? []);
   } catch {
@@ -78,7 +85,8 @@ export function netOf(items: CashActivity[]): NetSummary {
 }
 
 const PAGE = 1000; // the server's own cap per request
-let full: { key: string; at: number; items: CashActivity[]; baseCurrency?: string | null } | null = null;
+let full: { key: string; at: number; items: CashActivity[]; baseCurrency?: string | null } | null =
+  null;
 
 /**
  * A search over the payee AND every bank field, and the Subscription filter (owner, 2026-10-01: only
@@ -94,15 +102,21 @@ export async function searchWithBankFields(
   const { offset = 0, limit = 50, activityIds, search, ...others } = request;
   const needle = search?.trim().toLowerCase();
   const hits = needle ? await bankHits(needle) : new Set<string>();
-  if (!activityIds && !hits.size) return serverSearch(request);
+  // A new name given by a rule (Rules, Actions, Rename to) is searchable too: money-hub patch.
+  const renamed = needle ? await renamedMatcher(needle) : null;
+  if (!activityIds && !hits.size && !renamed) return serverSearch(request);
   if (activityIds?.length === 0) {
-    return { items: [], totalCount: 0, net: offset === 0 ? { byCurrency: [], converted: null } : null };
+    return {
+      items: [],
+      totalCount: 0,
+      net: offset === 0 ? { byCurrency: [], converted: null } : null,
+    };
   }
 
   // Without bank matches the server still narrows by the payee words.
-  const filters = hits.size ? others : { ...others, search };
+  const filters = hits.size || renamed ? others : { ...others, search };
   const only = activityIds ? new Set(activityIds) : null;
-  const key = JSON.stringify({ ...filters, needle, activityIds });
+  const key = JSON.stringify({ ...filters, needle, activityIds, renamed: !!renamed });
   if (!full || full.key !== key || offset === 0 || Date.now() - full.at > 60_000) {
     const items: CashActivity[] = [];
     let baseCurrency: string | null | undefined;
@@ -115,7 +129,10 @@ export async function searchWithBankFields(
     const kept = items.filter(
       (a) =>
         (!only || only.has(a.id)) &&
-        (!hits.size || (a.notes ?? "").toLowerCase().includes(needle!) || hits.has(a.id)),
+        (!(hits.size || renamed) ||
+          (a.notes ?? "").toLowerCase().includes(needle!) ||
+          hits.has(a.id) ||
+          !!renamed?.(a)),
     );
     full = { key, at: Date.now(), baseCurrency, items: kept };
   }

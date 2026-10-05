@@ -5,7 +5,10 @@
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+import { listCategorizationRules } from "../adapters/rules";
 import { useCategorizationRules } from "../hooks/use-categorization-rules";
+import { getEffectiveCashActivityType } from "./constants";
+import type { CashActivity } from "../types/cash-activity";
 import type { CategorizationRule } from "../types/rule";
 
 const BASE = "/api/money-hub/rule-renames";
@@ -115,4 +118,36 @@ export function useRuleRename(target: RuleTarget): string | null {
     () => renameFor(rules, renames, { notes, activityType, accountId, amount }),
     [rules, renames, notes, activityType, accountId, amount],
   );
+}
+
+/**
+ * For the transaction search: null when no rename holds the words, else a test for a transaction that
+ * shows a new name holding them (owner, 10-05: searching by the renamed name). Any failure reading
+ * the rules or the renames means "no renames", so the search is the usual one.
+ */
+export async function renamedMatcher(
+  needle: string,
+): Promise<((a: CashActivity) => boolean) | null> {
+  try {
+    const res = await fetch(BASE, { credentials: "include" });
+    if (!res.ok) return null;
+    const renames = (await res.json()) as RuleRenames;
+    const words = needle.toLowerCase();
+    const hit = Object.entries(renames ?? {}).filter(
+      ([, name]) => typeof name === "string" && name.toLowerCase().includes(words),
+    );
+    if (!hit.length) return null;
+    const rules = await listCategorizationRules();
+    return (a) => {
+      const name = renameFor(rules, renames, {
+        notes: a.notes,
+        activityType: getEffectiveCashActivityType(a),
+        accountId: a.accountId,
+        amount: a.amount,
+      });
+      return !!name && name.toLowerCase().includes(words);
+    };
+  } catch {
+    return null;
+  }
 }
