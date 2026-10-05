@@ -36,6 +36,7 @@ import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
 import { AccountMark } from "./account-mark";
 import { useNotes } from "../lib/notes";
+import { useRuleRename } from "../lib/rule-renames";
 import { PendingChangeTag } from "./pending-change-tag";
 import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
 import { canLinkCharge, linkCharge } from "../lib/track-charge";
@@ -109,6 +110,7 @@ function TransactionRowImpl({
   const { data: notesById } = useNotes();
   const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id, notesById));
   const bankLine = bankLineFor(bankLines, a);
+  const renamed = useRuleRename({ notes: a.notes, activityType: getEffectiveCashActivityType(a), accountId: a.accountId, amount: a.amount });   // money-hub patch: Rules, Actions, Rename to (lib/rule-renames.ts)
   const note = notesById?.[a.id];
   const returnMark = useReturnMarks().get(a.id);
   const amazon = useAmazonLinks().data?.[a.id];   // money-hub patch: the Amazon order (lib/amazon.ts)
@@ -178,8 +180,8 @@ function TransactionRowImpl({
           )}
           {/* money-hub patch: the owner's merchant logo (lib/merchants.ts). */}
           {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} /> : null}
-          {a.notes != null ? (
-            <TruncatedText text={a.notes} className={cn("text-sm", (bankLine || amazon) && "max-w-[50%] shrink-0")} />
+          {renamed != null || a.notes != null ? (
+            <TruncatedText text={renamed ?? a.notes ?? ""} className={cn("text-sm", (bankLine || amazon) && "max-w-[50%] shrink-0")} />
           ) : (
             <span className="text-muted-foreground text-sm italic">—</span>
           )}

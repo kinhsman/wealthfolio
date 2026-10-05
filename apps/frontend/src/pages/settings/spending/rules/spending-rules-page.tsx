@@ -1,4 +1,7 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { saveRuleRename } from "@/features/spending/lib/rule-renames";
 import { CountsAsRulesSection } from "@/features/spending/components/counts-as-dialog";
 import { useTranslation } from "react-i18next";
 import { Navigate } from "react-router-dom";
@@ -64,6 +67,7 @@ export default function SpendingRulesPage() {
   const compareNames = useNameComparator();
   const { isEnabled, isLoading: settingsLoading, accountIds } = useSpendingSettings();
   const { accounts } = useAccounts({ filterActive: false });
+  const queryClient = useQueryClient();
   const {
     data: rules = [],
     isLoading: rulesLoading,
@@ -173,7 +177,9 @@ export default function SpendingRulesPage() {
   };
 
   const handleDeleteRule = (rule: CategorizationRule) => {
-    remove.mutate(rule.id);
+    remove.mutate(rule.id, {
+      onSuccess: () => void saveRuleRename(queryClient, rule.id, "").catch(() => {}),
+    });
   };
 
   const handleSave = (values: RuleFormValues) => {
@@ -200,7 +206,12 @@ export default function SpendingRulesPage() {
           },
         },
         {
-          onSuccess: () => setVisibleModal(false),
+          onSuccess: () => {
+            setVisibleModal(false);
+            void saveRuleRename(queryClient, selectedRule.id, values.renameTo).catch(() =>
+              toast.error("The new name could not be saved."),
+            );
+          },
         },
       );
     } else {
@@ -220,7 +231,12 @@ export default function SpendingRulesPage() {
           accountId: values.accountId,
         },
         {
-          onSuccess: () => setVisibleModal(false),
+          onSuccess: (created) => {
+            setVisibleModal(false);
+            void saveRuleRename(queryClient, created.id, values.renameTo).catch(() =>
+              toast.error("The new name could not be saved."),
+            );
+          },
         },
       );
     }

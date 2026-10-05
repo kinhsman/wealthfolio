@@ -26,6 +26,7 @@ import { ReturnBadge } from "./return-badge";
 import { AmazonOrderText } from "./amazon-order";
 import { useAmazonLinks } from "../lib/amazon";
 import { useMerchantFor } from "../lib/merchants";
+import { useRuleRename } from "../lib/rule-renames";
 import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
 import { AccountLogo } from "./account-mark";
@@ -97,6 +98,7 @@ function TransactionCardImpl({
   const { data: bankLines } = useBankLines();
   const { data: notesById } = useNotes();
   const merchant = useMerchantFor(a.notes, account, getEffectiveCashActivityType(a), bankWordsFor(bankLines, a.id, notesById));
+  const renamed = useRuleRename({ notes: a.notes, activityType: getEffectiveCashActivityType(a), accountId: a.accountId, amount: a.amount });   // money-hub patch: Rules, Actions, Rename to (lib/rule-renames.ts)
   const bankLine = bankLineFor(bankLines, a);
   const amazon = useAmazonLinks().data?.[a.id];   // money-hub patch: the Amazon order (lib/amazon.ts)
   const note = notesById?.[a.id];
@@ -167,7 +169,7 @@ function TransactionCardImpl({
               </span>
             )}
             <span className="text-foreground min-w-0 flex-1 truncate text-sm font-medium">
-              {a.notes ?? <span className="text-muted-foreground italic">—</span>}
+              {renamed ?? a.notes ?? <span className="text-muted-foreground italic">—</span>}
             </span>
             {/* money-hub patch: sent back, or the refund for something sent back (lib/returns.ts). */}
             <ReturnBadge mark={returnMark} />

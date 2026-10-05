@@ -26,6 +26,7 @@ import type { CategorizationRule, RuleAmountOp, RuleMatchType } from "../types/r
 import { QuickCategorizePopover } from "./quick-categorize-popover";
 import { keywordsToRule, ruleToKeywords } from "../lib/keywords";
 import { KeywordChips, withTyped } from "./keyword-chips";
+import { useRuleRenames } from "../lib/rule-renames";
 
 export interface RuleFormValues {
   name: string;
@@ -39,6 +40,8 @@ export interface RuleFormValues {
   /** Raw input strings; converted to numbers by the save handler. */
   amountValue: string;
   amountValue2: string;
+  /** "Rename to": what matching transactions show instead of the bank text (lib/rule-renames.ts). */
+  renameTo: string;
   priority: number;
   /** null applies the rule to every account; a value scopes it to that account. */
   accountId: string | null;
@@ -82,10 +85,11 @@ export const buildRuleFormSchema = (t: Translate) =>
       amountOp: z.enum(["", "eq", "gt", "gte", "lt", "lte", "between"]),
       amountValue: z.string(),
       amountValue2: z.string(),
+      renameTo: z.string(),
       priority: z.coerce.number().int().min(0),
       accountId: z.string().nullable(),
     })
-    .refine((data) => data.categoryId || data.activityType, {
+    .refine((data) => data.categoryId || data.activityType || data.renameTo.trim(), {
       message: t("spending:rules.categoryOrTypeRequired"),
       path: ["categoryId"],
     })
@@ -172,6 +176,7 @@ export function RuleForm({
 }: RuleFormProps) {
   const { t } = useTranslation();
 
+  const { data: renames } = useRuleRenames();
   const ruleFormSchema = useMemo(() => buildRuleFormSchema(t), [t]);
 
   const AMOUNT_OP_OPTIONS = useMemo<{ value: RuleAmountOp; label: string }[]>(
@@ -229,10 +234,18 @@ export function RuleForm({
       amountOp: rule?.amountOp ?? "",
       amountValue: rule?.amountValue != null ? String(rule.amountValue) : "",
       amountValue2: rule?.amountValue2 != null ? String(rule.amountValue2) : "",
+      renameTo: rule ? (renames?.[rule.id] ?? "") : "",
       priority: rule?.priority ?? 0,
       accountId: rule && !rule.isGlobal ? (rule.accountId ?? null) : null,
     },
   });
+
+  // The renames arrive after the form opens: fill the field then, unless something is typed already.
+  useEffect(() => {
+    if (rule && renames?.[rule.id] && !form.getValues("renameTo")) {
+      form.setValue("renameTo", renames[rule.id]);
+    }
+  }, [rule, renames, form]);
 
   const amountOp = form.watch("amountOp");
 
@@ -528,6 +541,19 @@ export function RuleForm({
               What happens to a transaction that matches.
             </p>
           </div>
+          <FormField
+            control={form.control as never}
+            name="renameTo"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Rename to</FormLabel>
+                <FormControl>
+                  <Input placeholder="Leave empty to keep the bank's name" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           <div className="grid grid-cols-[1fr_7rem] gap-2">
             <FormField
               control={form.control as never}

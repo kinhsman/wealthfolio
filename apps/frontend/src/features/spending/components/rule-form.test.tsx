@@ -15,6 +15,7 @@ const baseValues: RuleFormValues = {
   amountOp: "",
   amountValue: "",
   amountValue2: "",
+  renameTo: "",
   priority: 0,
   accountId: null,
 };
@@ -136,5 +137,16 @@ describe("amount condition combined with account scope", () => {
 
   it("accepts a scoped rule with no amount condition", () => {
     expect(schema.safeParse({ ...baseValues, accountId: "acct-1" }).success).toBe(true);
+  });
+});
+
+describe("rule form rename", () => {
+  it("accepts a rename-only rule and still rejects a rule that does nothing", () => {
+    expect(
+      schema.safeParse({ ...baseValues, categoryId: "", renameTo: "Netflix" }).success,
+    ).toBe(true);
+    expect(errorPaths({ ...baseValues, categoryId: "", renameTo: "  " })).toContainEqual([
+      "categoryId",
+    ]);
   });
 });
