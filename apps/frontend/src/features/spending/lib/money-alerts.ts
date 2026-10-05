@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 export type BigAlertKind = "out" | "in";
 export type BudgetAlertKind = "near" | "over";
-export type ConnectionAlertKind = "signIn" | "broken" | "back";
+export type ConnectionAlertKind = "signIn" | "broken" | "back" | "expiring";
 export type RecapAlertKind = "weekly";
 export type CardAlertKind = "dueSoon" | "overdue";
 export type LoanAlertKind = "renewSoon" | "renewToday";
@@ -81,6 +81,11 @@ export const CONNECTION_ALERT_LABELS: Record<ConnectionAlertKind, { title: strin
   },
   broken: { title: "Keeps failing", text: "A bank has not synced for 12 hours for another reason." },
   back: { title: "Back again", text: "Once it works again, after one of the alerts above." },
+  // Owner, 10-05: a bank's permission has an end date; told 14, 7, 3 and 1 days ahead (money-hub service).
+  expiring: {
+    title: "Sign-in coming up",
+    text: "A bank's permission to share ends soon; told 14, 7, 3 and 1 days ahead.",
+  },
 };
 
 export const RECAP_ALERT_LABELS: Record<RecapAlertKind, { title: string; text: string }> = {
