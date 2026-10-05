@@ -251,10 +251,10 @@ export function storeName(store: string | null): string {
 // receipts"). Done in the browser over the receipts the page already holds: no server call, nothing to build.
 
 /** Lower case, no accents ("Phở" is found by "pho"). */
-const plain = (s: string) => s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d");
+export const plain = (s: string) => s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d");
 
 /** A day the way it can be typed: 2026-10-04, Oct 4, 2026, October 4, 2026, 10/4/2026, 10/04/2026. */
-function dayWords(iso: string | null | undefined): string[] {
+export function dayWords(iso: string | null | undefined): string[] {
   const ymd = iso?.slice(0, 10);
   if (!ymd) return [];
   const d = new Date(`${ymd}T12:00:00Z`);
@@ -265,7 +265,7 @@ function dayWords(iso: string | null | undefined): string[] {
 }
 
 /** An amount the way it can be typed: 1234.5 -> 1234.50, $1,234.50 (a discount also without its minus). */
-function moneyWords(n: number | null | undefined): string[] {
+export function moneyWords(n: number | null | undefined): string[] {
   if (n == null || !Number.isFinite(n)) return [];
   const abs = Math.abs(n);
   return [n.toFixed(2), abs.toFixed(2), `$${abs.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`];

@@ -27,6 +27,7 @@ export default defineConfig({
         "credit-cards": path.resolve(__dirname, "preview/credit-cards.html"),
         "free-cash": path.resolve(__dirname, "preview/free-cash.html"),
         taxes: path.resolve(__dirname, "preview/taxes.html"),
+        hsa: path.resolve(__dirname, "preview/hsa.html"),
         "email-banks": path.resolve(__dirname, "preview/email-banks.html"),
         pending: path.resolve(__dirname, "preview/pending.html"),
         returns: path.resolve(__dirname, "preview/returns.html"),

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" class="overflow-x-hidden">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Preview: HSA receipts</title>
+  </head>
+  <body class="overflow-x-hidden font-sans">
+    <script>
+      // ?theme=dark|light picks the look, like the app's own first-paint script.
+      (function () {
+        var theme = new URLSearchParams(location.search).get("theme") || "light";
+        document.documentElement.classList.add(theme === "dark" ? "dark" : "light");
+        // ?font=mono|serif tries the app's other font settings (the owner's is sans).
+        var font = new URLSearchParams(location.search).get("font");
+        if (font === "mono" || font === "serif") {
+          document.body.classList.replace("font-sans", "font-" + font);
+        }
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/preview/hsa.tsx"></script>
+  </body>
+</html>

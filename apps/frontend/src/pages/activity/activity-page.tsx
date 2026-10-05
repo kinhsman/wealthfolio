@@ -676,6 +676,13 @@ const ActivityPage = () => {
             testId: "receipts-action",
             onClick: () => navigate("/spending/receipts"),
           },
+          // money-hub patch: medical receipts for HSA reimbursement (lib/hsa.ts).
+          {
+            icon: Icons.Stethoscope,
+            label: "HSA receipts",
+            testId: "hsa-action",
+            onClick: () => navigate("/spending/hsa"),
+          },
         ],
       },
     ],
@@ -704,6 +711,13 @@ const ActivityPage = () => {
               {receiptsToReview}
             </span>
           ) : null}
+        </Link>
+      </Button>
+      {/* money-hub patch: the HSA receipts page, beside Receipts (lib/hsa.ts). */}
+      <Button asChild size={isMobileViewport ? "icon" : "sm"} variant="outline" title="HSA receipts" aria-label="HSA receipts">
+        <Link to="/spending/hsa">
+          <Icons.Stethoscope className={isMobileViewport ? "size-4" : "mr-1.5 size-4"} />
+          {isMobileViewport ? null : "HSA"}
         </Link>
       </Button>
       {/* Ask AI to categorize uncategorized transactions */}

@@ -3,6 +3,7 @@
 // View and Download sit in a receipt's action row (receipt-panel.tsx); the picture itself is shown beside the
 // lines on the Receipts page, so what the AI read can be checked against the receipt without leaving it.
 // A PDF is turned into one picture in the browser (lib/receipt-pdf.ts), then sent like a snapped photo.
+// `urlOf` lets another page (the HSA receipts page) show its own pictures with the same View, Download and panel.
 import { useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -13,11 +14,13 @@ import { hasPicture, isPdf, pdfToPicture, receiptFileName } from "../lib/receipt
 import { photoUrl, storeName, type Receipt } from "../lib/receipts";
 
 type Pictured = Pick<Receipt, "id" | "photos" | "source" | "store" | "date" | "total">;
+/** Where picture `n` of a receipt is served (the Receipts page's by default). */
+type PictureUrl = (id: string, n: number) => string;
 
 const link = "text-primary inline-flex items-center gap-1 underline-offset-4 hover:underline";
 
 /** View (the picture, full size, in a new tab) and Download (the file), for each photo of the receipt. */
-export function ReceiptFileLinks({ receipt: r }: { receipt: Pictured }) {
+export function ReceiptFileLinks({ receipt: r, urlOf = photoUrl }: { receipt: Pictured; urlOf?: PictureUrl }) {
   if (!hasPicture(r)) return null;
   const count = Math.max(1, r.photos);
   return (
@@ -25,7 +28,7 @@ export function ReceiptFileLinks({ receipt: r }: { receipt: Pictured }) {
       {Array.from({ length: count }, (_, n) => (
         <span key={n} className="flex items-center gap-3">
           <a
-            href={photoUrl(r.id, n)}
+            href={urlOf(r.id, n)}
             target="_blank"
             rel="noreferrer"
             className={link}
@@ -35,7 +38,7 @@ export function ReceiptFileLinks({ receipt: r }: { receipt: Pictured }) {
             View{count > 1 ? ` ${n + 1}` : ""}
           </a>
           <a
-            href={photoUrl(r.id, n)}
+            href={urlOf(r.id, n)}
             download={receiptFileName(r, n, count)}
             className={link}
             title="Save the receipt picture"
@@ -53,9 +56,11 @@ export function ReceiptFileLinks({ receipt: r }: { receipt: Pictured }) {
 export function ReceiptPhotoPanel({
   receipt: r,
   className,
+  urlOf = photoUrl,
 }: {
   receipt: Pictured;
   className?: string;
+  urlOf?: PictureUrl;
 }) {
   if (!hasPicture(r)) return null;
   return (
@@ -68,14 +73,14 @@ export function ReceiptPhotoPanel({
       {Array.from({ length: Math.max(1, r.photos) }, (_, n) => (
         <a
           key={n}
-          href={photoUrl(r.id, n)}
+          href={urlOf(r.id, n)}
           target="_blank"
           rel="noreferrer"
           title="Open the receipt picture full size"
           className="block"
         >
           <img
-            src={photoUrl(r.id, n)}
+            src={urlOf(r.id, n)}
             alt={`Receipt ${storeName(r.store)}${r.photos > 1 ? `, photo ${n + 1}` : ""}`}
             className="w-full rounded bg-white"
             loading="lazy"
