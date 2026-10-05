@@ -38,12 +38,14 @@ export function RuleEditModal({
   const { t } = useTranslation();
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="sm:max-w-[640px]">
+      <DialogContent className="gap-3 p-4 sm:max-h-[92dvh] sm:max-w-[560px] sm:overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {rule ? t("spending:rules.editTitle") : t("spending:rules.addTitle")}
           </DialogTitle>
-          <DialogDescription>{t("spending:rules.editDescription")}</DialogDescription>
+          <DialogDescription className="sr-only">
+            {t("spending:rules.editDescription")}
+          </DialogDescription>
         </DialogHeader>
         <RuleForm
           rule={rule}
