@@ -13,7 +13,7 @@ import {
 import type { ActivityDetails } from "@/lib/types";
 import { restrictionAllowsType } from "@/lib/activity-restrictions";
 import { isLiabilityAccountType } from "@/lib/constants";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityTypePicker } from "./activity-type-picker";
 import { ActivityFormRenderer } from "./activity-form-renderer";
@@ -45,6 +45,10 @@ interface ActivityFormProps {
   onClose?: () => void;
   /** When true, hides the activity type picker (use when type is already determined) */
   hidePicker?: boolean;
+  /** money-hub patch: a field of the host page's own, shown above the form (the Spending Category line). */
+  extraFields?: ReactNode;
+  /** money-hub patch: runs once the activity is saved (not on Cancel), just before onClose. */
+  onSaved?: () => void;
 }
 
 export function ActivityForm({
@@ -54,6 +58,8 @@ export function ActivityForm({
   open,
   onClose,
   hidePicker,
+  extraFields,
+  onSaved,
 }: ActivityFormProps) {
   const { t } = useTranslation();
   // Derive the editing state and stored type from activity prop
@@ -109,7 +115,12 @@ export function ActivityForm({
     accounts: filteredAccounts,
     activity,
     selectedType: effectiveSelectedType,
-    onSuccess: onClose,
+    onSuccess: onSaved
+      ? () => {
+          onSaved();
+          onClose?.();
+        }
+      : onClose,
   });
 
   // Handle sheet open change - reset state when closing
@@ -159,6 +170,8 @@ export function ActivityForm({
               </span>
             </div>
           )}
+
+          {extraFields}
 
           {/* Activity Type Picker - when creating, and when editing a row whose
               stored type has no editor of its own */}

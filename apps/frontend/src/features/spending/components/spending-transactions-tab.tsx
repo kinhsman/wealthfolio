@@ -43,6 +43,7 @@ import {
 } from "@wealthfolio/ui";
 
 import { CashActivityForm } from "./cash-activity-form";
+import { TransferCategoryField, type TransferPick } from "./transfer-category-field";
 import { ActivityForm } from "@/pages/activity/components/activity-form";
 import { MobileActivityForm } from "@/pages/activity/components/mobile-forms/mobile-activity-form";
 import { TransferMatchDialog } from "@/pages/activity/components/transfer-match-dialog";
@@ -69,6 +70,7 @@ import {
 } from "../lib/constants";
 import { cashActivityFlowMetadata } from "../lib/cash-activity-form-utils";
 import {
+  getTransactionDisplay,
   isTransferCashActivity,
   stableArr,
   toRowVM,
@@ -90,8 +92,7 @@ import {
 import { useEventTypes, useSpendingEvents } from "../hooks/use-spending-events";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { invalidateSpendingCaches } from "../lib/invalidation";
-import { offerRule } from "../lib/rule-offer";
-import { askWhichOne } from "../lib/track-charge";
+import { offerAfterPicks } from "../lib/offer-after-picks";
 import { subscriptionCharges, subscriptionFilterOptions, useSubscriptions } from "../lib/subscriptions";
 import type {
   CashActivitySearchRequest,
@@ -261,6 +262,14 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
     const [transferFormActivity, setTransferFormActivity] = useState<
       Partial<ActivityDetails> | undefined
     >();
+    // money-hub patch: the Category line of a transfer's Edit window (components/transfer-category-field.tsx).
+    const [transferEdit, setTransferEdit] = useState<{
+      row: TransactionRowVM;
+      scope: QuickCategorizeScope;
+      pick: TransferPick | null;
+    } | null>(null);
+    const transferEditRef = useRef(transferEdit);
+    transferEditRef.current = transferEdit;
     const [transferMatchDialog, setTransferMatchDialog] = useState<{
       open: boolean;
       mode: "link" | "unlink";
@@ -457,6 +466,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
     const handleTransferFormClose = useCallback(() => {
       setShowTransferForm(false);
       setTransferFormActivity(undefined);
+      setTransferEdit(null);
     }, []);
     const { data: events = [] } = useSpendingEvents();
     const { data: eventTypes = [] } = useEventTypes();
@@ -820,12 +830,21 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
             ids.map((activityId) => ({ activityId, taxonomyId, categoryId })),
           );
           toast.success(t("spending:txTab.categorizedCount", { count: result.length }));
+          // money-hub patch: the same follow-up as a pick in the row's own column (lib/offer-after-picks.ts).
+          const categoryName = allCategories.get(categoryId)?.name ?? "that category";
+          offerAfterPicks(
+            ids.map((id) => {
+              const activity = rows.find((r) => r.activity.id === id)?.activity;
+              return { activity, notes: activity?.notes, taxonomyId, categoryId, categoryName };
+            }),
+            Array.from(allCategories.values()),
+          );
         } catch {
           // Hook already toasts on error.
         }
         setSelectedRowIds(new Set());
       },
-      [selectedRowIds, bulkAssignMutation, t],
+      [selectedRowIds, bulkAssignMutation, t, rows, allCategories],
     );
 
     const handleBulkSetEvent = useCallback(
@@ -862,19 +881,14 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
           { activityId, taxonomyId, categoryId },
           {
             // money-hub patch: a category picked by hand offers a rule for transactions like it;
-            // a subscription or bill category first asks which one it is (lib/track-charge.ts).
+            // a subscription or bill category first asks which one it is (lib/offer-after-picks.ts).
             onSuccess: () => {
               const activity = rows.find((r) => r.activity.id === activityId)?.activity;
               const categoryName = allCategories.get(categoryId)?.name ?? "that category";
-              const rule = () => void offerRule({ notes: activity?.notes, taxonomyId, categoryId, categoryName });
-              const asked = askWhichOne({
-                activity,
-                categoryId,
-                categories: Array.from(allCategories.values()),
-                categoryName,
-                after: rule,
-              });
-              if (!asked) rule();
+              offerAfterPicks(
+                [{ activity, notes: activity?.notes, taxonomyId, categoryId, categoryName }],
+                Array.from(allCategories.values()),
+              );
             },
           },
         );
@@ -914,16 +928,52 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
           setEditingActivity(undefined);
           setShowForm(false);
           setTransferFormActivity(toActivityDetails(row, accountById.get(row.activity.accountId)));
+          // money-hub patch: a transfer that counts in Spending has a Category in its list row; its Edit
+          // window gets the same line (owner, 10-05). A move between his own accounts stays without.
+          const shown = getTransactionDisplay(row.activity, accountById.get(row.activity.accountId)?.accountType);
+          setTransferEdit(
+            shown.isNeutral
+              ? null
+              : {
+                  row,
+                  scope: shown.isIncome ? "income" : shown.isSaving ? "saving" : "expense",
+                  pick: row.category ? { taxonomyId: row.category.taxonomyId, categoryId: row.category.id } : null,
+                },
+          );
           setShowTransferForm(true);
           return;
         }
         setTransferFormActivity(undefined);
         setShowTransferForm(false);
+        setTransferEdit(null);
         setEditingActivity(row);
         setShowForm(true);
       },
       [accountById],
     );
+    // money-hub patch: the transfer is saved; now the Category chosen in its Edit window, with the
+    // same offer a pick in the row's column brings.
+    const handleTransferSaved = useCallback(() => {
+      const edit = transferEditRef.current;
+      if (!edit) return;
+      const was = edit.row.category;
+      if (edit.pick) {
+        if (edit.pick.categoryId !== was?.id) {
+          handleAssignCategory(edit.row.activity.id, edit.pick.taxonomyId, edit.pick.categoryId);
+        }
+      } else if (was) {
+        handleClearCategory(edit.row.activity.id, was.taxonomyId);
+      }
+    }, [handleAssignCategory, handleClearCategory]);
+    const transferCategoryField = transferEdit ? (
+      <TransferCategoryField
+        value={transferEdit.pick}
+        scope={transferEdit.scope}
+        categories={allCategories}
+        onChange={(pick) => setTransferEdit((e) => (e ? { ...e, pick } : e))}
+      />
+    ) : undefined;
+
     const handleDeleteRow = useCallback((row: TransactionRowVM) => {
       const activityType = getEffectiveCashActivityType(row.activity);
       setDeletingIds([row.activity.id]);
@@ -1459,6 +1509,8 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
               open={showTransferForm}
               onClose={handleTransferFormClose}
               startOnDetails
+              extraFields={transferCategoryField}
+              onSaved={transferEdit ? handleTransferSaved : undefined}
             />
           ) : (
             <ActivityForm
@@ -1468,6 +1520,8 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
               open={showTransferForm}
               onClose={handleTransferFormClose}
               hidePicker
+              extraFields={transferCategoryField}
+              onSaved={transferEdit ? handleTransferSaved : undefined}
             />
           ))}
 

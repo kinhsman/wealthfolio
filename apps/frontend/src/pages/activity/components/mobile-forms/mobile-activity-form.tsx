@@ -27,7 +27,7 @@ import { buildOccSymbol, isValidOptionExpiration, parseOccSymbol } from "@/lib/o
 import { generateId } from "@/lib/id";
 import type { ActivityCreate, ActivityDetails, ActivityUpdate } from "@/lib/types";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useForm, type Resolver, type SubmitHandler } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -49,6 +49,10 @@ interface MobileActivityFormProps {
   open?: boolean;
   onClose?: () => void;
   startOnDetails?: boolean;
+  /** money-hub patch: a field of the host page's own, shown on the details step (the Spending Category line). */
+  extraFields?: ReactNode;
+  /** money-hub patch: runs once the activity is saved (not on Cancel), just before onClose. */
+  onSaved?: () => void;
 }
 
 export interface TransferValidationInput {
@@ -296,6 +300,8 @@ export function MobileActivityForm({
   open,
   onClose,
   startOnDetails,
+  extraFields,
+  onSaved,
 }: MobileActivityFormProps) {
   const { t } = useTranslation();
   // Sync stores a needs-review row as UNKNOWN, which has no editor here. Jumping
@@ -315,7 +321,14 @@ export function MobileActivityForm({
     updateActivityMutation,
     saveActivitiesMutation,
     saveInternalTransferPairMutation,
-  } = useActivityMutations(onClose);
+  } = useActivityMutations(
+    onSaved
+      ? () => {
+          onSaved();
+          onClose?.();
+        }
+      : onClose,
+  );
 
   const defaultValues = useMemo<Partial<NewActivityFormValues>>(() => {
     // Derive transfer mode from existing activity data
@@ -958,6 +971,7 @@ export function MobileActivityForm({
           <div className="p-4">
             <Form {...form}>
               <form onSubmit={handleValidatedSubmit} className="flex h-full flex-col">
+                {currentStep === 2 && extraFields ? <div className="mb-4">{extraFields}</div> : null}
                 <MobileActivitySteps
                   currentStep={currentStep}
                   accounts={effectiveAccounts}

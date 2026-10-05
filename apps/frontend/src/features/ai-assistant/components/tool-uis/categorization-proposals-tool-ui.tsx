@@ -1,6 +1,7 @@
 import { updateToolResult } from "@/adapters";
 import { QuickCategorizePopover } from "@/features/spending/components/quick-categorize-popover";
 import { useBulkAssignCategories } from "@/features/spending/hooks/use-cash-activities";
+import { offerAfterPicks } from "@/features/spending/lib/offer-after-picks";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
 import { useSettingsContext } from "@/lib/settings-provider";
 import { cn } from "@/lib/utils";
@@ -252,6 +253,20 @@ function CategorizationProposalsContentImpl({
 
       setLocalSubmitted(true);
       setLocalAppliedCount(applied.length);
+
+      // money-hub patch: a category the owner picked or changed by hand here gets the same offer as one
+      // picked on the Transactions page (lib/offer-after-picks.ts); the Assistant's own picks do not.
+      offerAfterPicks(
+        accepted
+          .filter((r) => r.source === "manual")
+          .map((r) => ({
+            notes: r.notes,
+            taxonomyId: r.taxonomyId,
+            categoryId: r.categoryId,
+            categoryName: categoryPathMap.get(r.categoryId)?.name ?? "that category",
+          })),
+        [],
+      );
 
       if (threadId && toolCallId) {
         try {
