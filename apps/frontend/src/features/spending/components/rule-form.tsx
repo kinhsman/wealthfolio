@@ -251,7 +251,10 @@ export function RuleForm({
   const keywordsNow = withTyped(words, typing);
   // The form checks a pattern is there; with chips, the first word stands for it.
   useEffect(() => {
-    if (matchTypeNow === "contains") form.setValue("pattern", keywordsNow[0] ?? "", { shouldValidate: form.formState.isSubmitted });
+    if (matchTypeNow === "contains")
+      form.setValue("pattern", keywordsNow[0] ?? "", {
+        shouldValidate: form.formState.isSubmitted,
+      });
   }, [matchTypeNow, keywordsNow.join("\u0001")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSubmit = (values: RuleFormValues) => {
@@ -290,66 +293,80 @@ export function RuleForm({
           )}
         />
 
-        <FormField
-          control={form.control as never}
-          name="matchType"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("spending:rules.matchType")}</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder={t("spending:rules.selectMatchType")} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {MATCH_TYPE_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <section className="space-y-4 rounded-md border p-4">
+          <div>
+            <h3 className="text-sm font-semibold">Matching conditions</h3>
+            <p className="text-muted-foreground text-xs">
+              A transaction must meet every condition you fill in.
+            </p>
+          </div>
+          <FormField
+            control={form.control as never}
+            name="matchType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("spending:rules.matchType")}</FormLabel>
+                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t("spending:rules.selectMatchType")} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {MATCH_TYPE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        <FormField
-          control={form.control as never}
-          name="pattern"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("spending:rules.pattern")}</FormLabel>
-              {matchTypeNow === "contains" ? (
-                <>
-                  <KeywordChips words={words} onChange={setWords} typing={typing} onTyping={setTyping} placeholder={t("spending:rules.patternPlaceholder")} />
-                  <FormDescription>Any of these words matches. Press Enter to add another.</FormDescription>
-                  <FormMessage />
-                </>
-              ) : (
-              <>
-              <FormControl>
-                <Input
-                  placeholder={
-                    form.watch("matchType") === "regex"
-                      ? t("spending:rules.patternPlaceholderRegex")
-                      : t("spending:rules.patternPlaceholder")
-                  }
-                  {...field}
-                />
-              </FormControl>
-              {form.watch("matchType") === "regex" && (
-                <FormDescription>{t("spending:rules.patternRegexHint")}</FormDescription>
-              )}
-              <FormMessage />
-              </>
-              )}
-            </FormItem>
-          )}
-        />
+          <FormField
+            control={form.control as never}
+            name="pattern"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("spending:rules.pattern")}</FormLabel>
+                {matchTypeNow === "contains" ? (
+                  <>
+                    <KeywordChips
+                      words={words}
+                      onChange={setWords}
+                      typing={typing}
+                      onTyping={setTyping}
+                      placeholder={t("spending:rules.patternPlaceholder")}
+                    />
+                    <FormDescription>
+                      Any of these words matches. Press Enter to add another.
+                    </FormDescription>
+                    <FormMessage />
+                  </>
+                ) : (
+                  <>
+                    <FormControl>
+                      <Input
+                        placeholder={
+                          form.watch("matchType") === "regex"
+                            ? t("spending:rules.patternPlaceholderRegex")
+                            : t("spending:rules.patternPlaceholder")
+                        }
+                        {...field}
+                      />
+                    </FormControl>
+                    {form.watch("matchType") === "regex" && (
+                      <FormDescription>{t("spending:rules.patternRegexHint")}</FormDescription>
+                    )}
+                    <FormMessage />
+                  </>
+                )}
+              </FormItem>
+            )}
+          />
 
-        <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control as never}
             name="activityType"
@@ -381,6 +398,138 @@ export function RuleForm({
             )}
           />
 
+          <div className="space-y-2">
+            <div className="flex items-baseline gap-1.5">
+              <FormLabel>{t("spending:rules.amountLabel")}</FormLabel>
+              <span className="text-muted-foreground text-xs">
+                {t("spending:rules.amountOptional")}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control as never}
+                name="amountOp"
+                render={({ field }) => (
+                  <FormItem>
+                    <Select
+                      onValueChange={(val) => field.onChange(val === NONE ? "" : val)}
+                      value={field.value || NONE}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NONE}>{t("spending:rules.amountAnyAmount")}</SelectItem>
+                        {AMOUNT_OP_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {amountOp && amountOp !== "between" && (
+                <FormField
+                  control={form.control as never}
+                  name="amountValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Input type="number" min={0} step="any" inputMode="decimal" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+            {amountOp === "between" && (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control as never}
+                  name="amountValue"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-muted-foreground text-xs font-normal">
+                        {t("spending:rules.amountFrom")}
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="number" min={0} step="any" inputMode="decimal" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control as never}
+                  name="amountValue2"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-muted-foreground text-xs font-normal">
+                        {t("spending:rules.amountTo")}
+                      </FormLabel>
+                      <FormControl>
+                        <Input type="number" min={0} step="any" inputMode="decimal" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+            {amountOp && (
+              <FormDescription>
+                {t("spending:rules.amountHint")}
+                {amountOp === "between" ? ` ${t("spending:rules.amountBetweenHint")}` : ""}
+              </FormDescription>
+            )}
+          </div>
+
+          <FormField
+            control={form.control as never}
+            name="accountId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("spending:rules.scopeLabel")}</FormLabel>
+                <Select
+                  onValueChange={(val) => field.onChange(val === ALL_ACCOUNTS ? null : val)}
+                  value={(field.value as string | null) ?? ALL_ACCOUNTS}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value={ALL_ACCOUNTS}>
+                      {t("common:component.all_accounts")}
+                    </SelectItem>
+                    {scopeOptions.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>{t("spending:rules.scopeHint")}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </section>
+
+        <section className="space-y-4 rounded-md border p-4">
+          <div>
+            <h3 className="text-sm font-semibold">Actions</h3>
+            <p className="text-muted-foreground text-xs">
+              What happens to a transaction that matches.
+            </p>
+          </div>
           <FormField
             control={form.control as never}
             name="categoryId"
@@ -443,144 +592,22 @@ export function RuleForm({
               );
             }}
           />
-        </div>
 
-        <div className="space-y-2">
-          <div className="flex items-baseline gap-1.5">
-            <FormLabel>{t("spending:rules.amountLabel")}</FormLabel>
-            <span className="text-muted-foreground text-xs">
-              {t("spending:rules.amountOptional")}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <FormField
-              control={form.control as never}
-              name="amountOp"
-              render={({ field }) => (
-                <FormItem>
-                  <Select
-                    onValueChange={(val) => field.onChange(val === NONE ? "" : val)}
-                    value={field.value || NONE}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={NONE}>{t("spending:rules.amountAnyAmount")}</SelectItem>
-                      {AMOUNT_OP_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {amountOp && amountOp !== "between" && (
-              <FormField
-                control={form.control as never}
-                name="amountValue"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Input type="number" min={0} step="any" inputMode="decimal" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-          </div>
-          {amountOp === "between" && (
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control as never}
-                name="amountValue"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs font-normal">
-                      {t("spending:rules.amountFrom")}
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="number" min={0} step="any" inputMode="decimal" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control as never}
-                name="amountValue2"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-muted-foreground text-xs font-normal">
-                      {t("spending:rules.amountTo")}
-                    </FormLabel>
-                    <FormControl>
-                      <Input type="number" min={0} step="any" inputMode="decimal" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          )}
-          {amountOp && (
-            <FormDescription>
-              {t("spending:rules.amountHint")}
-              {amountOp === "between" ? ` ${t("spending:rules.amountBetweenHint")}` : ""}
-            </FormDescription>
-          )}
-        </div>
-
-        <FormField
-          control={form.control as never}
-          name="accountId"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("spending:rules.scopeLabel")}</FormLabel>
-              <Select
-                onValueChange={(val) => field.onChange(val === ALL_ACCOUNTS ? null : val)}
-                value={(field.value as string | null) ?? ALL_ACCOUNTS}
-              >
+          <FormField
+            control={form.control as never}
+            name="priority"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("spending:rules.priorityLabel")}</FormLabel>
                 <FormControl>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <Input type="number" min={0} {...field} />
                 </FormControl>
-                <SelectContent>
-                  <SelectItem value={ALL_ACCOUNTS}>{t("common:component.all_accounts")}</SelectItem>
-                  {scopeOptions.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      {account.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormDescription>{t("spending:rules.scopeHint")}</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control as never}
-          name="priority"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("spending:rules.priorityLabel")}</FormLabel>
-              <FormControl>
-                <Input type="number" min={0} {...field} />
-              </FormControl>
-              <FormDescription>{t("spending:rules.priorityHint")}</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                <FormDescription>{t("spending:rules.priorityHint")}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </section>
 
         <div className="flex justify-end gap-2 pt-4">
           <Button type="button" variant="outline" onClick={onCancel}>
