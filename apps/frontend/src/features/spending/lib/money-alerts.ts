@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 export type BigAlertKind = "out" | "in";
 export type BudgetAlertKind = "near" | "over";
-export type ConnectionAlertKind = "signIn" | "broken" | "back" | "expiring";
+export type ConnectionAlertKind = "signIn" | "broken" | "back" | "expiring" | "replaced";
 export type RecapAlertKind = "weekly";
 export type CardAlertKind = "dueSoon" | "overdue";
 export type LoanAlertKind = "renewSoon" | "renewToday";
@@ -85,6 +85,11 @@ export const CONNECTION_ALERT_LABELS: Record<ConnectionAlertKind, { title: strin
   expiring: {
     title: "Sign-in coming up",
     text: "A bank's permission to share ends soon; told 14, 7, 3 and 1 days ahead.",
+  },
+  // Owner, 10-05: a card the bank replaced is folded into the old one automatically; told once.
+  replaced: {
+    title: "Card replaced",
+    text: "The bank swapped a card and the app joined the new one to the old: told once, with what matched.",
   },
 };
 

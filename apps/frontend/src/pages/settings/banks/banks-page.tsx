@@ -20,6 +20,11 @@ interface BankAccount {
   id: string; name: string; plaidName: string; renamed: boolean; officialName: string | null; mask: string | null; type: string; subtype: string | null;
   balance: number | null; currency: string; include: boolean; supported: boolean; balanceOnly: boolean; wfAccountId: string | null;
   txns: number; firstDate: string | null;
+  /** A card the bank replaced (money-hub service): the old one says by which, the new one what it took over. */
+  replacedBy?: { mask: string | null } | null;
+  replaces?: { mask: string | null; at: string; matched: number; kept: number; fresh: number } | null;
+  /** A new card that looks like a vanished one but shares no charges with it: offered a Link. */
+  maybeReplaces?: { mask: string | null } | null;
 }
 interface BankItem {
   id: string; institution: { name: string; plaidName: string; logoUrl: string | null }; env: string; error: string | null; needsLogin: boolean;
@@ -52,6 +57,7 @@ const api = {
   include: (item: string, id: string, include: boolean) =>
     call<BanksStatus>("PUT", `/accounts/${encodeURIComponent(item)}/${encodeURIComponent(id)}`, { include }),
   sync: () => call<BanksStatus>("POST", "/sync", {}),
+  link: (item: string, id: string) => call<BanksStatus>("POST", `/accounts/${encodeURIComponent(item)}/${encodeURIComponent(id)}/link`, {}),
   renameBank: (item: string, name: string) => call<BanksStatus>("PUT", `/items/${encodeURIComponent(item)}/name`, { name }),
   renameAccount: (item: string, id: string, name: string) =>
     call<BanksStatus>("PUT", `/accounts/${encodeURIComponent(item)}/${encodeURIComponent(id)}/name`, { name }),
@@ -327,7 +333,17 @@ export default function BanksSettingsPage() {
                 <p className="text-warning px-4 pb-3 text-xs">Card due dates: {item.liabilitiesError}</p>
               )}
               <div className="divide-y border-t">
-                {item.accounts.map((a) => (
+                {item.accounts.map((a) => (a.replacedBy ? (
+                  // money-hub patch (owner, 10-05): the bank replaced this card; its history lives on in the new one.
+                  <div key={a.id} className="flex items-center gap-3 px-4 py-3 opacity-70">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{a.plaidName}{a.mask ? ` ••${a.mask}` : ""}</div>
+                      <div className="text-muted-foreground truncate text-xs">
+                        Replaced by ••{a.replacedBy.mask ?? "the new card"}. History lives on there.
+                      </div>
+                    </div>
+                  </div>
+                ) : (
                   <div key={a.id} className="flex items-center gap-3 px-4 py-3">
                     <div className="min-w-0 flex-1">
                       <InlineName value={a.renamed ? a.name : `${a.name}${a.mask ? ` ••${a.mask}` : ""}`}
@@ -337,12 +353,24 @@ export default function BanksSettingsPage() {
                           name ? `Renamed to ${name}.` : "Back to the bank's name.")} />
                       <div className="text-muted-foreground truncate text-xs">
                         {[kindOf(a),
+                          a.replaces ? `Took over ••${a.replaces.mask ?? "the old card"}` : "",
                           !a.supported ? "Not brought in (loans stay out)" :
                             !a.include ? "Not in net worth" :
                               a.balanceOnly ? (a.firstDate ? `In net worth since ${monthYear(a.firstDate)}` : "In net worth, first update running")
                                 : a.firstDate ? `In net worth, ${a.txns} transactions since ${monthYear(a.firstDate)}` : "In net worth, first update running",
-                        ].join(" · ")}
+                        ].filter(Boolean).join(" · ")}
                       </div>
+                      {a.maybeReplaces && (
+                        <div className="mt-1 flex items-center gap-2 text-xs">
+                          <span className="text-muted-foreground">Same card as ••{a.maybeReplaces.mask ?? "the old one"}?</span>
+                          <button type="button" className={`${btn} ${cta} h-7 px-2`} disabled={!!busy}
+                            onClick={() => run(`link:${item.id}/${a.id}`, () => api.link(item.id, a.id),
+                              `Linked: this card carries on ••${a.maybeReplaces?.mask ?? "the old one"}'s history.`)}>
+                            {busy === `link:${item.id}/${a.id}` ? <Icons.Spinner className="size-3.5 animate-spin" /> : null}
+                            Link them
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <div className="text-sm tabular-nums">{money(a.type === "credit" && a.balance != null ? -a.balance : a.balance, a.currency)}</div>
                     {busy === `${item.id}/${a.id}`
@@ -351,7 +379,7 @@ export default function BanksSettingsPage() {
                           onCheckedChange={(v) => run(`${item.id}/${a.id}`, () => api.include(item.id, a.id, v),
                             v ? `${a.name} is in your net worth, with its transactions.` : `${a.name} is out of your net worth. Its history is kept.`)} />}
                   </div>
-                ))}
+                )))}
               </div>
               {/* money-hub patch: more accounts from the same login, ticked in Plaid's window (update
                   mode with account selection: the same link, none of the 10 spent). */}
