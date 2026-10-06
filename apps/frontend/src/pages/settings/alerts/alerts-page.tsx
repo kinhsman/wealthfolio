@@ -1,6 +1,6 @@
 // money-hub patch: Settings, Connections, Alerts. Where the money app's alerts go (owner, 2026-10-01:
-// "where is ntfy config in the settings page?"): Discord and the phone through ntfy. Every alert goes
-// to every place set up here, the same message. The money-hub service keeps it
+// "where is ntfy config in the settings page?"): Discord, the phone through ntfy, and the app on the
+// phone's home screen (Web Push, owner 10-06). Every alert goes to every place set up here, the same message. The money-hub service keeps it
 // (/api/money-hub/alerts, server/drive-backup/lib/alerts.js); secrets never come back to the page.
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -53,14 +53,20 @@ import {
 } from "@/features/spending/lib/money-alerts";
 import { cn } from "@/lib/utils";
 import { SettingsHeader } from "../settings-header";
+import { isIos, isStandalone, phoneStep, pushSupported, turnOffHere, turnOnHere, useThisDevice } from "./phone-app";
 
 const BASE = "/api/money-hub/alerts";
 
 interface AlertsStatus {
   discord: { on: boolean; shown: string | null };
   ntfy: { on: boolean; server: string; topic: string; hasToken: boolean; priority: number };
-  last: { at: string; title: string; discord: boolean; ntfy: boolean } | null;
-  went?: { discord: boolean; ntfy: boolean };
+  /** The app on the home screen (Web Push): devices signed up, and the key this browser subscribes against. */
+  push: { on: boolean; devices: number; publicKey: string | null };
+  last: { at: string; title: string; discord: boolean; ntfy: boolean; push?: boolean } | null;
+  went?: { discord: boolean; ntfy: boolean; push?: boolean };
+  /** A test that waits (Test in 20 seconds): answered at once, sent `delay` seconds later. */
+  scheduled?: boolean;
+  delay?: number;
 }
 interface NtfyInput {
   server: string;
@@ -83,16 +89,18 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 const api = {
   status: () => call<AlertsStatus>("GET", ""),
   update: (body: { discordWebhook?: string | null; ntfy?: NtfyInput | null }) => call<AlertsStatus>("PUT", "", body),
-  test: (only?: "discord" | "ntfy") => call<AlertsStatus>("POST", "/test", only ? { only } : {}),
+  test: (only?: "discord" | "ntfy" | "push", delay?: number) =>
+    call<AlertsStatus>("POST", "/test", only ? { only, ...(delay ? { delay } : {}) } : {}),
+  pushSubscribe: (subscription: PushSubscriptionJSON) => call<AlertsStatus>("POST", "/push/subscribe", { subscription }),
+  pushUnsubscribe: (endpoint: string) => call<AlertsStatus>("POST", "/push/unsubscribe", { endpoint }),
   /** A sample of the backup failure alert. */
   testBackup: () => call<AlertsStatus>("POST", "/test/backup"),
 };
 
-type Went = { discord: boolean; ntfy: boolean } | undefined;
-const sentTo = (went: Went, sample?: string) => {
-  const where = [went?.discord && "Discord", went?.ntfy && "your phone"].filter(Boolean).join(" and ");
-  return `Sample sent to ${where}${sample ? `, using ${sample}` : ""}.`;
-};
+type Went = { discord: boolean; ntfy: boolean; push?: boolean } | undefined;
+const whereWent = (went: Went) =>
+  [went?.discord && "Discord", went?.push && "your phone app", went?.ntfy && "ntfy"].filter(Boolean).join(" and ");
+const sentTo = (went: Went, sample?: string) => `Sample sent to ${whereWent(went)}${sample ? `, using ${sample}` : ""}.`;
 
 const PRIORITIES: { value: number; label: string }[] = [
   { value: 1, label: "Lowest: no sound" },
@@ -327,8 +335,7 @@ export default function AlertsSettingsPage() {
   const setPending = (patch: Partial<PendingAlerts>) => runPending("pending-set", () => pendingChangesApi.setAlerts(patch));
   const testPending = (kind: PendingAlertKind) =>
     runPending(`test-pending-${kind}`, () => pendingChangesApi.test(kind), (v) => {
-      const where = [v.went?.discord && "Discord", v.went?.ntfy && "your phone"].filter(Boolean).join(" and ");
-      return `Sample sent to ${where}, using ${v.sample}.`;
+      return sentTo(v.went, v.sample);
     });
 
   // Subscriptions & bills and Returns (money-hub lib/subscriptions.js, lib/returns.js): their switches
@@ -367,9 +374,34 @@ export default function AlertsSettingsPage() {
   const saveNtfy = () =>
     run("ntfy", () => api.update({ ntfy: { server: server.trim(), topic: topic.trim(), priority, ...(token ? { token } : {}) } }), () => "Saved. Press Send a test to check your phone.");
 
+  // The app on the home screen (Web Push; ./phone-app.ts, public/sw.js, money-hub lib/webPush.js).
+  const { onHere, look } = useThisDevice();
+  // A service that is not upgraded yet has no `push`: the card then just reads "Not set up".
+  const push = status?.push ?? { on: false, devices: 0, publicKey: null };
+  const pushOn = push.on;
+  const step = phoneStep({ ios: isIos(), standalone: isStandalone(), supported: pushSupported() });
+  const turnOnPhone = async () => {
+    const key = push.publicKey;
+    if (!key) {
+      setNote({ tone: "bad", text: "The money app helper did not give its key. Reload the page and try again." });
+      return;
+    }
+    await run("push-on", async () => {
+      await turnOnHere(key, api.pushSubscribe);
+      await look();
+      return api.status();
+    }, () => "This device is signed up. Press Send a test.");
+  };
+  const turnOffPhone = () =>
+    run("push-off", async () => {
+      await turnOffHere(api.pushUnsubscribe);
+      await look();
+      return api.status();
+    }, () => "Notifications are off on this device.");
+
   return (
     <div className="space-y-6">
-      <SettingsHeader heading="Alerts" text="Where the money app tells you things: the bell in the app, Discord, and your phone through ntfy. Every alert goes to each place set up here." />
+      <SettingsHeader heading="Alerts" text="Where the money app tells you things: the bell in the app, Discord, the app on your phone, and ntfy. Every alert goes to each place set up here." />
       <Separator />
 
       {loadError && <p className="text-destructive text-sm">{loadError}</p>}
@@ -423,6 +455,68 @@ export default function AlertsSettingsPage() {
               </button>
             </div>
           ) : null}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <SectionTitle title="Phone app" hint="The money app on your home screen" />
+        <div className="bg-card rounded-xl border p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <img src="/apple-touch-icon.png" width={40} height={40} alt="" aria-hidden="true" className="size-10 shrink-0 rounded-lg" />
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">Money app</div>
+                <div className="text-muted-foreground truncate text-xs">
+                  {pushOn ? `${push.devices} ${push.devices === 1 ? "device" : "devices"} signed up` : "Not set up"}
+                </div>
+              </div>
+            </div>
+            {status && <StatusPill on={pushOn} text={pushOn ? "Set up" : "Off"} />}
+          </div>
+          {status && (
+            <div className="mt-4 space-y-3">
+              {step === "home-screen" ? (
+                <ol className="text-muted-foreground list-inside list-decimal space-y-1 text-xs leading-relaxed">
+                  <li>In Safari press Share, then Add to Home Screen.</li>
+                  <li>Open the money app from the new icon and sign in.</li>
+                  <li>Come back to Settings, Alerts, and press Turn on here.</li>
+                </ol>
+              ) : step === "unsupported" ? (
+                <p className="text-muted-foreground text-xs">This browser cannot receive notifications. An iPhone needs iOS 16.4 or newer.</p>
+              ) : !pushOn ? (
+                <p className="text-muted-foreground text-xs">Real notifications from the money app, even when it is closed. Nothing else to install.</p>
+              ) : null}
+              {((step === "ready" && !onHere) || pushOn || onHere) && (
+                <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                  {step === "ready" && !onHere && (
+                    <button type="button" className={`${btn} ${cta}`} disabled={!!busy} onClick={turnOnPhone}>
+                      {busy === "push-on" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Bell className="size-3.5" />}
+                      Turn on here
+                    </button>
+                  )}
+                  {pushOn && (
+                    <button type="button" className={`${btn} ${cta}`} disabled={!!busy}
+                      onClick={() => run("test-push", () => api.test("push"), () => "Test sent. It should show within a few seconds.")}>
+                      {busy === "test-push" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Bell className="size-3.5" />}
+                      Send a test
+                    </button>
+                  )}
+                  {pushOn && (
+                    <button type="button" className={btn} disabled={!!busy}
+                      onClick={() => run("test-push-later", () => api.test("push", 20), () => "Sending in 20 seconds. Close the app and lock your phone now.")}>
+                      {busy === "test-push-later" ? <Icons.Spinner className="size-3.5 animate-spin" /> : <Icons.Clock className="size-3.5" />}
+                      Test in 20 seconds
+                    </button>
+                  )}
+                  {onHere && (
+                    <button type="button" className="text-destructive ml-auto text-xs underline-offset-4 hover:underline disabled:opacity-50" disabled={!!busy} onClick={turnOffPhone}>
+                      {busy === "push-off" ? "Turning off" : "Turn off here"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
@@ -847,7 +941,7 @@ export default function AlertsSettingsPage() {
 
       {status?.last && (
         <p className="text-muted-foreground text-xs">
-          Last alert {when(status.last.at)}: {status.last.title} ({[status.last.discord && "Discord", status.last.ntfy && "phone"].filter(Boolean).join(" and ") || "not delivered"})
+          Last alert {when(status.last.at)}: {status.last.title} ({[status.last.discord && "Discord", status.last.push && "phone app", status.last.ntfy && "ntfy"].filter(Boolean).join(" and ") || "not delivered"})
         </p>
       )}
 
