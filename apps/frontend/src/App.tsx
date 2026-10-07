@@ -10,7 +10,7 @@ import { AppSkin } from "@/components/app-skin";
 import { AuthGate, AuthProvider } from "@/context/auth-context";
 import { EventDialogProvider } from "@/features/spending/components/event-dialog-provider";
 // money-hub patch: the Make a rule preview, opened from the rule offer toast.
-import { RuleOfferHost } from "@/features/spending/components/rule-offer-dialog";
+import { RuleDialogHost } from "@/features/spending/components/rule-dialog";
 import { CountsAsHost } from "@/features/spending/components/counts-as-dialog";
 // money-hub patch: "which subscription or bill is this?", opened when a charge is filed as one.
 import { TrackChargeHost } from "@/features/spending/components/track-charge-dialog";
@@ -56,7 +56,7 @@ function App() {
             <AddonRuntimeLoader />
             <EventDialogProvider>
               <AssetLogoRegistrySync />
-              <RuleOfferHost />
+              <RuleDialogHost />
               <CountsAsHost />
               <TrackChargeHost />
               <TrackReturnHost />
