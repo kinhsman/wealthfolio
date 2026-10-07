@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 import { saveRuleRename } from "@/features/spending/lib/rule-renames";
+import { ruleOfferStore } from "@/features/spending/lib/rule-offer";
 import { CountsAsRulesSection } from "@/features/spending/components/counts-as-dialog";
 import { useTranslation } from "react-i18next";
 import { Navigate } from "react-router-dom";
@@ -28,11 +28,7 @@ import {
 } from "@wealthfolio/ui";
 import { cn } from "@/lib/utils";
 import { useAccounts } from "@/hooks/use-accounts";
-import { useNameComparator } from "@/hooks/use-name-comparator";
-import { useTaxonomy } from "@/hooks/use-taxonomies";
-import type { TaxonomyCategory } from "@/lib/types";
 
-import { RuleEditModal } from "@/features/spending/components/rule-edit-modal";
 import {
   RuleItem,
   type RuleCategoryMeta,
@@ -40,13 +36,7 @@ import {
 } from "@/features/spending/components/rule-item";
 import { PRESET_FLAGS } from "@/features/spending/components/rule-preset-constants";
 import { RulePresetPicker } from "@/features/spending/components/rule-preset-picker";
-import {
-  ruleAmountPayload,
-  type RuleFormAccountOption,
-  type RuleFormCategoryOption,
-  type RuleFormValues,
-} from "@/features/spending/components/rule-form";
-import { isSpendingAccountType } from "@/features/spending/lib/constants";
+import { useRuleFormOptions } from "@/features/spending/hooks/use-rule-form-options";
 import {
   useCategorizationRuleMutations,
   useCategorizationRules,
@@ -58,14 +48,9 @@ import type { CategorizationRule } from "@/features/spending/types/rule";
 import { SettingsHeader } from "../../settings-header";
 import { SpendingBackLink } from "../components/spending-back-link";
 
-const SPENDING_TAXONOMY = "spending_categories";
-const INCOME_TAXONOMY = "income_sources";
-const SAVINGS_TAXONOMY = "savings_categories";
-
 export default function SpendingRulesPage() {
   const { t } = useTranslation();
-  const compareNames = useNameComparator();
-  const { isEnabled, isLoading: settingsLoading, accountIds } = useSpendingSettings();
+  const { isEnabled, isLoading: settingsLoading } = useSpendingSettings();
   const { accounts } = useAccounts({ filterActive: false });
   const queryClient = useQueryClient();
   const {
@@ -75,54 +60,30 @@ export default function SpendingRulesPage() {
     error: rulesError,
   } = useCategorizationRules();
   const { data: presets = [], isError: presetsErrored, error: presetsError } = useRulePresets();
-  const spending = useTaxonomy(SPENDING_TAXONOMY);
-  const income = useTaxonomy(INCOME_TAXONOMY);
-  const savings = useTaxonomy(SAVINGS_TAXONOMY);
-  const { create, update, remove, rerun } = useCategorizationRuleMutations();
+  const {
+    categoryOptions,
+    isLoading: optionsLoading,
+    isError: optionsErrored,
+    error: optionsError,
+  } = useRuleFormOptions();
+  const { remove, rerun } = useCategorizationRuleMutations();
 
-  const [visibleModal, setVisibleModal] = useState(false);
-  const [selectedRule, setSelectedRule] = useState<CategorizationRule | undefined>();
   const [searchQuery, setSearchQuery] = useState("");
   // `presetFilter`: null = all, presetId = installed preset, "custom" = user-created rules.
   const [presetFilter, setPresetFilter] = useState<string | null>(null);
   const [confirmRerunAllOpen, setConfirmRerunAllOpen] = useState(false);
 
-  const isLoading = rulesLoading || spending.isLoading || income.isLoading || savings.isLoading;
-  const hasLoadError =
-    rulesErrored || presetsErrored || spending.isError || income.isError || savings.isError;
+  const isLoading = rulesLoading || optionsLoading;
+  const hasLoadError = rulesErrored || presetsErrored || optionsErrored;
   const loadError =
     rulesError?.message ??
     presetsError?.message ??
-    spending.error?.message ??
-    income.error?.message ??
-    savings.error?.message ??
+    optionsError?.message ??
     t("settings:spending.rules.load_error");
 
-  const { categoryOptions, categoryMeta } = useMemo(() => {
-    const buildOptions = (taxonomyId: string, cats: TaxonomyCategory[]) => {
-      const byId = new Map(cats.map((c) => [c.id, c]));
-      return cats
-        .slice()
-        .sort((a, b) => a.sortOrder - b.sortOrder)
-        .map((c) => {
-          const parent = c.parentId ? byId.get(c.parentId) : null;
-          return {
-            value: `${taxonomyId}:${c.id}`,
-            label: c.name,
-            taxonomyId,
-            categoryId: c.id,
-            color: c.color,
-            parentName: parent?.name ?? null,
-          } satisfies RuleFormCategoryOption;
-        });
-    };
-    const opts: RuleFormCategoryOption[] = [
-      ...buildOptions(SPENDING_TAXONOMY, spending.data?.categories ?? []),
-      ...buildOptions(INCOME_TAXONOMY, income.data?.categories ?? []),
-      ...buildOptions(SAVINGS_TAXONOMY, savings.data?.categories ?? []),
-    ];
+  const categoryMeta = useMemo(() => {
     const meta: Record<string, RuleCategoryMeta> = {};
-    opts.forEach((o) => {
+    categoryOptions.forEach((o) => {
       const entry = {
         name: o.label,
         color: o.color ?? null,
@@ -131,8 +92,8 @@ export default function SpendingRulesPage() {
       meta[o.value] = entry;
       meta[o.categoryId] ??= entry;
     });
-    return { categoryOptions: opts, categoryMeta: meta };
-  }, [spending.data?.categories, income.data?.categories, savings.data?.categories]);
+    return meta;
+  }, [categoryOptions]);
 
   const presetMeta = useMemo<Record<string, RulePresetMeta>>(() => {
     const meta: Record<string, RulePresetMeta> = {};
@@ -145,101 +106,31 @@ export default function SpendingRulesPage() {
     return meta;
   }, [presets]);
 
-  const { accountOptions, accountMeta } = useMemo(() => {
-    // Only tracked spending accounts are offered: a rerun walks just those
-    // accounts, so a rule scoped anywhere else could never fire.
-    const tracked = new Set(accountIds);
-    const opts: RuleFormAccountOption[] = accounts
-      .filter((a) => isSpendingAccountType(a.accountType) && tracked.has(a.id))
-      .map((a) => ({ id: a.id, name: a.name }))
-      .sort((a, b) => compareNames(a.name, b.name));
-    // Names cover every account, not just the pickable ones, so a rule scoped to
-    // an account the user has since untracked still renders a real name.
+  // Names cover every account, not just the pickable ones, so a rule scoped to an account the user
+  // has since untracked still renders a real name.
+  const accountMeta = useMemo(() => {
     const meta: Record<string, string> = {};
     accounts.forEach((a) => {
       meta[a.id] = a.name;
     });
-    return { accountOptions: opts, accountMeta: meta };
-  }, [accounts, accountIds, compareNames]);
+    return meta;
+  }, [accounts]);
 
   if (!settingsLoading && !isEnabled) {
     return <Navigate to="/settings/spending" replace />;
   }
 
-  const handleAddRule = () => {
-    setSelectedRule(undefined);
-    setVisibleModal(true);
-  };
+  // Adding and editing open the one rule window (components/rule-dialog.tsx), the same as the
+  // Make a rule offer after filing a transaction.
+  const handleAddRule = () => ruleOfferStore.open({ pattern: "", taxonomyId: "", categoryId: "" });
 
-  const handleEditRule = (rule: CategorizationRule) => {
-    setSelectedRule(rule);
-    setVisibleModal(true);
-  };
+  const handleEditRule = (rule: CategorizationRule) =>
+    ruleOfferStore.open({ rule, pattern: "", taxonomyId: "", categoryId: "" });
 
   const handleDeleteRule = (rule: CategorizationRule) => {
     remove.mutate(rule.id, {
       onSuccess: () => void saveRuleRename(queryClient, rule.id, "").catch(() => {}),
     });
-  };
-
-  const handleSave = (values: RuleFormValues) => {
-    const { amountOp, amountValue, amountValue2 } = ruleAmountPayload(values);
-    if (selectedRule) {
-      update.mutate(
-        {
-          id: selectedRule.id,
-          patch: {
-            name: values.name,
-            pattern: values.pattern,
-            matchType: values.matchType,
-            taxonomyId: values.taxonomyId || null,
-            categoryId: values.categoryId || null,
-            activityType: values.activityType || null,
-            amountOp,
-            amountValue,
-            amountValue2,
-            priority: values.priority,
-            // Always sent explicitly: null clears the column, an id sets it, and
-            // the backend rejects an isGlobal/accountId pair that disagrees.
-            isGlobal: values.accountId === null,
-            accountId: values.accountId,
-          },
-        },
-        {
-          onSuccess: () => {
-            setVisibleModal(false);
-            void saveRuleRename(queryClient, selectedRule.id, values.renameTo).catch(() =>
-              toast.error("The new name could not be saved."),
-            );
-          },
-        },
-      );
-    } else {
-      create.mutate(
-        {
-          name: values.name,
-          pattern: values.pattern,
-          matchType: values.matchType,
-          taxonomyId: values.taxonomyId || null,
-          categoryId: values.categoryId || null,
-          activityType: values.activityType || null,
-          amountOp,
-          amountValue,
-          amountValue2,
-          priority: values.priority,
-          isGlobal: values.accountId === null,
-          accountId: values.accountId,
-        },
-        {
-          onSuccess: (created) => {
-            setVisibleModal(false);
-            void saveRuleRename(queryClient, created.id, values.renameTo).catch(() =>
-              toast.error("The new name could not be saved."),
-            );
-          },
-        },
-      );
-    }
   };
 
   const installedPresets = useMemo(() => presets.filter((p) => p.installed), [presets]);
@@ -451,16 +342,6 @@ export default function SpendingRulesPage() {
         {/* money-hub patch: the owner's Counts as rules (features/spending/lib/counts-as.ts). */}
         <CountsAsRulesSection />
       </div>
-
-      <RuleEditModal
-        open={visibleModal}
-        onClose={() => setVisibleModal(false)}
-        rule={selectedRule}
-        categoryOptions={categoryOptions}
-        accountOptions={accountOptions}
-        onSave={handleSave}
-        isLoading={create.isPending || update.isPending}
-      />
 
       <AlertDialog open={confirmRerunAllOpen} onOpenChange={setConfirmRerunAllOpen}>
         <AlertDialogContent>

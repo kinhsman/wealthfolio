@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import * as z from "zod";
@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@wealthfolio/ui";
+import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
 import type { CategorizationRule, RuleAmountOp, RuleMatchType } from "../types/rule";
 import { QuickCategorizePopover } from "./quick-categorize-popover";
@@ -45,6 +46,23 @@ export interface RuleFormValues {
   priority: number;
   /** null applies the rule to every account; a value scopes it to that account. */
   accountId: string | null;
+  /** "Also match bank transfers" (lib/rule-transfers.ts): off unless set. */
+  transfers?: boolean;
+}
+
+/** The rule as typed so far, in the shape the money-hub preview reads (components/rule-dialog.tsx). */
+export interface RuleDraft {
+  pattern: string;
+  matchType: RuleMatchType;
+  taxonomyId: string;
+  categoryId: string;
+  activityType: string | null;
+  amountOp: RuleAmountOp | null;
+  amountValue: number | null;
+  amountValue2: number | null;
+  accountId: string | null;
+  priority: number;
+  transfers: boolean;
 }
 
 const parseAmount = (raw: string): number | null => {
@@ -88,6 +106,7 @@ export const buildRuleFormSchema = (t: Translate) =>
       renameTo: z.string(),
       priority: z.coerce.number().int().min(0),
       accountId: z.string().nullable(),
+      transfers: z.boolean().optional(),
     })
     .refine((data) => data.categoryId || data.activityType || data.renameTo.trim(), {
       message: t("spending:rules.categoryOrTypeRequired"),
@@ -156,6 +175,16 @@ interface RuleFormProps {
   onSubmit: (values: RuleFormValues) => void;
   onCancel: () => void;
   isLoading?: boolean;
+  /** A new rule's starting words, category ("<taxonomyId>:<categoryId>") and bank transfers switch. */
+  start?: { words?: string[]; category?: string; transfers?: boolean };
+  /** Called with the rule as typed so far, a moment after it changes (the window's live match preview). */
+  onDraft?: (draft: RuleDraft | null) => void;
+  /** Shown above the buttons: the matches. */
+  preview?: ReactNode;
+  /** Before the main button. */
+  footerExtra?: ReactNode;
+  submitLabel?: string;
+  submitDisabled?: boolean;
 }
 
 const NONE = "__none__";
@@ -173,6 +202,12 @@ export function RuleForm({
   onSubmit,
   onCancel,
   isLoading,
+  start,
+  onDraft,
+  preview,
+  footerExtra,
+  submitLabel,
+  submitDisabled,
 }: RuleFormProps) {
   const { t } = useTranslation();
 
@@ -218,7 +253,7 @@ export function RuleForm({
 
   // money-hub patch: "contains" takes several keywords, any of them matching (lib/keywords.ts);
   // saved as one case-blind regex when there are several, read back as words here.
-  const initialWords = rule ? ruleToKeywords(rule.pattern, rule.matchType) : [];
+  const initialWords = rule ? ruleToKeywords(rule.pattern, rule.matchType) : (start?.words ?? []);
   const [words, setWords] = useState<string[]>(initialWords ?? []);
   const [typing, setTyping] = useState("");
 
@@ -229,7 +264,7 @@ export function RuleForm({
       pattern: initialWords ? (initialWords[0] ?? "") : (rule?.pattern ?? ""),
       matchType: initialWords ? "contains" : (rule?.matchType ?? "contains"),
       taxonomyId: rule?.taxonomyId ?? "",
-      categoryId: composite(rule), // we encode taxonomyId:categoryId in this single field
+      categoryId: rule ? composite(rule) : (start?.category ?? ""), // we encode taxonomyId:categoryId in this single field
       activityType: rule?.activityType ?? "",
       amountOp: rule?.amountOp ?? "",
       amountValue: rule?.amountValue != null ? String(rule.amountValue) : "",
@@ -237,6 +272,7 @@ export function RuleForm({
       renameTo: rule ? (renames?.[rule.id] ?? "") : "",
       priority: rule?.priority ?? 0,
       accountId: rule && !rule.isGlobal ? (rule.accountId ?? null) : null,
+      transfers: start?.transfers ?? false,
     },
   });
 
@@ -246,6 +282,13 @@ export function RuleForm({
       form.setValue("renameTo", renames[rule.id]);
     }
   }, [rule, renames, form]);
+
+  // The bank transfers switch is saved elsewhere and arrives late too.
+  useEffect(() => {
+    if (start?.transfers != null && !form.formState.dirtyFields.transfers) {
+      form.setValue("transfers", start.transfers);
+    }
+  }, [start?.transfers, form]);
 
   const amountOp = form.watch("amountOp");
 
@@ -270,7 +313,8 @@ export function RuleForm({
       });
   }, [matchTypeNow, keywordsNow.join("\u0001")]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSubmit = (values: RuleFormValues) => {
+  // The values as saved: several words become one pattern, the category is split back into its two ids.
+  const resolve = (values: RuleFormValues): RuleFormValues => {
     if (values.matchType === "contains") {
       values = { ...values, ...keywordsToRule(keywordsNow) };
     }
@@ -282,12 +326,44 @@ export function RuleForm({
       taxonomyId = tax;
       categoryId = cat;
     }
-    onSubmit({
-      ...values,
-      taxonomyId,
-      categoryId,
-    });
+    return { ...values, taxonomyId, categoryId };
   };
+
+  const handleSubmit = (values: RuleFormValues) => onSubmit(resolve(values));
+
+  // The window's preview follows the rule as typed. A half-typed amount is left out until it is whole.
+  const watched = form.watch();
+  const draft = useMemo<RuleDraft | null>(() => {
+    const v = resolve(watched);
+    if (!v.pattern.trim() || !v.taxonomyId || !v.categoryId) return null;
+    const amount = ruleAmountPayload(v);
+    const amountOk =
+      amount.amountOp != null &&
+      amount.amountValue != null &&
+      (amount.amountOp !== "between" || amount.amountValue2 != null);
+    return {
+      pattern: v.pattern.trim(),
+      matchType: v.matchType,
+      taxonomyId: v.taxonomyId,
+      categoryId: v.categoryId,
+      activityType: v.activityType || null,
+      ...(amountOk ? amount : { amountOp: null, amountValue: null, amountValue2: null }),
+      accountId: v.accountId,
+      priority: Number(v.priority) || 0,
+      transfers: !!v.transfers,
+    };
+  }, [JSON.stringify(watched), keywordsNow.join("\u0001")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const draftKey = JSON.stringify(draft);
+  useEffect(() => {
+    onDraft?.(draft);
+  }, [draftKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A new rule is named after its words until the owner types a name.
+  useEffect(() => {
+    if (!rule && !form.formState.dirtyFields.name) {
+      form.setValue("name", keywordsNow.join(", ").slice(0, 60));
+    }
+  }, [rule, form, keywordsNow.join("\u0001")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Form {...form}>
@@ -533,6 +609,28 @@ export function RuleForm({
               </FormDescription>
             )}
           </div>
+          <FormField
+            control={form.control as never}
+            name="transfers"
+            render={({ field }) => (
+              <FormItem className="flex items-start justify-between gap-3 space-y-0">
+                <div className="min-w-0 space-y-0.5">
+                  <FormLabel>Also match bank transfers</FormLabel>
+                  <FormDescription>
+                    Payments to a card the app does not track (Capital One, Apple Card) and other
+                    transfers nothing paired. Off: the rule looks at purchases only.
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={!!field.value}
+                    onCheckedChange={field.onChange}
+                    aria-label="Also match bank transfers"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
         </section>
         <section className="space-y-2.5 rounded-md border p-3">
           <div className="flex items-baseline gap-2">
@@ -633,16 +731,20 @@ export function RuleForm({
           </div>
         </section>
 
-        <div className="flex justify-end gap-2 pt-1">
+        {preview}
+        <div className="flex flex-wrap justify-end gap-2 pt-1">
           <Button type="button" variant="outline" onClick={onCancel}>
             {t("common:cancel")}
           </Button>
-          <Button type="submit" disabled={isLoading}>
+          {footerExtra}
+          <Button type="submit" disabled={isLoading || submitDisabled}>
             {isLoading ? (
               <>
                 <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
                 {t("spending:common.saving")}
               </>
+            ) : submitLabel ? (
+              submitLabel
             ) : rule ? (
               t("spending:rules.updateRule")
             ) : (

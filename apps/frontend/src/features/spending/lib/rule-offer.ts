@@ -2,13 +2,15 @@
 // transactions like it (owner, 2026-09-30: "when i edit a transaction, offer a rule creation, and
 // rerun rules only on that specific rule i just added"; then "make the button bigger, also open a
 // modal to preview and confirm the rule before apply"). The toast's Make a rule opens the preview
-// (components/rule-offer-dialog.tsx, mounted once in App.tsx); making the rule there re-files only
+// (components/rule-dialog.tsx, mounted once in App.tsx, the same window Settings, Rules uses for adding
+// and editing: owner, 10-07, "so they are not split brain"); making the rule there re-files only
 // what that rule matches: the bank-imported entries go through the money-hub service
 // (/api/money-hub/plaid/preview-rule and /apply-rule, server/drive-backup/lib/plaidSync.js),
 // because Wealthfolio's own re-run treats their categories as picked by hand and never changes them.
 import { toast } from "sonner";
 
 import { listCategorizationRules } from "../adapters/rules";
+import type { CategorizationRule } from "../types/rule";
 
 /** Text the bank import labelled itself ("Friend (Nga): ...", "Rent received: ..."): rules leave it alone. */
 const importLabelled = (text: string) => /^[^:]{1,40}:\s/.test(text);
@@ -40,8 +42,11 @@ export function rulePatternFrom(notes?: string | null): string | null {
 }
 
 export interface RuleOffer {
+  /** The rule to edit (Settings, Rules); absent for a new one. */
+  rule?: CategorizationRule;
   /** The words to start with; empty when the text gave none (the owner types them). */
   pattern: string;
+  /** The category to start with; empty for a blank rule (Settings, Add rule). */
   taxonomyId: string;
   categoryId: string;
   /** Runs once the rule is made (a subscription's edit window: scan again so its charges join). */
