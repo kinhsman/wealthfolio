@@ -12,6 +12,8 @@ import {
   transactionsHref,
   upcoming,
   partitionPaidStreams,
+  groupUnderMortgage,
+  isUnderMortgage,
   type Stream,
 } from "@/features/spending/lib/subscriptions";
 
@@ -186,5 +188,36 @@ describe("partitionPaidStreams", () => {
     };
     const res = partitionPaidStreams([s1, s2], monthInfo);
     expect(res.paid.map((s) => s.key)).toEqual(["s2", "s1"]);
+  });
+});
+
+describe("escrow bills follow their mortgage", () => {
+  const escrow = (part: "tax" | "insurance", mortgageKey: string | null) => ({
+    rentalId: "r1", part, company: null, mortgageKey, mortgageName: "US Bank", years: [], monthlyNow: null, estimated: false,
+  });
+  const mortgage = mk({ key: "m:usb", name: "US Bank Mortgage", dueInDays: 20, last: { date: "2026-10-01", amount: 3000, id: "mc" } });
+  const tax = mk({ key: "escrow:r1:tax", name: "Property tax", dueInDays: 80, escrow: escrow("tax", "m:usb") });
+  const ins = mk({ key: "escrow:r1:insurance", name: "Home insurance", dueInDays: 5, escrow: escrow("insurance", "m:usb") });
+  const other = mk({ key: "o1", name: "Electric", dueInDays: 6 });
+
+  it("moves to Paid with the mortgage, right under it", () => {
+    const res = partitionPaidStreams([other, ins, mortgage, tax], { paid: [{ key: "m:usb" }], left: [] });
+    expect(res.paid.map((s) => s.key)).toEqual(["m:usb", "escrow:r1:insurance", "escrow:r1:tax"]);
+    expect(res.upcoming.map((s) => s.key)).toEqual(["o1"]);
+  });
+
+  it("stays upcoming, under the mortgage, while the mortgage is not paid", () => {
+    const res = partitionPaidStreams([other, ins, mortgage, tax], { paid: [], left: [{ key: "m:usb" }] });
+    expect(res.paid).toEqual([]);
+    expect(res.upcoming.map((s) => s.key)).toEqual(["o1", "m:usb", "escrow:r1:insurance", "escrow:r1:tax"]);
+  });
+
+  it("one with no mortgage on the list keeps its own place and is not indented", () => {
+    const loose = mk({ key: "escrow:r2:tax", name: "Tax", dueInDays: 3, escrow: escrow("tax", null) });
+    const list = groupUnderMortgage([loose, other]);
+    expect(list.map((s) => s.key)).toEqual(["escrow:r2:tax", "o1"]);
+    expect(isUnderMortgage(loose, list)).toBe(false);
+    expect(isUnderMortgage(tax, [mortgage, tax])).toBe(true);
+    expect(isUnderMortgage(tax, [tax])).toBe(false);
   });
 });

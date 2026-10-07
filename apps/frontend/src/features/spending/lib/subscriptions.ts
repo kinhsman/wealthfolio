@@ -68,6 +68,10 @@ export interface Stream {
   /** Exclude from forecast (owner, 10-01: the mortgage): a fixed bill the Monthly budget takes off the
    *  budget as it is instead of forecasting it (lib/budget-forecast.ts). Spending still counts it. */
   excludeFromForecast?: boolean;
+  /** The owner's own say on Varies (owner, 10-07: Anthropic): "on" = no price up or down alerts and no
+   *  fixed amount on the row, "off" = steady whatever its charges look like, none = the charges decide
+   *  (`variable` is the answer either way). */
+  variesSet?: "on" | "off" | null;
   /** "Send the bank's amount to Owly" is on (owner, 10-01). */
   sendTotal?: boolean;
   /** What was last sent to Owly as this bill's total, or why Owly refused. */
@@ -236,6 +240,8 @@ export const subscriptionsApi = {
         every: Every | null;
         /** Reactivate a stopped one (true), or let its charges say again (false). */
         active: boolean;
+        /** Varies on (true) or off (false); null lets its charges decide again. */
+        varies: boolean | null;
         /** The company whose logo it shows (escrow's bills: no charge to find one from). */
         merchantId: string | null;
       }
@@ -488,8 +494,31 @@ export function upcoming(items: Stream[], limit = 3): Stream[] {
 }
 
 /**
+ * Bills paid from a mortgage's escrow (property tax, home insurance) sit right under that mortgage
+ * payment, in its section (owner, 10-07: "tied to the US Bank mortgage ... indentation for these bills
+ * locked to the mortgage"). One whose mortgage is not in the list stays where its own order puts it.
+ */
+export function groupUnderMortgage(list: Stream[]): Stream[] {
+  const keys = new Set(list.map((s) => s.key));
+  const tied = (s: Stream) => (s.escrow?.mortgageKey && keys.has(s.escrow.mortgageKey) ? s.escrow.mortgageKey : null);
+  const kids = new Map<string, Stream[]>();
+  for (const s of list) {
+    const k = tied(s);
+    if (k) kids.set(k, [...(kids.get(k) ?? []), s]);
+  }
+  return list
+    .filter((s) => !tied(s))
+    .flatMap((s) => [s, ...(kids.get(s.key) ?? []).sort((a, b) => a.name.localeCompare(b.name))]);
+}
+
+/** Is this row one of a mortgage's escrow bills, shown under that mortgage in the same list? */
+export const isUnderMortgage = (s: Stream, list: Stream[]): boolean =>
+  !!s.escrow?.mortgageKey && list.some((x) => x.key === s.escrow!.mortgageKey);
+
+/**
  * Splits live streams into upcoming/due streams and those already paid this month.
  * A stream counts as paid when it has a charge this month and no more charges left to pay this month.
+ * An escrow bill has no charge of its own: it is paid when its mortgage payment is, and moves with it.
  */
 export function partitionPaidStreams(
   items: Stream[],
@@ -497,9 +526,15 @@ export function partitionPaidStreams(
 ): { upcoming: Stream[]; paid: Stream[] } {
   const paidKeys = new Set(billMonthInfo.paid.map((b) => b.key));
   const leftKeys = new Set(billMonthInfo.left.map((b) => b.key));
-  const isPaid = (s: Stream) => paidKeys.has(s.key) && !leftKeys.has(s.key);
+  const ownPaid = (key: string) => paidKeys.has(key) && !leftKeys.has(key);
 
   const live = items.filter((s) => s.status !== "stopped");
+  const liveKeys = new Set(live.map((s) => s.key));
+  const isPaid = (s: Stream) => {
+    const m = s.escrow?.mortgageKey;
+    return m && liveKeys.has(m) ? ownPaid(m) : ownPaid(s.key);
+  };
+
   const upcoming = live
     .filter((s) => !isPaid(s))
     .sort((a, b) => a.dueInDays - b.dueInDays || a.name.localeCompare(b.name));
@@ -507,5 +542,5 @@ export function partitionPaidStreams(
     .filter(isPaid)
     .sort((a, b) => (b.last?.date ?? "").localeCompare(a.last?.date ?? "") || a.name.localeCompare(b.name));
 
-  return { upcoming, paid };
+  return { upcoming: groupUnderMortgage(upcoming), paid: groupUnderMortgage(paid) };
 }

@@ -61,6 +61,7 @@ import {
   nextChargeAfter,
   openDatePicker,
   partitionPaidStreams,
+  isUnderMortgage,
   rentalSettingsHref,
   shortDate,
   statusLabel,
@@ -431,12 +432,12 @@ export default function SpendingSubscriptionsPage() {
                       ) : (
                         <>
                           {rows.slice(0, 6).map((s) => (
-                            <StreamRow key={s.key} s={s} {...rowProps} />
+                            <StreamRow key={s.key} s={s} nested={isUnderMortgage(s, rows)} {...rowProps} />
                           ))}
                           {rows.length > 6 ? (
                             <PhoneFold id={`subscriptions-${g.group}`} closedLabel={`Show ${rows.length - 6} more`} openLabel="Show less">
                               {rows.slice(6).map((s) => (
-                                <StreamRow key={s.key} s={s} {...rowProps} />
+                                <StreamRow key={s.key} s={s} nested={isUnderMortgage(s, rows)} {...rowProps} />
                               ))}
                             </PhoneFold>
                           ) : null}
@@ -449,18 +450,18 @@ export default function SpendingSubscriptionsPage() {
                 {paid.length ? (
                   <Section
                     title="Paid items"
-                    blurb={`${paid.length} charge${paid.length === 1 ? "" : "s"} already paid this month.`}
+                    blurb={`${paid.filter((s) => !isUnderMortgage(s, paid)).length} charge${paid.filter((s) => !isUnderMortgage(s, paid)).length === 1 ? "" : "s"} already paid this month.`}
                     collapsible
                     defaultOpen={false}
                     aside={<><PrivacyAmount value={paidTotal} currency={currency} /> this month</>}
                   >
                     {paid.slice(0, 6).map((s) => (
-                      <StreamRow key={s.key} s={s} {...rowProps} />
+                      <StreamRow key={s.key} s={s} nested={isUnderMortgage(s, paid)} {...rowProps} />
                     ))}
                     {paid.length > 6 ? (
                       <PhoneFold id="subscriptions-paid" closedLabel={`Show ${paid.length - 6} more`} openLabel="Show less">
                         {paid.slice(6).map((s) => (
-                          <StreamRow key={s.key} s={s} {...rowProps} />
+                          <StreamRow key={s.key} s={s} nested={isUnderMortgage(s, paid)} {...rowProps} />
                         ))}
                       </PhoneFold>
                     ) : null}
@@ -792,8 +793,11 @@ function StreamRow({
   currency,
   busy,
   act,
+  nested = false,
 }: {
   s: Stream;
+  /** A mortgage's escrow bill under that mortgage: indented, locked to it. */
+  nested?: boolean;
   currency: string;
   busy: string | null;
   act: (label: string, fn: () => Promise<SubscriptionsView>, done?: string) => Promise<void>;
@@ -820,6 +824,7 @@ function StreamRow({
       className={cn(
         "-mx-2 cursor-pointer rounded-xl border-t border-[var(--m-line-soft)] px-2 py-2.5 transition-colors first:border-t-0 hover:bg-[var(--m-tile)] max-md:py-2",
         s.status === "stopped" && "opacity-70",
+        nested && "ml-7 rounded-l-none border-l-2 border-l-[var(--m-line)] max-md:ml-4",
       )}
     >
       <div className="flex items-center gap-3">
@@ -915,8 +920,10 @@ function StreamRow({
         </div>
         <div className="shrink-0 text-right">
           <div className="text-sm font-medium tabular-nums">
-            {s.variable && !s.sharedOn ? <span className="text-muted-foreground font-normal">about </span> : null}
-            {s.sharedOn && s.shared?.latest ? (
+            {s.variable && !s.sharedOn && s.variesSet !== "on" ? <span className="text-muted-foreground font-normal">about </span> : null}
+            {s.variesSet === "on" && !s.sharedOn ? (
+              <span className="text-muted-foreground font-normal">Varies</span>
+            ) : s.sharedOn && s.shared?.latest ? (
               <PrivacyAmount value={s.shared.latest.mine} currency={currency} />
             ) : (
               <OwnAmount s={s} currency={currency} />
@@ -925,6 +932,10 @@ function StreamRow({
           {s.sharedOn && s.shared?.latest ? (
             <div className="text-muted-foreground text-[11px] tabular-nums">
               of <PrivacyAmount value={s.shared.latest.amount} currency={currency} /> bill
+            </div>
+          ) : s.variesSet === "on" && s.last ? (
+            <div className="text-muted-foreground text-[11px] tabular-nums">
+              last {s.native?.last != null && s.currency ? <PrivacyAmount value={s.native.last} currency={s.currency} /> : <PrivacyAmount value={s.last.amount} currency={currency} />}
             </div>
           ) : s.variable ? (
             <div className="text-muted-foreground text-[11px]">varies</div>
@@ -1028,6 +1039,7 @@ function EditStreamDialog({
   const [confirmed, setConfirmed] = useState(!!s.confirmed);
   const [sendTotal, setSendTotal] = useState(!!s.sendTotal);
   const [excludeFromForecast, setExcludeFromForecast] = useState(!!s.excludeFromForecast);
+  const [varies, setVaries] = useState(!!s.variable);
   const [amount, setAmount] = useState(manual ? String(manual.amount) : "");
   // A hand-added one's amount is in its own currency (none set: the base one, as it always was).
   const [cur, setCur] = useState(manual?.currency || currency);
@@ -1094,6 +1106,7 @@ function EditStreamDialog({
   if ((remind === "off" ? null : Number(remind)) !== (s.remindBefore ?? null)) patch.remindBefore = remind === "off" ? null : Number(remind);
   if (confirmed !== !!s.confirmed) patch.confirmed = confirmed;
   if (excludeFromForecast !== !!s.excludeFromForecast) patch.excludeFromForecast = excludeFromForecast;
+  if (varies !== !!s.variable) patch.varies = varies;
   const sendChanged = sendTotal !== !!s.sendTotal;
   const dirty = Object.keys(patch).length > 0 || sendChanged || ownChanged || outChanged;
   // Every charge out of a found one would drop it with no way back from here: Not a subscription is that.
@@ -1215,6 +1228,13 @@ function EditStreamDialog({
                 <Field label="Looks right" foot="It really is a subscription or bill.">
                   <div className="flex h-9 items-center">
                     <Switch checked={confirmed} onCheckedChange={setConfirmed} aria-label="Looks right" />
+                  </div>
+                </Field>
+              )}
+              {escrow ? null : (
+                <Field label="Varies" foot="The charge moves with use (an API, a utility). No price up or down alerts, and no fixed amount on the row.">
+                  <div className="flex h-9 items-center">
+                    <Switch checked={varies} onCheckedChange={setVaries} aria-label="Varies" />
                   </div>
                 </Field>
               )}
