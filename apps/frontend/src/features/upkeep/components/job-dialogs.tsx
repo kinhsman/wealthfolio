@@ -1,4 +1,4 @@
-// money-hub patch: Home & Car, the small windows: a job (new, changed, or its last-done day set), a starter list to
+// money-hub patch: Maintenance, the small windows: a job (new, changed, or its last-done day set), a starter list to
 // tick, Track another asset (any Holdings asset but a loan), and the tab's short name. Each is the app's Dialog:
 // a centered window on a computer, a sheet from the bottom on a phone.
 import { useState } from "react";

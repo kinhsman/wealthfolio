@@ -886,7 +886,7 @@ export default function AlertsSettingsPage() {
               {more.upkeep ? (
                 <GroupAlerts<UpkeepAlertKind>
                   icon={<Icons.Wrench className="text-muted-foreground size-4 shrink-0" />}
-                  title="Home & Car" to="/upkeep"
+                  title="Maintenance" to="/maintenance"
                   text="Jobs coming up or overdue on your house, your car and anything else you track, and a car's miles"
                   on={more.upkeep.alerts.on !== false} kinds={more.upkeep.alerts} labels={UPKEEP_ALERT_LABELS}
                   busyKey="upkeep" busy={busy}

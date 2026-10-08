@@ -1,4 +1,4 @@
-// money-hub patch: Home & Car, the starter lists. A new plan starts from the jobs most people need for that
+// money-hub patch: Maintenance, the starter lists. A new plan starts from the jobs most people need for that
 // kind of asset (the owner ticks what applies and can change every number): "a thing goes in only if it costs
 // money or has a due date". A job added from here has no last-done day yet: the page asks for it.
 import type { JobInput } from "./upkeep";

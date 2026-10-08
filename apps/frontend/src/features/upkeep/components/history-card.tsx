@@ -1,4 +1,4 @@
-// money-hub patch: Home & Car, Recent jobs: what was done, on which asset, what it cost and the bank charge that
+// money-hub patch: Maintenance, Recent jobs: what was done, on which asset, what it cost and the bank charge that
 // paid it ("Paid elsewhere" when none was named). A mistake is taken back from the row's menu.
 import { useState } from "react";
 

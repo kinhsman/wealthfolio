@@ -1,4 +1,4 @@
-// money-hub patch: Home & Car, the Done window: the day, the cost, a vehicle's miles, a note, and "Match a bank
+// money-hub patch: Maintenance, the Done window: the day, the cost, a vehicle's miles, a note, and "Match a bank
 // charge" (the last 14 days of money out, the likely one picked and its amount filled in; or "No charge" for cash
 // and anything paid elsewhere). The same window records a one-off repair, which has a name instead of a job.
 // A centered window on a computer, a sheet from the bottom on a phone (the app's Dialog does both).

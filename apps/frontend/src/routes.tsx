@@ -154,7 +154,8 @@ export function AppRoutes() {
           <Route path="spending/merchant/:id" element={<SpendingDrillPage kind="merchant" />} />
           <Route path="spending/category/:id" element={<SpendingDrillPage kind="category" />} />
           <Route path="taxes" element={<TaxesPage />} />
-          <Route path="upkeep" element={<UpkeepPage />} />
+          <Route path="maintenance" element={<UpkeepPage />} />
+          <Route path="upkeep" element={<Navigate to="/maintenance" replace />} />
           <Route path="cash" element={<CashPage />} />
           {/* money-hub: the Rentals page moved to /rentals; old links keep the rental and tab */}
           <Route path={RENTALS_ADDON_PATH.slice(1)} element={<ToRentalsPage />} />

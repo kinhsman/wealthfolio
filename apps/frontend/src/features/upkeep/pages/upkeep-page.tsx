@@ -1,4 +1,4 @@
-// money-hub patch: Home & Car (owner, 2026-10-08: "make the money app a lifeOS, first track the regular house and
+// money-hub patch: Maintenance (owner, 2026-10-08: "make the money app a lifeOS, first track the regular house and
 // car maintenance", then "any asset can have maintenance"). One tab per tracked Holdings asset, named by the
 // asset itself, each with its jobs and what is due first; an Overview of all of them and the recent jobs. Marking
 // a job done can name the bank charge that paid it. Everything comes from the money-hub service
@@ -58,7 +58,7 @@ function Pills({
     <div
       className="inline-flex max-w-full gap-1 overflow-x-auto rounded-full bg-[var(--m-track)] p-[3px]"
       role="group"
-      aria-label="Home and car"
+      aria-label="Maintenance"
     >
       {items.map((i) => (
         <button
@@ -219,7 +219,7 @@ export default function UpkeepPage() {
     <div className="meadow min-h-screen" data-light-skin={skins.light} data-dark-skin={skins.dark}>
       <Page>
         <PageHeader
-          heading="Home & Car"
+          heading="Maintenance"
           actions={
             view ? (
               <AddMenu
@@ -289,7 +289,7 @@ export default function UpkeepPage() {
               </div>
             ) : (
               <div className="rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-[18px] py-4 text-[13.5px]">
-                <p>{error?.message ?? "Home & Car could not be loaded."}</p>
+                <p>{error?.message ?? "Maintenance could not be loaded."}</p>
                 <button
                   type="button"
                   onClick={() => void refetch()}

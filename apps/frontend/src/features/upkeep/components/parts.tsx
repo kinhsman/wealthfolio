@@ -1,4 +1,4 @@
-// money-hub patch: the small pieces the Home & Car cards share, in the Spending dashboard's Meadow look
+// money-hub patch: the small pieces the Maintenance cards share, in the Spending dashboard's Meadow look
 // (the page sits inside `.meadow`, so the --m-* colours and the Bronze skin both apply).
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";

@@ -1,4 +1,4 @@
-// money-hub patch: Home & Car, the numbers on top: what is overdue, what is coming up (30 days or 600 miles), what
+// money-hub patch: Maintenance, the numbers on top: what is overdue, what is coming up (30 days or 600 miles), what
 // was spent this year, and what is next. On a phone one strip of three, keywords only.
 import { cn } from "@/lib/utils";
 import { PrivacyAmount } from "@wealthfolio/ui";

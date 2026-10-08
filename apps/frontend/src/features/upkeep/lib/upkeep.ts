@@ -1,4 +1,4 @@
-// money-hub patch: Home & Car (owner, 2026-10-08: "make the money app a lifeOS, first track the regular house
+// money-hub patch: Maintenance (owner, 2026-10-08: "make the money app a lifeOS, first track the regular house
 // and car maintenance", then "any asset can have maintenance"). A maintenance plan belongs to a Holdings
 // ASSET (a house is a Property, a car a Vehicle): the money-hub service keeps the jobs and what was done
 // (server/drive-backup/lib/upkeep.js) and works out where every job stands; this file reads it, sends the

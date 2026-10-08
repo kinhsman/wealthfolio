@@ -1,4 +1,4 @@
-// money-hub patch: Home & Car, one asset's card: its name (read live from Holdings), what kind it is, a car's
+// money-hub patch: Maintenance, one asset's card: its name (read live from Holdings), what kind it is, a car's
 // miles, and its jobs with what is due first on top. A job row: name over "every X · last Y", where it stands,
 // and Done. On a phone a row is a check circle, the name and where it stands, and the list folds after four.
 import { useState } from "react";
