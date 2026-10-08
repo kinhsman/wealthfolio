@@ -60,6 +60,7 @@ import SpendingReceiptsPage from "./features/spending/pages/spending-receipts-pa
 import SpendingHsaPage from "./features/spending/pages/spending-hsa-page";
 import SpendingDrillPage from "./features/spending/pages/spending-drill-page";
 import TaxesPage from "./features/taxes/pages/taxes-page";
+import UpkeepPage from "./features/upkeep/pages/upkeep-page";
 import CashPage from "./features/spending/pages/cash-page";
 import SpendingSettingsPage from "./pages/settings/spending/spending-settings-page";
 import SpendingSettingsCategoriesPage from "./pages/settings/spending/categories/spending-categories-page";
@@ -153,6 +154,7 @@ export function AppRoutes() {
           <Route path="spending/merchant/:id" element={<SpendingDrillPage kind="merchant" />} />
           <Route path="spending/category/:id" element={<SpendingDrillPage kind="category" />} />
           <Route path="taxes" element={<TaxesPage />} />
+          <Route path="upkeep" element={<UpkeepPage />} />
           <Route path="cash" element={<CashPage />} />
           {/* money-hub: the Rentals page moved to /rentals; old links keep the rental and tab */}
           <Route path={RENTALS_ADDON_PATH.slice(1)} element={<ToRentalsPage />} />

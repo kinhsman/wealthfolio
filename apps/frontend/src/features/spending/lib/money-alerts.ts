@@ -9,6 +9,7 @@ export type ConnectionAlertKind = "signIn" | "broken" | "back" | "expiring" | "r
 export type RecapAlertKind = "weekly";
 export type CardAlertKind = "dueSoon" | "overdue";
 export type LoanAlertKind = "renewSoon" | "renewToday";
+export type UpkeepAlertKind = "soon" | "overdue" | "miles";
 export type ReceiptAlertKind = "filed";
 
 type Switches<K extends string> = { on: boolean } & Record<K, boolean>;
@@ -22,13 +23,15 @@ export interface MoneyAlertsView {
   cards?: { alerts: Switches<CardAlertKind>; daysBefore: number };
   /** Optional: a service from before the loan renewal reminders sends none. */
   loans?: { alerts: Switches<LoanAlertKind>; daysBefore: number };
+  /** Optional: a service from before Home & Car sends none. */
+  upkeep?: { alerts: Switches<UpkeepAlertKind>; daysBefore: number };
   /** Optional: a service from before the receipt alert sends none. */
   receipts?: { alerts: Switches<ReceiptAlertKind> };
   went?: { discord: boolean; ntfy: boolean };
   sample?: string;
 }
 
-export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap" | "cards" | "loans" | "receipts";
+export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap" | "cards" | "loans" | "upkeep" | "receipts";
 
 const BASE = "/api/money-hub/money-alerts";
 export const MONEY_ALERTS_KEY = ["money-hub", "money-alerts"] as const;
@@ -126,3 +129,13 @@ export const LOAN_ALERT_LABELS: Record<LoanAlertKind, { title: string; text: str
 
 /** How many days before a line's term ends the reminder comes, for the picker. */
 export const RENEW_STEPS = [3, 5, 7, 10, 14, 30];
+
+// Owner, 10-08: Home & Car (features/upkeep): a job coming up, a job overdue (then every week), a car's miles.
+export const UPKEEP_ALERT_LABELS: Record<UpkeepAlertKind, { title: string; text: string }> = {
+  soon: { title: "Coming up", text: "A job due within the days above, or within 300 miles, once for each time it was last done." },
+  overdue: { title: "Overdue", text: "When a job turns overdue, then once a week for all that still are." },
+  miles: { title: "Update your miles", text: "A car's odometer reading is a month old, so the mileage jobs stay right. Once a month." },
+};
+
+/** How many days before a job is due the reminder comes, for the picker. */
+export const UPKEEP_STEPS = [3, 7, 10, 14, 21, 30];

@@ -81,6 +81,16 @@ function buildStaticNavigation(t: TFunction): NavigationProps {
         label: "Subscriptions and bills: what repeats, what is due and when",
       },
       {
+        // money-hub patch: Home & Car (features/upkeep), the upkeep of the house, the car and anything else in
+        // Holdings: what is due, what was done and what it cost (owner, 10-08). After Subscriptions & Bills so the
+        // phone's bar keeps Dashboard and Transactions. The 84px rail and the phone pill show "Home & Car".
+        icon: <Icons.Wrench className="size-6" />,
+        title: "Home & Car",
+        href: "/upkeep",
+        keywords: ["home", "car", "house", "maintenance", "upkeep", "repair", "oil", "filter", "service", "vehicle", "miles"],
+        label: "Upkeep for the house, the car and anything you own: what is due and what was done",
+      },
+      {
         icon: <Icons.Goals className="size-6" />,
         title: t("common:goals"),
         href: "/goals",

@@ -36,6 +36,8 @@ import {
   LOAN_ALERT_LABELS,
   RECEIPT_ALERT_LABELS,
   RENEW_STEPS,
+  UPKEEP_ALERT_LABELS,
+  UPKEEP_STEPS,
   CONNECTION_ALERT_LABELS,
   MONEY_ALERTS_KEY,
   NEAR_STEPS,
@@ -46,6 +48,7 @@ import {
   type BudgetAlertKind,
   type CardAlertKind,
   type LoanAlertKind,
+  type UpkeepAlertKind,
   type ReceiptAlertKind,
   type ConnectionAlertKind,
   type MoneyAlertGroup,
@@ -876,6 +879,31 @@ export default function AlertsSettingsPage() {
                         ))}
                       </select>
                       <span className="text-muted-foreground">before a line&rsquo;s term ends</span>
+                    </label>
+                  }
+                />
+              ) : null}
+              {more.upkeep ? (
+                <GroupAlerts<UpkeepAlertKind>
+                  icon={<Icons.Wrench className="text-muted-foreground size-4 shrink-0" />}
+                  title="Home & Car" to="/upkeep"
+                  text="Jobs coming up or overdue on your house, your car and anything else you track, and a car's miles"
+                  on={more.upkeep.alerts.on !== false} kinds={more.upkeep.alerts} labels={UPKEEP_ALERT_LABELS}
+                  busyKey="upkeep" busy={busy}
+                  onSwitch={(patch) => setMore("upkeep", patch)} onTest={(k) => testMore("upkeep", k)}
+                  extra={
+                    <label className="flex flex-wrap items-center gap-2">
+                      <span className="text-muted-foreground">Remind</span>
+                      <select
+                        value={more.upkeep.daysBefore} disabled={!!busy}
+                        onChange={(e) => setMore("upkeep", { daysBefore: Number(e.target.value) })}
+                        className="h-8 rounded-md border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+                      >
+                        {[...new Set([...UPKEEP_STEPS, more.upkeep.daysBefore])].sort((a, b) => a - b).map((d) => (
+                          <option key={d} value={d}>{d === 1 ? "1 day" : `${d} days`}</option>
+                        ))}
+                      </select>
+                      <span className="text-muted-foreground">before a job is due</span>
                     </label>
                   }
                 />
