@@ -16,15 +16,18 @@ import {
 
 import {
   KIND_WORDS,
+  MONTH_DAYS,
   everyText,
   hasMiles,
+  monthName,
   tabName,
+  yearDayText,
   type Job,
   type JobInput,
   type Plan,
   type UpkeepAsset,
 } from "../lib/upkeep";
-import { startersFor, starterJob, type Starter } from "../lib/starters";
+import { KITS, startersFor, starterJob, type KitId, type Starter } from "../lib/starters";
 import { AssetTile, Field, dialogSheet, dialogShell, dialogTitle, fieldClass } from "./parts";
 
 // -------------------------------------------------------------------------------------- one job --
@@ -57,19 +60,24 @@ function JobForm({
   const job = start.jobId ? (plan.jobs.find((j) => j.id === start.jobId) ?? null) : null;
   const car = hasMiles(plan.kind);
   const [name, setName] = useState(job?.name ?? "");
+  const [yearly, setYearly] = useState(!!job?.on);
   const [months, setMonths] = useState(job?.months ? String(job.months) : "");
   const [every, setEvery] = useState(job?.miles ? String(job.miles) : "");
+  const [month, setMonth] = useState(String(job?.on?.month ?? 1));
+  const [day, setDay] = useState(job?.on ? String(job.on.day) : "");
   const [lastDate, setLastDate] = useState(job?.last?.date ?? "");
   const [lastMiles, setLastMiles] = useState(
     job?.last?.miles != null ? String(job.last.miles) : "",
   );
   const [busy, setBusy] = useState(false);
   const [asking, setAsking] = useState(false);
-  const valid = name.trim() && (months || (car && every));
+  const dayOk = Number(day) >= 1 && Number(day) <= MONTH_DAYS[Number(month) - 1];
+  const valid = name.trim() && (yearly ? dayOk : months || (car && every));
   const input = (): JobInput => ({
     name,
-    months: months || null,
-    miles: car ? every.replace(/,/g, "") || null : null,
+    months: yearly ? null : months || null,
+    miles: car && !yearly ? every.replace(/,/g, "") || null : null,
+    on: yearly ? { month: Number(month), day: Number(day) } : null,
     lastDate: lastDate || null,
     lastMiles: car ? lastMiles.replace(/,/g, "") || null : null,
   });
@@ -122,29 +130,88 @@ function JobForm({
           className={fieldClass}
         />
       </Field>
+      <div
+        className="inline-flex w-fit gap-1 rounded-full bg-[var(--m-track)] p-[3px]"
+        role="group"
+        aria-label="How it repeats"
+      >
+        {[
+          { yes: false, label: "Every so often" },
+          { yes: true, label: "A day each year" },
+        ].map((o) => (
+          <button
+            key={o.label}
+            type="button"
+            aria-pressed={yearly === o.yes}
+            onClick={() => setYearly(o.yes)}
+            className={cn(
+              "h-7 shrink-0 whitespace-nowrap rounded-full px-3.5 text-[12.5px]",
+              yearly === o.yes
+                ? "bg-[var(--m-surface)] text-[var(--m-ink)]"
+                : "text-[var(--m-muted)] hover:text-[var(--m-ink-2)]",
+            )}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
       <div className="grid grid-cols-2 gap-x-2.5 gap-y-2">
-        <Field label="Every (months)">
-          <input
-            type="text"
-            inputMode="numeric"
-            value={months}
-            onChange={(e) => setMonths(e.target.value.replace(/\D/g, ""))}
-            placeholder="12"
-            className={fieldClass}
-          />
-        </Field>
-        {car ? (
-          <Field label="Or every (miles)">
-            <input
-              type="text"
-              inputMode="numeric"
-              value={every}
-              onChange={(e) => setEvery(e.target.value.replace(/[^\d,]/g, ""))}
-              placeholder="5,000"
-              className={fieldClass}
-            />
-          </Field>
-        ) : null}
+        {yearly ? (
+          <>
+            <Field label="Month">
+              <select
+                value={month}
+                onChange={(e) => {
+                  setMonth(e.target.value);
+                  if (Number(day) > MONTH_DAYS[Number(e.target.value) - 1])
+                    setDay(String(MONTH_DAYS[Number(e.target.value) - 1]));
+                }}
+                className={fieldClass}
+              >
+                {MONTH_DAYS.map((_, i) => (
+                  <option key={i} value={i + 1}>
+                    {monthName(i + 1)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Day">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={day}
+                onChange={(e) => setDay(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                placeholder="15"
+                className={fieldClass}
+              />
+            </Field>
+          </>
+        ) : (
+          <>
+            <Field label="Every (months)">
+              <input
+                type="text"
+                inputMode="numeric"
+                value={months}
+                onChange={(e) => setMonths(e.target.value.replace(/\D/g, ""))}
+                placeholder="12"
+                className={fieldClass}
+              />
+            </Field>
+            {car ? (
+              <Field label="Or every (miles)">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={every}
+                  onChange={(e) => setEvery(e.target.value.replace(/[^\d,]/g, ""))}
+                  placeholder="5,000"
+                  className={fieldClass}
+                />
+              </Field>
+            ) : null}
+          </>
+        )}
         <Field label="Last done">
           <input
             type="date"
@@ -168,9 +235,11 @@ function JobForm({
         ) : null}
       </div>
       <p className="text-[12px] text-[var(--m-muted)]">
-        {car
-          ? "Months, miles, or both: whichever comes first. Without a last-done day it stays quiet."
-          : "Without a last-done day it stays quiet: no reminder until you set one."}
+        {yearly
+          ? "Comes up on this day every year, with no last-done day needed. It stays due for a month, then waits for next year."
+          : car
+            ? "Months, miles, or both: whichever comes first. Without a last-done day it stays quiet."
+            : "Without a last-done day it stays quiet: no reminder until you set one."}
       </p>
       <DialogFooter className="items-center gap-2 sm:justify-between">
         {job ? (
@@ -239,17 +308,16 @@ export function JobDialog(props: {
 
 /** The ticking list: a row a job, its schedule in words; jobs already on the plan are marked and left out. */
 function StarterList({
-  kind,
+  list,
   have,
   picked,
   setPicked,
 }: {
-  kind: string;
+  list: Starter[];
   have: Set<string>;
   picked: Set<string>;
   setPicked: (next: Set<string>) => void;
 }) {
-  const list = startersFor(kind);
   const toggle = (name: string) => {
     const next = new Set(picked);
     if (next.has(name)) next.delete(name);
@@ -263,6 +331,7 @@ function StarterList({
         return (
           <label
             key={s.name}
+            title={s.tip}
             className={cn(
               "grid min-h-[34px] cursor-pointer grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 text-[14px] hover:bg-[var(--m-tile)]",
               already && "cursor-default opacity-45 hover:bg-transparent",
@@ -279,7 +348,9 @@ function StarterList({
             <span className="text-[12px] text-[var(--m-muted)]">
               {already
                 ? "on the list"
-                : everyText({ months: s.months ?? null, miles: s.miles ?? null })}
+                : s.yearly
+                  ? yearDayText(s.yearly)
+                  : everyText({ months: s.months ?? null, miles: s.miles ?? null })}
             </span>
           </label>
         );
@@ -293,22 +364,25 @@ const startPicks = (list: Starter[]) => new Set(list.filter((s) => s.on).map((s)
 function StarterForm({
   plans,
   start,
+  kit,
   onClose,
   onAdd,
 }: {
   plans: Plan[];
   start: string;
+  kit: KitId | null;
   onClose: () => void;
   onAdd: (assetId: string, jobs: JobInput[]) => Promise<boolean>;
 }) {
+  // A kit (the lawn) is for a house, not a car: only the properties are offered.
+  const choices = kit ? plans.filter((p) => p.kind === "property") : plans;
   const [assetId, setAssetId] = useState(start);
-  const plan = plans.find((p) => p.assetId === assetId) ?? plans[0];
-  const [picked, setPicked] = useState(() => startPicks(startersFor(plan.kind)));
+  const plan = choices.find((p) => p.assetId === assetId) ?? choices[0] ?? plans[0];
+  const listFor = (p: Plan) => (kit ? KITS[kit].list : startersFor(p.kind));
+  const [picked, setPicked] = useState(() => startPicks(listFor(plan)));
   const [busy, setBusy] = useState(false);
   const have = new Set(plan.jobs.map((j) => j.name.toLowerCase()));
-  const chosen = startersFor(plan.kind).filter(
-    (s) => picked.has(s.name) && !have.has(s.name.toLowerCase()),
-  );
+  const chosen = listFor(plan).filter((s) => picked.has(s.name) && !have.has(s.name.toLowerCase()));
   const save = async () => {
     setBusy(true);
     const ok = await onAdd(plan.assetId, chosen.map(starterJob));
@@ -318,24 +392,27 @@ function StarterForm({
   return (
     <>
       <DialogHeader className="text-left">
-        <DialogTitle className={dialogTitle}>From a starter list</DialogTitle>
+        <DialogTitle className={dialogTitle}>
+          {kit ? KITS[kit].title : "From a starter list"}
+        </DialogTitle>
         <DialogDescription>
-          Tick what applies; every number can be changed after. Set when each was last done, and the
-          reminders start.
+          {kit
+            ? KITS[kit].blurb
+            : "Tick what applies; every number can be changed after. Set when each was last done, and the reminders start."}
         </DialogDescription>
       </DialogHeader>
-      {plans.length > 1 ? (
+      {choices.length > 1 ? (
         <Field label="For">
           <select
             value={assetId}
             onChange={(e) => {
               setAssetId(e.target.value);
               const next = plans.find((p) => p.assetId === e.target.value);
-              if (next) setPicked(startPicks(startersFor(next.kind)));
+              if (next) setPicked(startPicks(listFor(next)));
             }}
             className={fieldClass}
           >
-            {plans.map((p) => (
+            {choices.map((p) => (
               <option key={p.assetId} value={p.assetId}>
                 {tabName(p)} ({KIND_WORDS[p.kind] ?? "Asset"})
               </option>
@@ -343,7 +420,7 @@ function StarterForm({
           </select>
         </Field>
       ) : null}
-      <StarterList kind={plan.kind} have={have} picked={picked} setPicked={setPicked} />
+      <StarterList list={listFor(plan)} have={have} picked={picked} setPicked={setPicked} />
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onClose}>
           Cancel
@@ -358,12 +435,15 @@ function StarterForm({
 
 export function StarterDialog({
   start,
+  kit = null,
   plans,
   onClose,
   onAdd,
 }: {
   /** The asset the list is for. */
   start: string | null;
+  /** A kit instead of the asset's own starter list. */
+  kit?: KitId | null;
   plans: Plan[];
   onClose: () => void;
   onAdd: (assetId: string, jobs: JobInput[]) => Promise<boolean>;
@@ -372,7 +452,14 @@ export function StarterDialog({
     <Dialog open={!!start} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className={dialogShell} mobileClassName={dialogSheet}>
         {start && plans.length ? (
-          <StarterForm key={start} plans={plans} start={start} onClose={onClose} onAdd={onAdd} />
+          <StarterForm
+            key={`${start}:${kit ?? ""}`}
+            plans={plans}
+            start={start}
+            kit={kit}
+            onClose={onClose}
+            onAdd={onAdd}
+          />
         ) : null}
       </DialogContent>
     </Dialog>
@@ -449,7 +536,7 @@ function TrackForm({
             <>
               <div className="text-[12px] text-[var(--m-muted)]">Start with these jobs</div>
               <StarterList
-                kind={asset.kind}
+                list={startersFor(asset.kind)}
                 have={new Set()}
                 picked={picked}
                 setPicked={setPicked}

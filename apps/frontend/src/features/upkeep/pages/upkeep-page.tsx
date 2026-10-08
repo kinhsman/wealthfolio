@@ -3,6 +3,7 @@
 // asset itself, each with its jobs and what is due first; an Overview of all of them and the recent jobs. Marking
 // a job done can name the bank charge that paid it. Everything comes from the money-hub service
 // (lib/upkeep.ts); the page only shows it and sends the owner's picks back.
+import { Sprout } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -43,6 +44,7 @@ import {
 import { PlanCard, type PlanActions } from "../components/plan-card";
 import { Card, useUpkeepAct } from "../components/parts";
 import { Summary } from "../components/summary";
+import type { KitId } from "../lib/starters";
 import { tabName, upkeepApi, useUpkeep, type Plan } from "../lib/upkeep";
 
 function Pills({
@@ -84,14 +86,18 @@ function Pills({
 function AddMenu({
   phone,
   hasPlans,
+  hasHouse,
   onStarter,
+  onLawn,
   onCustom,
   onOneOff,
   onTrack,
 }: {
   phone: boolean;
   hasPlans: boolean;
+  hasHouse: boolean;
   onStarter: () => void;
+  onLawn: () => void;
   onCustom: () => void;
   onOneOff: () => void;
   onTrack: () => void;
@@ -126,6 +132,12 @@ function AddMenu({
           <Icons.List className="mr-2 size-4" aria-hidden />
           From a starter list
         </DropdownMenuItem>
+        {hasHouse ? (
+          <DropdownMenuItem className="h-8" onSelect={onLawn}>
+            <Sprout className="mr-2 size-4" aria-hidden />
+            Lawn care (Chicago)
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem className="h-8" onSelect={onCustom}>
           <Icons.Plus className="mr-2 size-4" aria-hidden />
           Custom job
@@ -179,7 +191,7 @@ export default function UpkeepPage() {
   const { run } = useUpkeepAct();
   const [done, setDone] = useState<DoneStart | null>(null);
   const [job, setJob] = useState<JobStart | null>(null);
-  const [starter, setStarter] = useState<string | null>(null);
+  const [starter, setStarter] = useState<{ assetId: string; kit: KitId | null } | null>(null);
   const [track, setTrack] = useState(false);
   const [rename, setRename] = useState<Plan | null>(null);
   const [stopping, setStopping] = useState<Plan | null>(null);
@@ -196,7 +208,8 @@ export default function UpkeepPage() {
     onDone: (p, j) => setDone({ assetId: p.assetId, jobId: j.id }),
     onEdit: (p, j) => setJob({ assetId: p.assetId, jobId: j.id }),
     onAddJob: (p) => setJob({ assetId: p.assetId, jobId: null }),
-    onStarter: (p) => setStarter(p.assetId),
+    onStarter: (p) => setStarter({ assetId: p.assetId, kit: null }),
+    onLawn: (p) => setStarter({ assetId: p.assetId, kit: "lawn" }),
     onOneOff: (p) => setDone({ assetId: p.assetId, jobId: null }),
     onRename: (p) => setRename(p),
     onStop: (p) => setStopping(p),
@@ -225,7 +238,15 @@ export default function UpkeepPage() {
               <AddMenu
                 phone={phone}
                 hasPlans={plans.length > 0}
-                onStarter={() => current && setStarter(current.assetId)}
+                hasHouse={plans.some((p) => p.kind === "property")}
+                onStarter={() => current && setStarter({ assetId: current.assetId, kit: null })}
+                onLawn={() => {
+                  const house =
+                    current?.kind === "property"
+                      ? current
+                      : plans.find((p) => p.kind === "property");
+                  if (house) setStarter({ assetId: house.assetId, kit: "lawn" });
+                }}
                 onCustom={() => current && setJob({ assetId: current.assetId, jobId: null })}
                 onOneOff={() => current && setDone({ assetId: current.assetId, jobId: null })}
                 onTrack={() => setTrack(true)}
@@ -332,7 +353,8 @@ export default function UpkeepPage() {
         onRemove={(a, id) => run("job", () => upkeepApi.removeJob(a, id), "Job deleted")}
       />
       <StarterDialog
-        start={starter}
+        start={starter?.assetId ?? null}
+        kit={starter?.kit ?? null}
         plans={plans}
         onClose={() => setStarter(null)}
         onAdd={(a, jobs) => run("starter", () => upkeepApi.addPlan(a, jobs), "Jobs added")}

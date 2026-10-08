@@ -7,6 +7,12 @@ import { useQuery } from "@tanstack/react-query";
 
 export type StatusKind = "bad" | "warn" | "later" | "new";
 
+/** A day of the year, for a job that comes round on the same day each year (a lawn feed on May 20). */
+export interface YearDay {
+  month: number;
+  day: number;
+}
+
 export interface JobStatus {
   kind: StatusKind;
   /** What comes first: the date (d) or the miles (m). */
@@ -18,6 +24,8 @@ export interface JobStatus {
   /** The day it is due, or about when the miles run out. */
   dueOn: string | null;
   rank: number;
+  /** A yearly job: the day this round of it is for. */
+  cycle?: string | null;
   /** The words the page shows: "Overdue 16d", "in 4d", "in 300 mi", "Jan 12, 2027", "Set last done". */
   chip: string;
 }
@@ -27,6 +35,8 @@ export interface Job {
   name: string;
   months: number | null;
   miles: number | null;
+  /** Set for a yearly job (then no months or miles). */
+  on?: YearDay | null;
   last: { date: string; miles: number | null } | null;
   status: JobStatus;
 }
@@ -114,6 +124,7 @@ export interface JobInput {
   name: string;
   months?: number | string | null;
   miles?: number | string | null;
+  on?: YearDay | null;
   lastDate?: string | null;
   lastMiles?: number | string | null;
 }
@@ -200,8 +211,53 @@ export const miles = (n: number) => Math.round(n).toLocaleString("en-US");
 const thousands = (n: number) =>
   n % 1000 === 0 ? `${n / 1000}k` : `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
 
-/** "every 5k mi or 6 mo", "yearly", "every 2 yr". */
-export function everyText(job: Pick<Job, "months" | "miles">): string {
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+/** Days in each month; February tops out at 28 so every year has the day. */
+export const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+export const monthName = (month: number) => MONTH_NAMES[month - 1] ?? "";
+
+/** "Apr 15". */
+export const yearDayText = (on: YearDay) => `${monthName(on.month)} ${on.day}`;
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const daysBetween = (a: string, b: string) =>
+  Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86_400_000);
+
+/** The same rules as the service: a yearly job stays overdue 30 days, and done up to 30 days before its day counts. */
+const SEASON_GRACE = 30;
+const SEASON_EARLY = 30;
+
+/**
+ * The day a yearly job is looked for next (mirrors lib/upkeep.js `occurrenceOf`): this year's, or last year's while
+ * within 30 days past, or the next year's once this year's was done (30 days before it counts) or has gone by.
+ */
+export function nextYearDay(on: YearDay, lastDone: string | null, now: string): string {
+  const year = Number(now.slice(0, 4));
+  for (let y = year - 1; y <= year + 2; y++) {
+    const d = `${y}-${pad(on.month)}-${pad(on.day)}`;
+    if (daysBetween(d, now) > SEASON_GRACE) continue;
+    if (lastDone && daysBetween(d, lastDone) >= -SEASON_EARLY) continue;
+    return d;
+  }
+  return `${year + 1}-${pad(on.month)}-${pad(on.day)}`;
+}
+
+/** "every 5k mi or 6 mo", "yearly", "every 2 yr", "yearly on Apr 15". */
+export function everyText(job: Pick<Job, "months" | "miles"> & { on?: YearDay | null }): string {
+  if (job.on) return `yearly on ${yearDayText(job.on)}`;
   if (job.months === 12 && !job.miles) return "yearly";
   const parts: string[] = [];
   if (job.miles) parts.push(`${thousands(job.miles)} mi`);
@@ -215,13 +271,24 @@ export function lastText(job: Job, today: string): string {
   return `${shortDay(job.last.date, today)}${job.last.miles != null ? ` · ${miles(job.last.miles)} mi` : ""}`;
 }
 
+/** A job's line under its name: how often, and when it was last done ("not done yet" for a yearly job never marked). */
+export function rowText(job: Job, today: string): string {
+  if (job.on && !job.last) return `${everyText(job)} · not done yet`;
+  return `${everyText(job)} · last ${lastText(job, today)}`;
+}
+
 /** The text of "Next due ..." under the Done window: from the day and miles typed there. */
 export function nextDueText(
-  job: Pick<Job, "months" | "miles">,
+  job: Pick<Job, "months" | "miles"> & { on?: YearDay | null },
   date: string,
   milesNow: number | null,
   today: string,
 ): string {
+  if (job.on) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(date)
+      ? `Next due ${shortDay(nextYearDay(job.on, date, today), today)}`
+      : "";
+  }
   const parts: string[] = [];
   if (job.miles && milesNow != null) parts.push(`${miles(milesNow + job.miles)} mi`);
   if (job.months && /^\d{4}-\d{2}-\d{2}$/.test(date)) {

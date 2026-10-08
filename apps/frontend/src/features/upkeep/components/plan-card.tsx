@@ -1,6 +1,7 @@
 // money-hub patch: Maintenance, one asset's card: its name (read live from Holdings), what kind it is, a car's
 // miles, and its jobs with what is due first on top. A job row: name over "every X · last Y", where it stands,
 // and Done. On a phone a row is a check circle, the name and where it stands, and the list folds after four.
+import { Sprout } from "lucide-react";
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -16,9 +17,8 @@ import {
 
 import {
   KIND_WORDS,
-  everyText,
   hasMiles,
-  lastText,
+  rowText,
   miles as milesText,
   tabName,
   type Job,
@@ -33,6 +33,7 @@ export interface PlanActions {
   onEdit: (plan: Plan, job: Job) => void;
   onAddJob: (plan: Plan) => void;
   onStarter: (plan: Plan) => void;
+  onLawn: (plan: Plan) => void;
   onOneOff: (plan: Plan) => void;
   onRename: (plan: Plan) => void;
   onStop: (plan: Plan) => void;
@@ -109,9 +110,7 @@ function JobRow({
         title="Change this job"
       >
         <span className="truncate">{job.name}</span>
-        <span className="truncate text-[12px] text-[var(--m-muted)]">
-          {everyText(job)} · last {lastText(job, today)}
-        </span>
+        <span className="truncate text-[12px] text-[var(--m-muted)]">{rowText(job, today)}</span>
       </button>
       <StatusChip
         status={job.status}
@@ -282,6 +281,12 @@ export function PlanCard({
               <Icons.List className="mr-2 size-4" aria-hidden />
               From a starter list
             </DropdownMenuItem>
+            {plan.kind === "property" ? (
+              <DropdownMenuItem className="h-8" onSelect={() => actions.onLawn(plan)}>
+                <Sprout className="mr-2 size-4" aria-hidden />
+                Lawn care (Chicago)
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem className="h-8" onSelect={() => actions.onOneOff(plan)}>
               <Icons.Wrench className="mr-2 size-4" aria-hidden />
               One-off repair

@@ -1,13 +1,27 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  KITS,
+  LAWN_STARTERS,
   OTHER_STARTERS,
   PROPERTY_STARTERS,
   VEHICLE_STARTERS,
   startersFor,
   starterJob,
 } from "./starters";
-import { everyText, hasMiles, lastText, miles, nextDueText, shortDay, tabName } from "./upkeep";
+import {
+  MONTH_DAYS,
+  everyText,
+  hasMiles,
+  lastText,
+  miles,
+  nextDueText,
+  nextYearDay,
+  rowText,
+  shortDay,
+  tabName,
+  yearDayText,
+} from "./upkeep";
 
 describe("everyText", () => {
   it("says yearly for a plain 12 months", () => {
@@ -94,6 +108,84 @@ describe("starters", () => {
       name: "Tire rotation",
       months: null,
       miles: 7500,
+    });
+  });
+});
+
+describe("a job on a day each year", () => {
+  const spring = { months: null, miles: null, on: { month: 4, day: 15 } };
+  it("says the day in words", () => {
+    expect(yearDayText({ month: 4, day: 15 })).toBe("Apr 15");
+    expect(everyText(spring)).toBe("yearly on Apr 15");
+  });
+  it("shows no last-done day for a yearly job never marked", () => {
+    const base = { id: "j", name: "Crabgrass preventer", ...spring, status: {} };
+    expect(rowText({ ...base, last: null } as never, "2026-10-08")).toBe(
+      "yearly on Apr 15 · not done yet",
+    );
+    expect(
+      rowText({ ...base, last: { date: "2026-04-12", miles: null } } as never, "2026-10-08"),
+    ).toBe("yearly on Apr 15 · last Apr 12");
+    const oil = { id: "o", name: "Oil", months: 6, miles: 5000, on: null, last: null, status: {} };
+    expect(rowText(oil as never, "2026-10-08")).toBe("every 5k mi or 6 mo · last not set yet");
+  });
+  it("finds the day to look for next, like the service", () => {
+    const on = { month: 10, day: 15 };
+    expect(nextYearDay(on, null, "2026-10-08")).toBe("2026-10-15");
+    expect(nextYearDay(on, "2026-09-20", "2026-10-08")).toBe("2027-10-15");
+    expect(nextYearDay(on, "2026-09-10", "2026-10-08")).toBe("2026-10-15");
+    expect(nextYearDay({ month: 9, day: 7 }, null, "2026-10-08")).toBe("2027-09-07");
+    expect(nextYearDay({ month: 9, day: 8 }, null, "2026-10-08")).toBe("2026-09-08");
+    expect(nextYearDay({ month: 12, day: 25 }, null, "2027-01-02")).toBe("2026-12-25");
+    expect(nextYearDay({ month: 1, day: 5 }, "2026-12-20", "2026-12-28")).toBe("2028-01-05");
+  });
+  it("words the next due under the Done window from the day typed", () => {
+    expect(
+      nextDueText({ ...spring, on: { month: 10, day: 5 } }, "2026-10-08", null, "2026-10-08"),
+    ).toBe("Next due Oct 5, 2027");
+    expect(nextDueText(spring, "", null, "2026-10-08")).toBe("");
+  });
+});
+
+describe("the Chicago lawn kit", () => {
+  it("is a kit with unique names, real days, and none with months or miles", () => {
+    expect(KITS.lawn.list).toBe(LAWN_STARTERS);
+    const names = LAWN_STARTERS.map((s) => s.name.toLowerCase());
+    expect(new Set(names).size).toBe(names.length);
+    for (const s of LAWN_STARTERS) {
+      expect(s.yearly).toBeTruthy();
+      expect(s.months ?? s.miles).toBeUndefined();
+      const { month, day } = s.yearly!;
+      expect(day).toBeGreaterThanOrEqual(1);
+      expect(day).toBeLessThanOrEqual(MONTH_DAYS[month - 1]);
+    }
+  });
+  it("runs through the year in order, from the mower in March to the last mow in November", () => {
+    const days = LAWN_STARTERS.map((s) => s.yearly!.month * 100 + s.yearly!.day);
+    expect(days).toEqual([...days].sort((a, b) => a - b));
+    expect(LAWN_STARTERS[0].name).toBe("Mower tune-up");
+    expect(LAWN_STARTERS[LAWN_STARTERS.length - 1].name).toBe("Last mow");
+  });
+  it("ticks the core jobs, leaves the optional ones, and never collides with the house list", () => {
+    const ticked = LAWN_STARTERS.filter((s) => s.on).map((s) => s.name);
+    expect(ticked).toEqual([
+      "Crabgrass preventer",
+      "Spring feed",
+      "Grub preventer",
+      "Aerate and overseed",
+      "Fall feed",
+      "Leaf cleanup",
+      "Winterizer feed",
+    ]);
+    const house = new Set(PROPERTY_STARTERS.map((s) => s.name.toLowerCase()));
+    expect(LAWN_STARTERS.some((s) => house.has(s.name.toLowerCase()))).toBe(false);
+  });
+  it("hands the service the day, not a rule of months", () => {
+    expect(starterJob(LAWN_STARTERS[2])).toEqual({
+      name: "Crabgrass preventer",
+      months: null,
+      miles: null,
+      on: { month: 4, day: 15 },
     });
   });
 });
