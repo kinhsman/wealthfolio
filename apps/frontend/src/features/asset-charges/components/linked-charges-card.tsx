@@ -23,18 +23,22 @@ import { useMerchants } from "@/features/spending/lib/merchants";
 import { shortDay } from "@/features/upkeep/lib/upkeep";
 
 import {
+  COST_WORDS,
   RULE_KIND_WORDS,
+  SHARE_WORDS,
   emptyHelp,
   hasRule,
   ruleName,
   useChargeLinkActions,
   useChargeLinks,
+  withCostShare,
   withRule,
   withoutRule,
   type ChargeRule,
   type LinkedCharge,
   type RuleInput,
   type RuleKind,
+  type Share,
 } from "../lib/charge-links";
 
 const KIND_ICON: Record<RuleKind, typeof Icons.Store> = {
@@ -49,10 +53,13 @@ export function LinkedChargesCard({
   assetId,
   kind,
   currency,
+  rental = false,
 }: {
   assetId: string;
   kind: string;
   currency: string;
+  /** A home that is rented: each rule also says what kind of cost it is and whose, for the Rentals page. */
+  rental?: boolean;
 }) {
   const view = useChargeLinks();
   const asset = view.data?.assets.find((a) => a.id === assetId);
@@ -101,6 +108,7 @@ export function LinkedChargesCard({
               <AddRule
                 rules={rules}
                 busy={busy}
+                rental={rental}
                 onCancel={() => setAdding(false)}
                 onAdd={(rule) =>
                   saveRules.mutate(withRule(rules, rule), {
@@ -117,13 +125,31 @@ export function LinkedChargesCard({
               const Icon = KIND_ICON[r.kind];
               const c = asset.rules[r.id];
               return (
-                <div key={r.id} className="grid min-h-8 grid-cols-[18px_minmax(0,1fr)_auto_24px] items-center gap-2 text-sm">
+                <div
+                  key={r.id}
+                  className={cn(
+                    "grid min-h-8 grid-cols-[18px_minmax(0,1fr)_auto_24px] items-center gap-x-2 text-sm",
+                    rental && "md:grid-cols-[18px_minmax(0,1fr)_auto_auto_auto_24px]",
+                  )}
+                >
                   <Icon className="text-muted-foreground size-4" aria-hidden />
                   <span className="truncate">
                     {ruleName(r)}
                     <span className="text-muted-foreground ml-1.5 text-xs">{RULE_KIND_WORDS[r.kind]}</span>
                   </span>
-                  <span className="text-muted-foreground text-xs tabular-nums">
+                  {rental ? (
+                    <div className="col-span-3 col-start-2 row-start-2 flex flex-wrap gap-1 pb-1 md:contents">
+                      <CostShare
+                        cost={r.cost ?? "other"}
+                        share={r.share ?? "usual"}
+                        disabled={busy}
+                        onChange={(cost, share) =>
+                          saveRules.mutate(withCostShare(rules, r.id, cost, share), { onError: fail })
+                        }
+                      />
+                    </div>
+                  ) : null}
+                  <span className={cn("text-muted-foreground text-xs tabular-nums", rental && "col-start-3 row-start-1 md:col-auto md:row-auto")}>
                     {c ? (
                       <>
                         {c.yearCount} this year ·{" "}
@@ -137,7 +163,10 @@ export function LinkedChargesCard({
                     title="Remove this rule"
                     disabled={busy}
                     onClick={() => remove(r)}
-                    className="text-muted-foreground hover:text-foreground flex size-6 items-center justify-center rounded-md disabled:opacity-50"
+                    className={cn(
+                      "text-muted-foreground hover:text-foreground flex size-6 items-center justify-center rounded-md disabled:opacity-50",
+                      rental && "col-start-4 row-start-1 md:col-auto md:row-auto",
+                    )}
                   >
                     <Icons.X className="size-4" aria-hidden />
                   </button>
@@ -207,17 +236,65 @@ function RecentRow({
   );
 }
 
+/** Rentals: what kind of cost a rule is and whose it is. */
+function CostShare({
+  cost,
+  share,
+  disabled,
+  onChange,
+}: {
+  cost: string;
+  share: string;
+  disabled?: boolean;
+  onChange: (cost: string, share: string) => void;
+}) {
+  const trigger = "h-6! min-h-0! w-auto gap-1 px-2 py-0! text-xs md:h-7!";
+  return (
+    <>
+      <Select value={cost} onValueChange={(v) => onChange(v, share)} disabled={disabled}>
+        <SelectTrigger className={trigger} aria-label="Counts as">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent position="popper">
+          {Object.entries(COST_WORDS).map(([v, label]) => (
+            <SelectItem key={v} value={v}>
+              {label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={share} onValueChange={(v) => onChange(cost, v)} disabled={disabled}>
+        <SelectTrigger className={trigger} aria-label="Whose cost">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent position="popper">
+          <SelectItem value="usual">Usual share</SelectItem>
+          {Object.entries(SHARE_WORDS).map(([v, label]) => (
+            <SelectItem key={v} value={v}>
+              {label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </>
+  );
+}
+
 function AddRule({
   rules,
   busy,
+  rental,
   onAdd,
   onCancel,
 }: {
   rules: ChargeRule[];
   busy: boolean;
+  rental: boolean;
   onAdd: (rule: RuleInput) => void;
   onCancel: () => void;
 }) {
+  const [cost, setCost] = useState("other");
+  const [share, setShare] = useState("usual");
   const [kind, setKind] = useState<RuleKind>("payee");
   const [pick, setPick] = useState("");
   const [text, setText] = useState("");
@@ -255,7 +332,12 @@ function AddRule({
       return;
     }
     const label = kind === "words" ? undefined : options.find((o) => o.value === pick)?.label;
-    onAdd({ kind, value, ...(label ? { label } : {}) });
+    onAdd({
+      kind,
+      value,
+      ...(label ? { label } : {}),
+      ...(rental ? { cost, ...(share !== "usual" ? { share: share as Share } : {}) } : {}),
+    });
   };
 
   return (
@@ -314,6 +396,11 @@ function AddRule({
             </Select>
           )}
         </div>
+        {rental ? (
+          <div className="flex basis-full flex-wrap gap-1.5">
+            <CostShare cost={cost} share={share} onChange={(c, s) => { setCost(c); setShare(s); }} />
+          </div>
+        ) : null}
         <Button type="button" size="sm" className="h-8" disabled={!ready || busy} onClick={submit}>
           Add
         </Button>

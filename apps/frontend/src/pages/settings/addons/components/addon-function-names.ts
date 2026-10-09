@@ -73,6 +73,7 @@ export const FUNCTION_DISPLAY_NAMES: Record<string, string> = {
   // SpendingAPI functions
   "spending.isEnabled": "Check whether Spending is enabled",
   "spending.getCategories": "View your spend categories",
+  "spending.getLinkedCharges": "View the bank charges linked to an asset",
   "spending.getReport": "View aggregate spending reports",
   "spending.getRules": "View its own auto-categorization rules",
   "spending.saveRule": "Create or update auto-categorization rules",

@@ -277,6 +277,10 @@ export const AlternativeAssetContent: React.FC<AlternativeAssetContentProps> = (
             assetId={holding.id}
             kind={holding.kind.toLowerCase()}
             currency={holding.currency}
+            rental={
+              holding.kind.toLowerCase() === "property" &&
+              (holding.metadata as Record<string, unknown> | null)?.sub_type === "rental"
+            }
           />
         ) : null}
 

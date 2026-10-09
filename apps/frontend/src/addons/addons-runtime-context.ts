@@ -44,6 +44,7 @@ import {
   upsertCategorizationRule,
 } from "@/adapters";
 import { searchCashActivities } from "@/features/spending/adapters/cash-activities";
+import { chargeLinksApi } from "@/features/asset-charges/lib/charge-links";
 import { getSpendingReport } from "@/features/spending/adapters/reports";
 import { openCsvFileDialog, openFileSaveDialog } from "@/adapters";
 import { ADDON_ADDRESS_ALIASES } from "@/lib/rentals";
@@ -493,6 +494,7 @@ export function createAddonHostAPI(
       searchCashActivities,
       getSpendingReport,
       getSpendCategories,
+      getLinkedCharges: async (assetId: string) => (await chargeLinksApi.assetCharges(assetId)).charges,
       listCategorizationRules,
       upsertCategorizationRule,
       deleteCategorizationRuleById: deleteCategorizationRule,

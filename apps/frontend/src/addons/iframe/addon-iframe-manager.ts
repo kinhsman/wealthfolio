@@ -360,6 +360,7 @@ export const ALLOWED_API_METHODS = new Set([
   "spending.searchCashActivities",
   "spending.getReport",
   "spending.getCategories",
+  "spending.getLinkedCharges",
   "spending.getRules",
   "spending.saveRule",
   "spending.deleteRule",

@@ -67,6 +67,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { QueryKeys } from "@/lib/query-keys";
 import { useSettingsContext } from "@/lib/settings-provider";
 import { rentalHref, rentalSwitchMetadata } from "@/lib/rentals";
+import { CHARGE_LINKS_KEY, chargeLinksApi } from "@/features/asset-charges/lib/charge-links";
 import { toast } from "sonner";
 
 export const HoldingsPage = () => {
@@ -254,6 +255,12 @@ export const HoldingsPage = () => {
         await updateAlternativeAssetMetadata(holding.id, rentalSwitchMetadata(holding, on));
         await queryClient.invalidateQueries({ queryKey: [QueryKeys.ALTERNATIVE_HOLDINGS] });
         if (on) {
+          // The Housing categories Rentals has always counted become this home's starter rules (only if it has
+          // none yet). The helper being away must not undo the switch: Linked charges has an Add button too.
+          chargeLinksApi
+            .startRentalRules(holding.id)
+            .then((view) => queryClient.setQueryData(CHARGE_LINKS_KEY, view))
+            .catch(() => undefined);
           toast.success(`${holding.name} is a rental`, {
             action: { label: "Open Rentals", onClick: () => navigate(rentalHref(holding.id)) },
           });

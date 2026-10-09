@@ -145,10 +145,11 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
     id: 'spending',
     name: 'Spending',
     description:
-      'View aggregate spending reports and categories, and manage categorization rules that auto-tag transactions',
+      'View aggregate spending reports and categories, the bank charges linked to an asset, and manage categorization rules that auto-tag transactions',
     functions: [
       'isEnabled',
       'getCategories',
+      'getLinkedCharges',
       'getReport',
       'getRules',
       'saveRule',

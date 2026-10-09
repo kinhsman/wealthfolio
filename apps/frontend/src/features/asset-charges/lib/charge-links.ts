@@ -3,6 +3,7 @@
 // asset; the money-hub service keeps the rules in the asset's own details and works out whose each charge is
 // (server/drive-backup/lib/chargeLinks.js). This file reads that, sends the owner's picks, and words the labels.
 // Nothing here matches a charge itself: every page asks the service, so they cannot disagree.
+import type { LinkedAssetCharge } from "@wealthfolio/addon-sdk";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export type RuleKind = "payee" | "category" | "words";
@@ -90,6 +91,10 @@ const seg = (s: string) => encodeURIComponent(s);
 
 export const chargeLinksApi = {
   get: () => call<ChargeLinksView>("GET", ""),
+  /** Every charge the asset has, with its parts (Rentals books these as the rental's costs). */
+  assetCharges: (assetId: string) => call<{ assetId: string; charges: LinkedAssetCharge[] }>("GET", `/${seg(assetId)}/charges`),
+  /** The Housing starter rules for a rental that has none yet. */
+  startRentalRules: (assetId: string) => call<ChargeLinksView>("POST", `/${seg(assetId)}/starter`, {}),
   saveRules: (assetId: string, rules: RuleInput[]) =>
     call<ChargeLinksView>("PUT", `/${seg(assetId)}/rules`, { rules }),
   setCharge: (assetId: string, chargeId: string, state: "yes" | "no" | "clear") =>
@@ -133,6 +138,32 @@ export const RULE_KIND_WORDS: Record<RuleKind, string> = {
   category: "Category",
   words: "Words",
 };
+
+/** Rentals: the kinds of cost a rule can count as, and whose cost it is (the words Rentals uses). */
+export const COST_WORDS: Record<string, string> = {
+  insurance: "Insurance",
+  repair: "Repair / maintenance",
+  utilities: "Utilities",
+  property_tax: "Property tax",
+  hoa: "HOA / fees",
+  management: "Management / listing",
+  improvement: "Improvement",
+  other: "Other cost",
+};
+export const SHARE_WORDS: Record<Share, string> = {
+  shared: "Shared with the rental",
+  rental: "Rental unit only",
+  mine: "My unit only",
+};
+
+/** The rule with its cost and whose changed ("usual" = the usual share for that cost). */
+export function withCostShare(rules: ChargeRule[], id: string, cost: string, share: string): RuleInput[] {
+  return rules.map((r) => {
+    if (r.id !== id) return r;
+    const { cost: _c, share: _s, ...rest } = r;
+    return { ...rest, cost, ...(share !== "usual" ? { share: share as Share } : {}) };
+  });
+}
 
 /** What a rule is called on the card. */
 export function ruleName(rule: ChargeRule): string {

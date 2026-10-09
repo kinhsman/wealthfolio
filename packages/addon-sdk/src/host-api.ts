@@ -18,6 +18,7 @@ import type {
   CheckSnapshotImportResult,
   CashActivitySearchRequest,
   CashActivitySearchResponse,
+  LinkedAssetCharge,
   ImportActivitiesResult,
   Asset,
   AlternativeAssetHolding,
@@ -494,6 +495,15 @@ export interface SpendingAPI {
   searchCashActivities(
     request: CashActivitySearchRequest,
   ): Promise<CashActivitySearchResponse>;
+
+  /**
+   * The bank charges linked to an asset (money-hub patch): the rules on the asset's Linked charges card,
+   * worked out by the money-hub helper, newest first, each with its parts (a split charge gives one per line).
+   * Requires the `spending.getLinkedCharges` permission.
+   * @param assetId The Holdings asset (a rental is its property's id)
+   * @returns Promise resolving to the asset's linked charges
+   */
+  getLinkedCharges(assetId: string): Promise<LinkedAssetCharge[]>;
 
   /**
    * Get aggregate spending, income, and saving totals and category breakdowns

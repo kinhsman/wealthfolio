@@ -737,6 +737,30 @@ export interface NetSummary {
   converted?: CurrencyNet | null;
 }
 
+/** One part of a bank charge that is for an asset (money-hub patch): a whole charge, or one line of a split. */
+export interface LinkedAssetChargePart {
+  lineId?: string;
+  note?: string;
+  ruleId: string | null;
+  amount: number;
+  /** The kind of cost the asset's rule says it is (insurance, repair, utilities, ...). */
+  cost?: string;
+  /** Whose cost it is by the asset's rule (mine, shared, rental). */
+  share?: 'mine' | 'shared' | 'rental';
+}
+
+/** A bank charge that is for an asset, as the money-hub helper works it out from the asset's linked-charge rules. */
+export interface LinkedAssetCharge {
+  id: string;
+  date: string;
+  accountId: string;
+  notes: string;
+  bank?: string;
+  amount: number;
+  via: 'rule' | 'include';
+  parts: LinkedAssetChargePart[];
+}
+
 export interface CashActivitySearchResponse {
   items: CashActivity[];
   totalCount: number;

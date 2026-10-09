@@ -67,6 +67,7 @@ import type {
   Goal as SDKGoal,
   GoalAllocation as SDKGoalAllocation,
   HostAPI as SDKHostAPI,
+  LinkedAssetCharge,
   NetworkRequest as SDKNetworkRequest,
   NetworkResponse as SDKNetworkResponse,
   Permission,
@@ -122,6 +123,7 @@ export interface InternalHostAPI {
   searchCashActivities(request: CashActivitySearchRequest): Promise<CashActivitySearchResponse>;
   getSpendingReport(request: ReportRequest): Promise<MonthlyReport>;
   getSpendCategories(kind?: SpendCategoryKind): Promise<SpendCategory[]>;
+  getLinkedCharges(assetId: string): Promise<LinkedAssetCharge[]>;
   listCategorizationRules(): Promise<InternalCategorizationRule[]>;
   upsertCategorizationRule(rule: NewCategorizationRule): Promise<InternalCategorizationRule>;
   deleteCategorizationRuleById(id: string): Promise<void>;
@@ -576,6 +578,7 @@ export function createSDKHostAPIBridge(
       isEnabled: internalAPI.isSpendingEnabled,
       getReport: internalAPI.getSpendingReport,
       getCategories: internalAPI.getSpendCategories,
+      getLinkedCharges: internalAPI.getLinkedCharges,
       getRules: async (): Promise<SDKCategorizationRule[]> => {
         const prefix = `addon:${addonId || "unknown-addon"}:`;
         const rules = await internalAPI.listCategorizationRules();
