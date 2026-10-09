@@ -7,7 +7,8 @@ import { Sprout } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import { useDashboardSkins } from "@/features/spending/lib/dashboard-skin";
+import { SwipablePage, type SwipablePageView } from "@/components/page";
+import { MeadowTab } from "@/features/meadow-dash/parts";
 import { useIsMobileViewport } from "@/hooks/use-platform";
 import { cn } from "@/lib/utils";
 import {
@@ -26,9 +27,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   Icons,
-  Page,
-  PageContent,
-  PageHeader,
   Skeleton,
 } from "@wealthfolio/ui";
 
@@ -46,42 +44,6 @@ import { Card, useUpkeepAct } from "../components/parts";
 import { Summary } from "../components/summary";
 import type { KitId } from "../lib/starters";
 import { tabName, upkeepApi, useUpkeep, type Plan } from "../lib/upkeep";
-
-function Pills({
-  items,
-  value,
-  onPick,
-}: {
-  items: { key: string; label: string }[];
-  value: string;
-  onPick: (key: string) => void;
-}) {
-  return (
-    <div
-      className="inline-flex max-w-full gap-1 overflow-x-auto rounded-full bg-[var(--m-track)] p-[3px]"
-      role="group"
-      aria-label="Maintenance"
-    >
-      {items.map((i) => (
-        <button
-          key={i.key}
-          type="button"
-          aria-pressed={i.key === value}
-          data-m={i.key === value ? "fill" : undefined}
-          onClick={() => onPick(i.key)}
-          className={cn(
-            "h-7 shrink-0 whitespace-nowrap rounded-full px-3.5 text-[12.5px] max-md:px-3",
-            i.key === value
-              ? "bg-[var(--m-surface)] text-[var(--m-ink)]"
-              : "text-[var(--m-muted)] hover:text-[var(--m-ink-2)]",
-          )}
-        >
-          {i.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function AddMenu({
   phone,
@@ -184,7 +146,6 @@ function Welcome({ hasAssets, onTrack }: { hasAssets: boolean; onTrack: () => vo
 }
 
 export default function UpkeepPage() {
-  const skins = useDashboardSkins();
   const phone = useIsMobileViewport();
   const [params, setParams] = useSearchParams();
   const { data: view, error, isLoading, refetch } = useUpkeep();
@@ -200,8 +161,7 @@ export default function UpkeepPage() {
   const plans = view?.plans ?? [];
   const asked = params.get("tab") ?? "overview";
   const tab = asked === "history" || plans.some((p) => p.assetId === asked) ? asked : "overview";
-  const pick = (key: string) =>
-    setParams(key === "overview" ? {} : { tab: key }, { replace: true });
+  const pick = (key: string) => setParams({ tab: key }, { replace: true });
   const current = plans.find((p) => p.assetId === tab) ?? plans[0];
 
   const actions: PlanActions = {
@@ -228,101 +188,130 @@ export default function UpkeepPage() {
       />
     ));
 
-  return (
-    <div className="meadow min-h-screen" data-light-skin={skins.light} data-dark-skin={skins.dark}>
-      <Page>
-        <PageHeader
-          heading="Maintenance"
-          actions={
-            view ? (
-              <AddMenu
-                phone={phone}
-                hasPlans={plans.length > 0}
-                hasHouse={plans.some((p) => p.kind === "property")}
-                onStarter={() => current && setStarter({ assetId: current.assetId, kit: null })}
-                onLawn={() => {
-                  const house =
-                    current?.kind === "property"
-                      ? current
-                      : plans.find((p) => p.kind === "property");
-                  if (house) setStarter({ assetId: house.assetId, kit: "lawn" });
-                }}
-                onCustom={() => current && setJob({ assetId: current.assetId, jobId: null })}
-                onOneOff={() => current && setDone({ assetId: current.assetId, jobId: null })}
-                onTrack={() => setTrack(true)}
-              />
-            ) : undefined
-          }
-        />
-        <PageContent className="px-3 pb-[var(--mobile-nav-total-offset)] md:px-6 md:pb-8 lg:px-8">
-          <div className="flex flex-col gap-3.5 max-md:gap-2">
-            {view && plans.length ? (
-              <>
-                <Pills
-                  items={[
-                    { key: "overview", label: "Overview" },
-                    ...plans.map((p) => ({ key: p.assetId, label: tabName(p) })),
-                    { key: "history", label: "History" },
-                  ]}
-                  value={tab}
-                  onPick={pick}
-                />
-                {tab === "history" ? null : <Summary view={view} phone={phone} />}
-                {tab === "overview" ? (
-                  <>
-                    <div
-                      className={cn(
-                        "grid items-start gap-3.5 max-md:gap-2",
-                        plans.length > 1 && "lg:grid-cols-2",
-                      )}
-                    >
-                      {cards(plans)}
-                    </div>
-                    <HistoryCard
-                      events={view.events}
-                      currency={view.currency}
-                      today={view.today}
-                      phone={phone}
-                      limit={phone ? 3 : 6}
-                      onTakeBack={(e) =>
-                        run("back", () => upkeepApi.removeEvent(e.id), "Taken back")
-                      }
-                    />
-                  </>
-                ) : tab === "history" ? (
-                  <HistoryCard
-                    events={view.events}
-                    currency={view.currency}
-                    today={view.today}
-                    phone={phone}
-                    onTakeBack={(e) => run("back", () => upkeepApi.removeEvent(e.id), "Taken back")}
-                  />
-                ) : (
-                  cards(plans.filter((p) => p.assetId === tab))
-                )}
-              </>
-            ) : view ? (
-              <Welcome hasAssets={view.assets.length > 0} onTrack={() => setTrack(true)} />
-            ) : isLoading ? (
-              <div className="flex flex-col gap-3.5" aria-busy>
-                <Skeleton className="h-20 w-full rounded-[20px]" />
-                <Skeleton className="h-64 w-full rounded-[20px]" />
-              </div>
-            ) : (
-              <div className="rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-[18px] py-4 text-[13.5px]">
-                <p>{error?.message ?? "Maintenance could not be loaded."}</p>
-                <button
-                  type="button"
-                  onClick={() => void refetch()}
-                  className="mt-1 text-[12.5px] underline underline-offset-4 hover:no-underline"
+  const addMenu = view ? (
+    <AddMenu
+      phone={phone}
+      hasPlans={plans.length > 0}
+      hasHouse={plans.some((p) => p.kind === "property")}
+      onStarter={() => current && setStarter({ assetId: current.assetId, kit: null })}
+      onLawn={() => {
+        const house =
+          current?.kind === "property" ? current : plans.find((p) => p.kind === "property");
+        if (house) setStarter({ assetId: house.assetId, kit: "lawn" });
+      }}
+      onCustom={() => current && setJob({ assetId: current.assetId, jobId: null })}
+      onOneOff={() => current && setDone({ assetId: current.assetId, jobId: null })}
+      onTrack={() => setTrack(true)}
+    />
+  ) : undefined;
+
+  const takeBack = (e: { id: string }) =>
+    run("back", () => upkeepApi.removeEvent(e.id), "Taken back");
+
+  // The same tabbed page as Dashboard, Insights and Transactions: the pills sit in the top bar and the
+  // tab's own body is a MeadowTab. One view (nothing tracked yet, or still loading) draws no pills.
+  const views: SwipablePageView[] =
+    view && plans.length
+      ? [
+          {
+            value: "overview",
+            label: "Overview",
+            icon: Icons.LayoutDashboard,
+            actions: addMenu,
+            content: (
+              <MeadowTab>
+                <Summary view={view} phone={phone} />
+                <div
+                  className={cn(
+                    "grid items-start gap-3.5 max-md:gap-2",
+                    plans.length > 1 && "lg:grid-cols-2",
+                  )}
                 >
-                  Try again
-                </button>
-              </div>
-            )}
-          </div>
-        </PageContent>
-      </Page>
+                  {cards(plans)}
+                </div>
+                <HistoryCard
+                  events={view.events}
+                  currency={view.currency}
+                  today={view.today}
+                  phone={phone}
+                  limit={phone ? 3 : 6}
+                  onTakeBack={takeBack}
+                />
+              </MeadowTab>
+            ),
+          },
+          ...plans.map((p) => ({
+            value: p.assetId,
+            label: tabName(p),
+            icon:
+              p.kind === "vehicle" ? Icons.Car : p.kind === "property" ? Icons.Home : Icons.Package,
+            actions: addMenu,
+            content: (
+              <MeadowTab>
+                <Summary view={view} phone={phone} />
+                {cards([p])}
+              </MeadowTab>
+            ),
+          })),
+          {
+            value: "history",
+            label: "History",
+            icon: Icons.History,
+            actions: addMenu,
+            content: (
+              <MeadowTab>
+                <HistoryCard
+                  events={view.events}
+                  currency={view.currency}
+                  today={view.today}
+                  phone={phone}
+                  onTakeBack={takeBack}
+                />
+              </MeadowTab>
+            ),
+          },
+        ]
+      : [
+          {
+            value: "overview",
+            label: "Overview",
+            actions: addMenu,
+            content: (
+              <MeadowTab>
+                {view ? (
+                  <Welcome hasAssets={view.assets.length > 0} onTrack={() => setTrack(true)} />
+                ) : isLoading ? (
+                  <div className="flex flex-col gap-3.5" aria-busy>
+                    <Skeleton className="h-20 w-full rounded-[20px]" />
+                    <Skeleton className="h-64 w-full rounded-[20px]" />
+                  </div>
+                ) : (
+                  <div className="rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-[18px] py-4 text-[13.5px]">
+                    <p>{error?.message ?? "Maintenance could not be loaded."}</p>
+                    <button
+                      type="button"
+                      onClick={() => void refetch()}
+                      className="mt-1 text-[12.5px] underline underline-offset-4 hover:no-underline"
+                    >
+                      Try again
+                    </button>
+                  </div>
+                )}
+              </MeadowTab>
+            ),
+          },
+        ];
+
+  return (
+    <>
+      <SwipablePage
+        className="pt-0"
+        views={views}
+        defaultView="overview"
+        withPadding={false}
+        withMobileNavOffset={false}
+        mobileActionsPlacement="header"
+      />
 
       <DoneDialog
         start={done}
@@ -401,6 +390,6 @@ export default function UpkeepPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }
