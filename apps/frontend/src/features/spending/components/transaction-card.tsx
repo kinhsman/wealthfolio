@@ -23,6 +23,7 @@ import { PendingChangeTag } from "./pending-change-tag";
 import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
 import { canLinkCharge, linkCharge } from "../lib/track-charge";
 import { ReturnBadge } from "./return-badge";
+import { AssetChip } from "@/features/asset-charges/components/asset-chip";
 import { AmazonOrderText } from "./amazon-order";
 import { useAmazonLinks } from "../lib/amazon";
 import { useMerchantFor } from "../lib/merchants";
@@ -173,6 +174,7 @@ function TransactionCardImpl({
             </span>
             {/* money-hub patch: sent back, or the refund for something sent back (lib/returns.ts). */}
             <ReturnBadge mark={returnMark} />
+            <AssetChip chargeId={a.id} />
             <span
               className={cn(
                 "shrink-0 text-sm font-medium tabular-nums",

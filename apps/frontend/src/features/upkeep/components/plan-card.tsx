@@ -3,6 +3,7 @@
 // and Done. On a phone a row is a check circle, the name and where it stands, and the list folds after four.
 import { Sprout } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
 import {
@@ -208,6 +209,7 @@ export function PlanCard({
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const navigate = useNavigate();
   const car = hasMiles(plan.kind);
   const fold = phone && plan.jobs.length > PHONE_ROWS;
   const shown = fold && !open ? plan.jobs.slice(0, PHONE_ROWS) : plan.jobs;
@@ -292,6 +294,13 @@ export function PlanCard({
               One-off repair
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="h-8"
+              onSelect={() => navigate(`/holdings/${encodeURIComponent(plan.assetId)}`)}
+            >
+              <Icons.Link className="mr-2 size-4" aria-hidden />
+              Linked charges
+            </DropdownMenuItem>
             <DropdownMenuItem className="h-8" onSelect={() => actions.onRename(plan)}>
               <Icons.Pencil className="mr-2 size-4" aria-hidden />
               Rename the tab

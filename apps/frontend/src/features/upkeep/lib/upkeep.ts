@@ -53,6 +53,8 @@ export interface Plan {
   perMonth: number;
   learned: boolean;
   jobs: Job[];
+  /** The bank charges linked to this asset (the Linked charges card on its Holdings page). */
+  linked?: { rules: number; count: number; yearCount: number; yearTotal: number };
 }
 
 export interface UpkeepAsset {
@@ -94,6 +96,8 @@ export interface ChargeChoice {
   notes: string;
   /** In a category that fits this asset (house = maintenance, car = car maintenance). */
   looksRight: boolean;
+  /** Linked to this asset by its Linked charges rules or by hand. */
+  linked?: boolean;
   /** Already on another job. */
   used: boolean;
 }
@@ -104,7 +108,13 @@ export interface UpkeepView {
   assets: UpkeepAsset[];
   plans: Plan[];
   events: UpkeepEvent[];
-  spent: { year: string; total: number; byAsset: Record<string, number> };
+  /** `byAsset` already holds the linked charges (`linkedByAsset`: just that part). */
+  spent: {
+    year: string;
+    total: number;
+    byAsset: Record<string, number>;
+    linkedByAsset?: Record<string, number>;
+  };
   summary: {
     overdue: number;
     soon: number;

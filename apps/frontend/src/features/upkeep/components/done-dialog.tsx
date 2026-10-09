@@ -133,7 +133,7 @@ function ChargeList({
               {c.merchant}
               <span className="ml-1.5 text-[12px] text-[var(--m-muted)]">
                 {shortDay(c.date, today)}
-                {c.looksRight ? " · looks right" : ""}
+                {c.linked ? " · linked" : c.looksRight ? " · looks right" : ""}
                 {c.used ? " · on another job" : ""}
               </span>
             </span>

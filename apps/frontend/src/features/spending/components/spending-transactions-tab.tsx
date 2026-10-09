@@ -93,6 +93,7 @@ import { useEventTypes, useSpendingEvents } from "../hooks/use-spending-events";
 import { useSpendingSettings } from "../hooks/use-spending-settings";
 import { invalidateSpendingCaches } from "../lib/invalidation";
 import { offerAfterPicks } from "../lib/offer-after-picks";
+import { assetFilterOptions, chargeIdsFor, useChargeLinks } from "@/features/asset-charges/lib/charge-links";
 import { subscriptionCharges, subscriptionFilterOptions, useSubscriptions } from "../lib/subscriptions";
 import type {
   CashActivitySearchRequest,
@@ -246,6 +247,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
     const urlAccounts = searchParams.get("accounts") ?? urlAccount;
     const urlEvents = searchParams.get("events");
     const urlSubscriptions = searchParams.get("subscriptions");
+    const urlAssets = searchParams.get("assets");
     const urlSearchQuery = searchParams.get("q");
     const urlAmountMin = searchParams.get("amountMin");
     const urlAmountMax = searchParams.get("amountMax");
@@ -299,6 +301,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
     const [selectedEvents, setSelectedEvents] = useState<Set<string>>(() =>
       parseSetParam(urlEvents),
     );
+    const [selectedAssets, setSelectedAssets] = useState<Set<string>>(() => parseSetParam(urlAssets));
     const [selectedSubscriptions, setSelectedSubscriptions] = useState<Set<string>>(() =>
       parseSetParam(urlSubscriptions),
     );
@@ -343,6 +346,10 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
         const next = parseSetParam(urlSubscriptions);
         return setsEqual(prev, next) ? prev : next;
       });
+      setSelectedAssets((prev) => {
+        const next = parseSetParam(urlAssets);
+        return setsEqual(prev, next) ? prev : next;
+      });
       setAmountRange((prev) => {
         const next = parseAmountRange(urlAmountMin, urlAmountMax);
         return sameAmountRange(prev, next) ? prev : next;
@@ -363,6 +370,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       urlStatus,
       urlSubcategoryId,
       urlSubscriptions,
+      urlAssets,
       urlTypes,
     ]);
 
@@ -392,6 +400,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       setSet("subcategory", selectedSubcategories);
       setSet("events", selectedEvents);
       setSet("subscriptions", selectedSubscriptions);
+      setSet("assets", selectedAssets);
       setOrDelete("q", searchInputRef.current || null);
       setOrDelete("amountMin", amountRange.min != null ? String(amountRange.min) : null);
       setOrDelete("amountMax", amountRange.max != null ? String(amountRange.max) : null);
@@ -410,6 +419,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       selectedSubcategories,
       selectedEvents,
       selectedSubscriptions,
+      selectedAssets,
       debouncedSearch,
       amountRange,
       dateRange,
@@ -520,11 +530,27 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       return subscriptions.isError ? { ids: [], from: null, to: null } : undefined;
     }, [selectedSubscriptions, subscriptions.data, subscriptions.isError]);
 
+    // money-hub patch: the Asset filter (Linked charges): exactly the charges the service links to the chosen
+    // assets, kept with the Subscription filter when both are on. `undefined` while the links load.
+    const chargeLinks = useChargeLinks();
+    const idFilter = useMemo(() => {
+      if (selectedAssets.size === 0) return subscriptionFilter;
+      const assetIds = chargeLinks.data
+        ? chargeIdsFor(chargeLinks.data, selectedAssets)
+        : chargeLinks.isError
+          ? []
+          : undefined;
+      if (assetIds === undefined || subscriptionFilter === undefined) return undefined;
+      if (!subscriptionFilter) return { ids: assetIds, from: null, to: null };
+      const keep = new Set(assetIds);
+      return { ...subscriptionFilter, ids: subscriptionFilter.ids.filter((id) => keep.has(id)) };
+    }, [selectedAssets, chargeLinks.data, chargeLinks.isError, subscriptionFilter]);
+
     const searchRequest: Omit<CashActivitySearchRequest, "offset" | "limit"> = useMemo(() => {
       // The server reads only the days the chosen charges span (a day either side), and the
       // browser keeps the charges themselves (lib/bank-lines.ts).
-      const chargesFrom = subscriptionFilter?.from ? dayEdge(subscriptionFilter.from, -1) : undefined;
-      const chargesTo = subscriptionFilter?.to ? dayEdge(subscriptionFilter.to, 2) : undefined;
+      const chargesFrom = idFilter?.from ? dayEdge(idFilter.from, -1) : undefined;
+      const chargesTo = idFilter?.to ? dayEdge(idFilter.to, 2) : undefined;
       const pickedFrom = dateRange?.from ? dateRange.from.toISOString() : undefined;
       const pickedTo = dateRange?.to
         ? (() => {
@@ -545,7 +571,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
         endDate: earlier(pickedTo, chargesTo),
         minAmount: amountRange.min ?? undefined,
         maxAmount: amountRange.max ?? undefined,
-        activityIds: subscriptionFilter?.ids,
+        activityIds: idFilter?.ids,
         sortBy: "date",
         sortDir: "desc",
       };
@@ -559,7 +585,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       statusFilter,
       dateRange,
       amountRange,
-      subscriptionFilter,
+      idFilter,
     ]);
 
     const {
@@ -576,7 +602,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       hasNextPage,
       fetchNextPage,
       refetch,
-    } = useCashActivitySearch(searchRequest, { enabled: subscriptionFilter !== undefined });
+    } = useCashActivitySearch(searchRequest, { enabled: idFilter !== undefined });
 
     const accountById = useMemo(() => {
       const m = new Map<string, Account>();
@@ -595,6 +621,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
         selectedSubcategories.size > 0 ||
         selectedEvents.size > 0 ||
         selectedSubscriptions.size > 0 ||
+        selectedAssets.size > 0 ||
         amountRange.min != null ||
         amountRange.max != null ||
         !!dateRange?.from ||
@@ -617,6 +644,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       selectedSubcategories,
       selectedEvents,
       selectedSubscriptions,
+      selectedAssets,
       amountRange,
       dateRange,
       selectedAccounts,
@@ -689,6 +717,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       selectedSubcategories.size > 0 ||
       selectedEvents.size > 0 ||
       selectedSubscriptions.size > 0 ||
+        selectedAssets.size > 0 ||
       amountRange.min != null ||
       amountRange.max != null ||
       !!dateRange?.from ||
@@ -709,6 +738,7 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       setSelectedSubcategories(new Set());
       setSelectedEvents(new Set());
       setSelectedSubscriptions(new Set());
+      setSelectedAssets(new Set());
       setAmountRange({ min: null, max: null });
       setDateRange(undefined);
     }, []);
@@ -1069,6 +1099,10 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
       () => events.map((e) => ({ value: e.id, label: e.name })),
       [events],
     );
+    const assetOptions = useMemo<FilterOption[]>(
+      () => assetFilterOptions(chargeLinks.data),
+      [chargeLinks.data],
+    );
     const subscriptionOptions = useMemo<FilterOption[]>(
       () => subscriptionFilterOptions(subscriptions.data?.items ?? []),
       [subscriptions.data],
@@ -1321,6 +1355,9 @@ export const SpendingTransactionsTab = forwardRef<SpendingTransactionsTabHandle>
           onEventsChange={setSelectedEvents}
           selectedSubscriptions={selectedSubscriptions}
           onSubscriptionsChange={setSelectedSubscriptions}
+          selectedAssets={selectedAssets}
+          onAssetsChange={setSelectedAssets}
+          assetOptions={assetOptions}
           subscriptionOptions={subscriptionOptions}
           amountRange={amountRange}
           onAmountRangeChange={setAmountRange}

@@ -41,6 +41,7 @@ import { PendingChangeTag } from "./pending-change-tag";
 import { purchaseOf, trackReturnStore, useReturnMarks } from "../lib/returns";
 import { canLinkCharge, linkCharge } from "../lib/track-charge";
 import { ReturnBadge } from "./return-badge";
+import { AssetChip } from "@/features/asset-charges/components/asset-chip";
 import { AmazonOrderLine } from "./amazon-order";
 import { useAmazonLinks } from "../lib/amazon";
 import { CategoryMark } from "./category-chips";
@@ -196,6 +197,8 @@ function TransactionRowImpl({
           <PendingChangeTag activityId={a.id} />
           {/* money-hub patch: sent back, or the refund for something sent back (lib/returns.ts). */}
           <ReturnBadge mark={returnMark} />
+          {/* money-hub patch: the Holdings asset this charge is for (features/asset-charges). */}
+          <AssetChip chargeId={a.id} />
           {/* money-hub patch: the bank's own line after the payee (lib/bank-lines.ts); on an Amazon charge, its
               order instead (the bank's code says nothing; the edit window still shows it). */}
           {amazon ? (

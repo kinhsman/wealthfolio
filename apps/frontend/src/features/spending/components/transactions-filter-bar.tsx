@@ -123,6 +123,8 @@ interface TransactionsFilterBarProps {
   /** money-hub patch: the Subscription filter, exactly the charges in the chosen ones. */
   selectedSubscriptions: Set<string>;
   onSubscriptionsChange: (next: Set<string>) => void;
+  selectedAssets: Set<string>;
+  onAssetsChange: (next: Set<string>) => void;
   amountRange: AmountRange;
   onAmountRangeChange: (next: AmountRange) => void;
 
@@ -134,6 +136,7 @@ interface TransactionsFilterBarProps {
   eventOptions: FilterOption[];
   hasEvents: boolean;
   subscriptionOptions: FilterOption[];
+  assetOptions: FilterOption[];
 
   // Status
   filtersActive: boolean;
@@ -188,6 +191,8 @@ export function TransactionsFilterBar({
   onEventsChange,
   selectedSubscriptions,
   onSubscriptionsChange,
+  selectedAssets,
+  onAssetsChange,
   amountRange,
   onAmountRangeChange,
   accountOptions,
@@ -197,6 +202,7 @@ export function TransactionsFilterBar({
   eventOptions,
   hasEvents,
   subscriptionOptions,
+  assetOptions,
   filtersActive,
   onClearAll,
   visibleCount,
@@ -223,6 +229,7 @@ export function TransactionsFilterBar({
     selectedSubcategories.size > 0 ||
     selectedEvents.size > 0 ||
     selectedSubscriptions.size > 0 ||
+    selectedAssets.size > 0 ||
     amountRange.min != null ||
     amountRange.max != null ||
     !!dateRange?.from ||
@@ -288,6 +295,15 @@ export function TransactionsFilterBar({
           selectedValues={selectedSubscriptions}
           onFilterChange={onSubscriptionsChange}
           contentClassName="w-[280px]"
+        />
+      )}
+      {(assetOptions.length > 0 || selectedAssets.size > 0) && (
+        <FacetedFilter
+          title="Asset"
+          options={assetOptions}
+          selectedValues={selectedAssets}
+          onFilterChange={onAssetsChange}
+          contentClassName="w-[240px]"
         />
       )}
     </>

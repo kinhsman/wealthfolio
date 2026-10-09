@@ -40,6 +40,7 @@ import {
 import { useAlternativeAssetMutations } from "./alternative-assets/hooks/use-alternative-asset-mutations";
 import { useQuoteMutations } from "./hooks/use-quote-mutations";
 import { LinkedAssetSection, LinkedLiabilitiesSection } from "./linked-liabilities-card";
+import { LinkedChargesCard } from "@/features/asset-charges/components/linked-charges-card";
 
 interface AlternativeAssetContentProps {
   assetId: string;
@@ -269,6 +270,15 @@ export const AlternativeAssetContent: React.FC<AlternativeAssetContentProps> = (
 
         {/* money-hub: a loan's lines, like the bank's sheet (loan-schedule-section.tsx; owner, 10-03). */}
         {isLiability ? <LoanLinesTable id={holding.id} currency={holding.currency} /> : null}
+
+        {/* money-hub: which bank charges are for this asset (features/asset-charges; owner, 10-08). */}
+        {!isLiability ? (
+          <LinkedChargesCard
+            assetId={holding.id}
+            kind={holding.kind.toLowerCase()}
+            currency={holding.currency}
+          />
+        ) : null}
 
         {/* Second row: About section */}
         <div className="space-y-4">

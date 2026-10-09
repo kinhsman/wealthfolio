@@ -1,3 +1,4 @@
+import { AssetForCharge } from "@/features/asset-charges/components/asset-chip";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -933,6 +934,10 @@ export function CashActivityForm({
                     {isEditing ? <BankDescription activityId={activity?.id} /> : null}
                     {/* money-hub patch: an Amazon charge's order (lib/amazon.ts). */}
                     {isEditing && activity?.id ? <AmazonOrderFor activityId={activity.id} /> : null}
+                    {/* money-hub patch: which Holdings asset this charge is for (features/asset-charges). */}
+                    {isEditing && activity?.id && watchType === "WITHDRAWAL" ? (
+                      <AssetForCharge chargeId={activity.id} />
+                    ) : null}
                     {/* money-hub patch: this charge's receipt, or add one (lib/receipts.ts). */}
                     {isEditing && activity?.id && watchType === "WITHDRAWAL" ? (
                       <ReceiptFor activityId={activity.id} activityDate={isoDayOf(activity.activityDate)} onFiled={onReceiptFiled} />
