@@ -24,8 +24,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "Money app", {
       body: data.body || "",
-      icon: "/apple-touch-icon.png",
-      badge: "/apple-touch-icon.png",
+      icon: "/apple-touch-icon.png?v=2",
+      badge: "/apple-touch-icon.png?v=2",
       tag: data.tag || undefined,
       data: { url: data.url || "/" },
     }),

@@ -153,7 +153,7 @@
   position: absolute;
   inset: var(--avatar-rim, 7px);
   border-radius: inherit;
-  background: #282726 url("/logo-gold.png") center / 48px 48px no-repeat;
+  background: #282726 url("/logo-gold.png?v=2") center / 48px 48px no-repeat;
 }
 
 /* Prevent mobile viewport bouncing */
@@ -176,7 +176,7 @@ html:not(.profile-opening) #root:empty::before {
   left: 50%;
   width: 80px;
   height: 80px;
-  background: url("/logo-gold.png") center / contain no-repeat;
+  background: url("/logo-gold.png?v=2") center / contain no-repeat;
   translate: -50% -50%;
   pointer-events: none;
 }

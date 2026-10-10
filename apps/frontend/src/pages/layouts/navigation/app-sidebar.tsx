@@ -136,13 +136,13 @@ export function AppSidebar({ navigation }: AppSidebarProps) {
                     <span className="block shrink-0 [perspective:400px]">
                       <img
                         className={cn(
-                          "h-8 w-8 rounded-full bg-transparent shadow-md transition-transform duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
+                          "h-8 w-8 rounded-[26%] bg-transparent shadow-md transition-transform duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none",
                           collapsed
                             ? "motion-safe:[transform:rotateY(180deg)] motion-safe:group-hover/logo:[transform:rotateY(360deg)]"
                             : "motion-safe:[transform:rotateY(0deg)] motion-safe:group-hover/logo:[transform:rotateY(180deg)]",
                         )}
                         aria-hidden="true"
-                        src="/logo.png"
+                        src="/logo.png?v=2"
                       />
                     </span>
                     {/* money-hub patch: the app's own name (owner, 10-02: "bring back the Wealthfolio name next to

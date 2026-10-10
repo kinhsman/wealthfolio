@@ -819,7 +819,7 @@ export function ProfileShell({ children }: { children: ReactNode }) {
         >
           <div className="group/logo pointer-events-auto shrink-0 [perspective:400px]">
             <img
-              src="/logo.png"
+              src="/logo.png?v=2"
               alt=""
               className="size-12 object-contain transition-transform duration-1000 ease-[cubic-bezier(0.22,1,0.36,1)] motion-safe:[transform:rotateY(0deg)] motion-safe:group-hover/logo:[transform:rotateY(180deg)] motion-reduce:transition-none"
             />

@@ -88,7 +88,7 @@ const OnboardingPage = () => {
           <img
             alt="Wealthfolio"
             className={cn(isAppearanceStep ? "mb-2 h-12 w-12" : "mb-3 h-16 w-16 sm:h-16 sm:w-16")}
-            src="/logo-vantage.png"
+            src="/logo-vantage.png?v=2"
           />
 
           {/* Progress indicators */}

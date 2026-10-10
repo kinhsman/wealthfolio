@@ -47,7 +47,7 @@ export function StartupScreen({ profile, message, error, children }: StartupScre
         </span>
       ) : (
         <img
-          src="/logo-gold.png"
+          src="/logo-gold.png?v=2"
           alt="Wealthfolio"
           className={`size-20 object-contain ${error ? "" : "splash-logo-pulse"}`}
         />
