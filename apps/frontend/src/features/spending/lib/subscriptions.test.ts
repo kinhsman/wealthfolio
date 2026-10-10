@@ -191,6 +191,42 @@ describe("partitionPaidStreams", () => {
   });
 });
 
+describe("partitionPaidStreams, not due this month", () => {
+  const end = "2026-10-31";
+  it("puts one with no charge this month and its next date later in a later list, not in upcoming or paid", () => {
+    const water = mk({ key: "w1", name: "Chicago Water", last: { date: "2026-09-10", amount: 150, id: "w" }, next: "2026-11-10", dueInDays: 31 });
+    const rent = mk({ key: "r1", name: "Pest", next: "2026-10-16", dueInDays: 6 });
+    const paid = mk({ key: "p1", name: "Netflix", last: { date: "2026-10-01", amount: 15, id: "n" }, next: "2026-11-01", dueInDays: 22 });
+    const res = partitionPaidStreams([water, rent, paid], { paid: [{ key: "p1" }], left: [{ key: "r1" }], end });
+    expect(res.later.map((s) => s.key)).toEqual(["w1"]);
+    expect(res.upcoming.map((s) => s.key)).toEqual(["r1"]);
+    expect(res.paid.map((s) => s.key)).toEqual(["p1"]);
+  });
+
+  it("a late one (next date in the past) stays upcoming", () => {
+    const late = mk({ key: "l1", name: "Late", next: "2026-10-05", dueInDays: -5 });
+    const res = partitionPaidStreams([late], { paid: [], left: [{ key: "l1" }], end });
+    expect(res.upcoming.map((s) => s.key)).toEqual(["l1"]);
+    expect(res.later).toEqual([]);
+  });
+
+  it("without the month's end nothing is later", () => {
+    const water = mk({ key: "w1", name: "Water", next: "2026-11-10", dueInDays: 31 });
+    const res = partitionPaidStreams([water], { paid: [], left: [] });
+    expect(res.upcoming.map((s) => s.key)).toEqual(["w1"]);
+    expect(res.later).toEqual([]);
+  });
+
+  it("escrow bills go later with their mortgage", () => {
+    const escrow = (part: "tax" | "insurance") => ({ rentalId: "r1", part, company: null, mortgageKey: "m:usb", mortgageName: "US Bank", years: [], monthlyNow: null, estimated: false });
+    const mortgage = mk({ key: "m:usb", name: "Mortgage", next: "2026-11-01", dueInDays: 22 });
+    const tax = mk({ key: "escrow:r1:tax", name: "Property tax", dueInDays: 80, next: "2026-12-01", escrow: escrow("tax") });
+    const res = partitionPaidStreams([mortgage, tax], { paid: [], left: [], end });
+    expect(res.later.map((s) => s.key)).toEqual(["m:usb", "escrow:r1:tax"]);
+    expect(res.upcoming).toEqual([]);
+  });
+});
+
 describe("escrow bills follow their mortgage", () => {
   const escrow = (part: "tax" | "insurance", mortgageKey: string | null) => ({
     rentalId: "r1", part, company: null, mortgageKey, mortgageName: "US Bank", years: [], monthlyNow: null, estimated: false,

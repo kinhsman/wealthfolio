@@ -516,31 +516,44 @@ export const isUnderMortgage = (s: Stream, list: Stream[]): boolean =>
   !!s.escrow?.mortgageKey && list.some((x) => x.key === s.escrow!.mortgageKey);
 
 /**
- * Splits live streams into upcoming/due streams and those already paid this month.
+ * Splits live streams into upcoming/due streams, those already paid this month and, with the month's
+ * last day (`end`), those not due until a later month (owner, 10-10: "Chicago water bill ... already paid
+ * in the last cycle, only show it again in Nov").
  * A stream counts as paid when it has a charge this month and no more charges left to pay this month.
- * An escrow bill has no charge of its own: it is paid when its mortgage payment is, and moves with it.
+ * One with no charge this month and nothing left to pay in it is "later": it is not paid this month (no
+ * money left), it is just not due yet. An escrow bill has no charge of its own: it is paid, or later,
+ * when its mortgage payment is, and moves with it.
  */
 export function partitionPaidStreams(
   items: Stream[],
-  billMonthInfo: { paid: { key: string }[]; left: { key: string }[] },
-): { upcoming: Stream[]; paid: Stream[] } {
+  billMonthInfo: { paid: { key: string }[]; left: { key: string }[]; end?: string },
+): { upcoming: Stream[]; paid: Stream[]; later: Stream[] } {
   const paidKeys = new Set(billMonthInfo.paid.map((b) => b.key));
   const leftKeys = new Set(billMonthInfo.left.map((b) => b.key));
   const ownPaid = (key: string) => paidKeys.has(key) && !leftKeys.has(key);
 
   const live = items.filter((s) => s.status !== "stopped");
-  const liveKeys = new Set(live.map((s) => s.key));
-  const isPaid = (s: Stream) => {
+  const byKey = new Map(live.map((s) => [s.key, s]));
+  const leader = (s: Stream) => {
     const m = s.escrow?.mortgageKey;
-    return m && liveKeys.has(m) ? ownPaid(m) : ownPaid(s.key);
+    return m && byKey.has(m) ? byKey.get(m)! : s;
+  };
+  const isPaid = (s: Stream) => ownPaid(leader(s).key);
+  const { end } = billMonthInfo;
+  const isLater = (s: Stream) => {
+    const l = leader(s);
+    return !!end && !!l.next && l.next > end && !paidKeys.has(l.key) && !leftKeys.has(l.key);
   };
 
   const upcoming = live
-    .filter((s) => !isPaid(s))
+    .filter((s) => !isPaid(s) && !isLater(s))
     .sort((a, b) => a.dueInDays - b.dueInDays || a.name.localeCompare(b.name));
   const paid = live
     .filter(isPaid)
     .sort((a, b) => (b.last?.date ?? "").localeCompare(a.last?.date ?? "") || a.name.localeCompare(b.name));
+  const later = live
+    .filter((s) => !isPaid(s) && isLater(s))
+    .sort((a, b) => a.dueInDays - b.dueInDays || a.name.localeCompare(b.name));
 
-  return { upcoming: groupUnderMortgage(upcoming), paid: groupUnderMortgage(paid) };
+  return { upcoming: groupUnderMortgage(upcoming), paid: groupUnderMortgage(paid), later: groupUnderMortgage(later) };
 }

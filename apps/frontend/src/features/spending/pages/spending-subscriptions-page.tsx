@@ -300,7 +300,7 @@ export default function SpendingSubscriptionsPage() {
   const items = data?.items ?? [];
   const today = useMemo(() => ymd(new Date()), []);
   const m = useMemo(() => ({ ...billMonth(items, today), month: new Date().toLocaleDateString(undefined, { month: "long" }), today }), [items, today]);
-  const { upcoming: upcomingLive, paid } = useMemo(() => partitionPaidStreams(items, m), [items, m]);
+  const { upcoming: upcomingLive, paid, later } = useMemo(() => partitionPaidStreams(items, m), [items, m]);
 
   const groups: { group: StreamGroup; title: string; monthly: number; blurb: string }[] = [
     { group: "subscriptions", title: "Subscriptions", monthly: data?.totals.subscriptionsMonthly ?? 0, blurb: "Services you pay for again and again." },
@@ -446,6 +446,29 @@ export default function SpendingSubscriptionsPage() {
                     </Section>
                   );
                 })}
+
+                {/* Paid last time, next one in a later month (owner, 10-10: Chicago Water every 2 months showed as
+                    still to pay in October): not paid this month, so not in Paid items either. */}
+                {later.length ? (
+                  <Section
+                    title="Not due this month"
+                    blurb="Paid last time. Back on the list when due."
+                    collapsible
+                    defaultOpen={false}
+                    aside={<><span>{later.filter((s) => !isUnderMortgage(s, later)).length}</span> coming later</>}
+                  >
+                    {later.slice(0, 6).map((s) => (
+                      <StreamRow key={s.key} s={s} nested={isUnderMortgage(s, later)} paidUp {...rowProps} />
+                    ))}
+                    {later.length > 6 ? (
+                      <PhoneFold id="subscriptions-later" closedLabel={`Show ${later.length - 6} more`} openLabel="Show less">
+                        {later.slice(6).map((s) => (
+                          <StreamRow key={s.key} s={s} nested={isUnderMortgage(s, later)} paidUp {...rowProps} />
+                        ))}
+                      </PhoneFold>
+                    ) : null}
+                  </Section>
+                ) : null}
 
                 {paid.length ? (
                   <Section
@@ -794,10 +817,13 @@ function StreamRow({
   busy,
   act,
   nested = false,
+  paidUp = false,
 }: {
   s: Stream;
   /** A mortgage's escrow bill under that mortgage: indented, locked to it. */
   nested?: boolean;
+  /** In Not due this month: the line says when it was last paid before the next date. */
+  paidUp?: boolean;
   currency: string;
   busy: string | null;
   act: (label: string, fn: () => Promise<SubscriptionsView>, done?: string) => Promise<void>;
@@ -902,7 +928,7 @@ function StreamRow({
             ) : null}
             {s.escrow?.company ? `${s.escrow.company} · ` : ""}
             {EVERY_LABELS[s.every]}
-            {s.everySetByOwner ? " (your choice)" : ""} · {dueLabel(s)}
+            {s.everySetByOwner ? " (your choice)" : ""} · {paidUp && s.last ? `Paid ${day(s.last.date)} · ` : ""}{dueLabel(s)}
             {s.nextSetByOwner ? " (your date)" : ""}
             {s.reactivated ? " · Reactivated by you" : ""}
             {s.remindBefore
@@ -938,7 +964,16 @@ function StreamRow({
               last {s.native?.last != null && s.currency ? <PrivacyAmount value={s.native.last} currency={s.currency} /> : <PrivacyAmount value={s.last.amount} currency={currency} />}
             </div>
           ) : s.variable ? (
-            <div className="text-muted-foreground text-[11px]">varies</div>
+            // A bill that varies still has a usual month (owner, 10-10: Chicago Water, every 2 months): the
+            // middle of its last 6 charges, spread over the months between them.
+            <div className="text-muted-foreground text-[11px] tabular-nums">
+              {s.every !== "month" && s.monthly > 0 ? (
+                // Phone: just the figure, the long line squeezed the name (owner rule: keywords only).
+                <>{phone ? null : "varies · about "}<PrivacyAmount value={s.monthly} currency={currency} /> a month</>
+              ) : (
+                "varies"
+              )}
+            </div>
           ) : s.every !== "month" ? (
             <div className="text-muted-foreground text-[11px] tabular-nums">
               <PrivacyAmount value={s.monthly} currency={currency} /> a month
