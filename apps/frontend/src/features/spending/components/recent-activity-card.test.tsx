@@ -29,6 +29,7 @@ function renderRecentActivityCard(activities: Activity[] = []) {
 describe("RecentActivityCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();   // the Income vs spending switch is remembered between renders
   });
 
   it("shows the standard empty state without a setup link", () => {
@@ -82,5 +83,37 @@ describe("RecentActivityCard", () => {
     expect(screen.getByText("Spending")).toBeInTheDocument();
     expect(screen.getByText("Paycheck")).toBeInTheDocument();
     expect(screen.getByText("Coffee")).toBeInTheDocument();
+  });
+
+  it("keeps a refund under Spending, not Income, when split", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const refund = {
+      id: "r1",
+      accountId: "acc-1",
+      activityDate: today,
+      activityType: "CREDIT",
+      subtype: "REFUND",
+      amount: "25",
+      currency: "USD",
+      notes: "Amazon refund",
+    } as unknown as Activity;
+    const paycheck = {
+      id: "r2",
+      accountId: "acc-1",
+      activityDate: today,
+      activityType: "DEPOSIT",
+      amount: "900",
+      currency: "USD",
+      notes: "Paycheck",
+    } as unknown as Activity;
+
+    renderRecentActivityCard([refund, paycheck]);
+    fireEvent.click(screen.getByRole("switch"));
+
+    const income = screen.getByText("Income").parentElement as HTMLElement;
+    const spending = screen.getByText("Spending").parentElement as HTMLElement;
+    expect(income).toHaveTextContent("Paycheck");
+    expect(income).not.toHaveTextContent("Amazon refund");
+    expect(spending).toHaveTextContent("Amazon refund");
   });
 });

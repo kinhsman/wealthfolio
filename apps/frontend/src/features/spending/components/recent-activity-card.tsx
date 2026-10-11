@@ -80,11 +80,12 @@ export function RecentActivityCard({
       .sort((a, b) => b.activityDate.localeCompare(a.activityDate));
     if (!split) return all.slice(0, 10);
     // Split: the latest five of each, so a rare income line is not pushed out by ten purchases.
-    const isOut = (a: Activity) =>
-      getActivitySpendingAmount(a, accountTypeById?.get(a.accountId)) > 0;
+    // A refund is negative spending (as in every total), so it stays under Spending, shown with a +.
+    const isSpending = (a: Activity) =>
+      getActivitySpendingAmount(a, accountTypeById?.get(a.accountId)) !== 0;
     return [
-      ...all.filter((a) => !isOut(a)).slice(0, SPLIT_ROWS),
-      ...all.filter(isOut).slice(0, SPLIT_ROWS),
+      ...all.filter((a) => !isSpending(a)).slice(0, SPLIT_ROWS),
+      ...all.filter(isSpending).slice(0, SPLIT_ROWS),
     ];
   }, [activities, accountTypeById, split]);
 
@@ -146,8 +147,8 @@ export function RecentActivityCard({
     if (!split) {
       return [{ id: "all", label: null, empty: "", days: byDay(pending, recent, 10) }];
     }
-    const isOut = (a: Activity) =>
-      getActivitySpendingAmount(a, accountTypeById?.get(a.accountId)) > 0;
+    const isSpending = (a: Activity) =>
+      getActivitySpendingAmount(a, accountTypeById?.get(a.accountId)) !== 0;
     return [
       {
         id: "income",
@@ -155,7 +156,7 @@ export function RecentActivityCard({
         empty: "No recent income.",
         days: byDay(
           pending.filter((p) => p.amount >= 0),
-          recent.filter((a) => !isOut(a)),
+          recent.filter((a) => !isSpending(a)),
           SPLIT_ROWS,
         ),
       },
@@ -165,7 +166,7 @@ export function RecentActivityCard({
         empty: "No recent spending.",
         days: byDay(
           pending.filter((p) => p.amount < 0),
-          recent.filter(isOut),
+          recent.filter(isSpending),
           SPLIT_ROWS,
         ),
       },
