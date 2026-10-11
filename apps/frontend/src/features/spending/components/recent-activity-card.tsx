@@ -4,10 +4,12 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
 import { DashboardCard } from "@/components/dashboard-card";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 import { QueryKeys } from "@/lib/query-keys";
 import type { Account, Activity } from "@/lib/types";
 import { cn, formatDateISO } from "@/lib/utils";
 import { PrivacyAmount, useDateFormatting } from "@wealthfolio/ui";
+import { Switch } from "@wealthfolio/ui/components/ui/switch";
 
 import { getActivityAssignments } from "../adapters/cash-activities";
 import {
@@ -25,6 +27,7 @@ import { PhoneFold } from "./phone-fold";
 import { useShownAmount } from "@/lib/display-currency";
 
 const SPENDING_TAXONOMY = "spending_categories";
+const SPLIT_ROWS = 5;
 
 export function RecentActivityCard({
   activities,
@@ -61,8 +64,10 @@ export function RecentActivityCard({
       ),
     [pendingAll, accountById, pendingRange?.from, pendingRange?.to],
   );
+  // money-hub patch: the switch in the header splits the list into recent income and recent spending.
+  const [split, setSplit] = usePersistentState<boolean>("dashboard-recent-split", false);
   const recent = useMemo(() => {
-    return activities
+    const all = activities
       .slice()
       .filter((activity) => {
         const accountType = accountTypeById?.get(activity.accountId);
@@ -72,9 +77,16 @@ export function RecentActivityCard({
           isCashActivityIncome(activityType, accountType, activity.subtype)
         );
       })
-      .sort((a, b) => b.activityDate.localeCompare(a.activityDate))
-      .slice(0, 10);
-  }, [activities, accountTypeById]);
+      .sort((a, b) => b.activityDate.localeCompare(a.activityDate));
+    if (!split) return all.slice(0, 10);
+    // Split: the latest five of each, so a rare income line is not pushed out by ten purchases.
+    const isOut = (a: Activity) =>
+      getActivitySpendingAmount(a, accountTypeById?.get(a.accountId)) > 0;
+    return [
+      ...all.filter((a) => !isOut(a)).slice(0, SPLIT_ROWS),
+      ...all.filter(isOut).slice(0, SPLIT_ROWS),
+    ];
+  }, [activities, accountTypeById, split]);
 
   const assignmentQueries = useQueries({
     queries: recent.map((a) => ({
@@ -114,22 +126,51 @@ export function RecentActivityCard({
 
   // Pending entries first in their day; ten rows in all, as before.
   type Row = { kind: "posted"; a: Activity } | { kind: "pending"; p: PendingTransaction };
-  const grouped = useMemo(() => {
-    const rows: { key: string; row: Row }[] = [
-      ...pending.map((p) => ({ key: `${p.date}~`, row: { kind: "pending" as const, p } })),
-      ...recent.map((a) => ({ key: a.activityDate, row: { kind: "posted" as const, a } })),
-    ]
-      .sort((x, y) => (y.key < x.key ? -1 : y.key > x.key ? 1 : 0))   // code order: "~" after "T"
-      .slice(0, 10);
-    const m = new Map<string, Row[]>();
-    for (const { key, row } of rows) {
-      const dateKey = key.slice(0, 10);
-      const arr = m.get(dateKey) ?? [];
-      arr.push(row);
-      m.set(dateKey, arr);
+  const sections = useMemo(() => {
+    const byDay = (ps: PendingTransaction[], as: Activity[], max: number) => {
+      const rows: { key: string; row: Row }[] = [
+        ...ps.map((p) => ({ key: `${p.date}~`, row: { kind: "pending" as const, p } })),
+        ...as.map((a) => ({ key: a.activityDate, row: { kind: "posted" as const, a } })),
+      ]
+        .sort((x, y) => (y.key < x.key ? -1 : y.key > x.key ? 1 : 0))   // code order: "~" after "T"
+        .slice(0, max);
+      const m = new Map<string, Row[]>();
+      for (const { key, row } of rows) {
+        const dateKey = key.slice(0, 10);
+        const arr = m.get(dateKey) ?? [];
+        arr.push(row);
+        m.set(dateKey, arr);
+      }
+      return Array.from(m.entries());
+    };
+    if (!split) {
+      return [{ id: "all", label: null, empty: "", days: byDay(pending, recent, 10) }];
     }
-    return Array.from(m.entries());
-  }, [recent, pending]);
+    const isOut = (a: Activity) =>
+      getActivitySpendingAmount(a, accountTypeById?.get(a.accountId)) > 0;
+    return [
+      {
+        id: "income",
+        label: "Income",
+        empty: "No recent income.",
+        days: byDay(
+          pending.filter((p) => p.amount >= 0),
+          recent.filter((a) => !isOut(a)),
+          SPLIT_ROWS,
+        ),
+      },
+      {
+        id: "spending",
+        label: "Spending",
+        empty: "No recent spending.",
+        days: byDay(
+          pending.filter((p) => p.amount < 0),
+          recent.filter(isOut),
+          SPLIT_ROWS,
+        ),
+      },
+    ];
+  }, [recent, pending, split, accountTypeById]);
 
   const dayLabel = (key: string): string => {
     const today = new Date();
@@ -152,28 +193,47 @@ export function RecentActivityCard({
       padded={false}
       className="overflow-hidden"
       action={
-        <Link
-          to={
-            uncategorizedCount > 0
-              ? "/activities?tab=spending&status=uncategorized"
-              : "/activities?tab=spending"
-          }
-          className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
-        >
-          {t("spending:dashboard.viewAll").replace(/\s*→\s*$/, "")}
-        </Link>
+        <div className="flex items-center gap-3">
+          <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
+            Income vs spending
+            <Switch size="sm" checked={split} onCheckedChange={setSplit} />
+          </label>
+          <Link
+            to={
+              uncategorizedCount > 0
+                ? "/activities?tab=spending&status=uncategorized"
+                : "/activities?tab=spending"
+            }
+            className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+          >
+            {t("spending:dashboard.viewAll").replace(/\s*→\s*$/, "")}
+          </Link>
+        </div>
       }
     >
-      {grouped.length === 0 ? (
+      {sections.every((s) => s.days.length === 0) ? (
         <div className="text-muted-foreground px-4 py-6 text-center text-xs md:px-5">
           {t("spending:dashboard.noRecentActivity")}
         </div>
       ) : (
+        <div>
+        {sections.map((section) => (
+        <div key={section.id}>
+        {section.label ? (
+          <div className="text-foreground px-4 pt-3 text-xs font-semibold max-md:px-3 md:px-5">
+            {section.label}
+          </div>
+        ) : null}
+        {section.days.length === 0 ? (
+          <div className="text-muted-foreground px-4 py-3 text-xs max-md:px-3 md:px-5">
+            {section.empty}
+          </div>
+        ) : (
         <div className="grid gap-x-7 px-4 pb-2 max-md:px-3 max-md:pb-0 md:px-5 [grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr))]">
         {(() => {
         // money-hub patch: on a phone the latest day shows and the others fold behind a Show more row;
         // each row is two lines there, the name over its category (approved phone design, 10-02).
-        const renderDay = ([dateKey, items]: (typeof grouped)[number]) => (
+        const renderDay = ([dateKey, items]: [string, Row[]]) => (
           <div key={dateKey} className="min-w-0 py-2 max-md:py-1">
             <div className="text-muted-foreground border-border/60 border-b pb-1 text-xs">
               {dayLabel(dateKey)}
@@ -265,13 +325,13 @@ export function RecentActivityCard({
             })}
           </div>
         );
-        const [first, ...rest] = grouped;
+        const [first, ...rest] = section.days;
         return (
           <>
             {renderDay(first)}
             {rest.length > 0 ? (
               <PhoneFold
-                id="activity"
+                id={section.id === "all" ? "activity" : `activity-${section.id}`}
                 closedLabel={`Show ${rest.length} more ${rest.length === 1 ? "day" : "days"}`}
                 openLabel="Show less"
               >
@@ -281,6 +341,10 @@ export function RecentActivityCard({
           </>
         );
         })()}
+        </div>
+        )}
+        </div>
+        ))}
         </div>
       )}
     </DashboardCard>

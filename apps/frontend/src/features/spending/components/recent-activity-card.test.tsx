@@ -1,4 +1,4 @@
-import { render, screen } from "@/test/render";
+import { fireEvent, render, screen } from "@/test/render";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -58,5 +58,29 @@ describe("RecentActivityCard", () => {
     expect(row).toBeInTheDocument();
     expect(row?.textContent).toContain("€");
     expect(row?.textContent).not.toContain("$");
+  });
+
+  it("splits recent income from recent spending with the header switch", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const mk = (id: string, type: string, notes: string): Activity =>
+      ({
+        id,
+        accountId: "acc-1",
+        activityDate: today,
+        activityType: type,
+        amount: "50",
+        currency: "USD",
+        notes,
+      }) as unknown as Activity;
+
+    renderRecentActivityCard([mk("1", "WITHDRAWAL", "Coffee"), mk("2", "DEPOSIT", "Paycheck")]);
+
+    expect(screen.queryByText("Income")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch"));
+
+    expect(screen.getByText("Income")).toBeInTheDocument();
+    expect(screen.getByText("Spending")).toBeInTheDocument();
+    expect(screen.getByText("Paycheck")).toBeInTheDocument();
+    expect(screen.getByText("Coffee")).toBeInTheDocument();
   });
 });
