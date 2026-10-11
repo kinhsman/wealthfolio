@@ -2,7 +2,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import type { OwlyTripsAnswer } from "../lib/owly-trips";
+import { listCashActivities } from "../adapters/cash-activities";
+import { getVisibleSpendingAmount } from "../lib/constants";
+import { chargesWindow, eventChargesKey, type Charge, type OwlyTrip, type OwlyTripsAnswer } from "../lib/owly-trips";
 
 const BASE = "/api/money-hub/owly";
 const KEY = "owly_trips";
@@ -47,5 +49,31 @@ export function useSetOwlyTripLink() {
       if (!vars.quiet) toast.success(vars.tripId === null ? "Owly trip unlinked" : "Owly trip linked");
     },
     onError: (err) => toast.error(err.message),
+  });
+}
+
+/**
+ * The card charges tagged to an event, wherever their dates fall (a flight is bought weeks before
+ * the trip). Reads the cash activities around the event and the trip's bills, once a trip is linked.
+ */
+export function useEventCharges(eventId: string | undefined, event: { startDate: string; endDate: string } | undefined, trip: OwlyTrip | null) {
+  const filter = event ? chargesWindow(event, trip) : undefined;
+  return useQuery<Charge[], Error>({
+    queryKey: eventChargesKey(eventId, filter),
+    enabled: !!eventId && !!trip && !!filter && (trip.bills?.length ?? 0) > 0,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async () => {
+      const rows = await listCashActivities(filter);
+      return rows
+        .filter((a) => a.eventId === eventId)
+        .map((a) => ({
+          id: a.id,
+          label: a.notes || a.activityType,
+          date: a.activityDate.slice(0, 10),
+          amount: getVisibleSpendingAmount(a),
+          currency: a.currency,
+        }));
+    },
   });
 }

@@ -1,24 +1,33 @@
 // money-hub patch: the Owly trip linked to an event, as one small strip (Spending dashboard
 // event card). Shows the group's total, the owner's share, who owes whom, and the cost to the
 // owner once friends pay back. Owly's own page opens from the arrow.
+import { useState } from "react";
+
 import { cn } from "@/lib/utils";
 import { Icons, PrivacyAmount } from "@wealthfolio/ui";
 
-import { owlyTripUrl, tripSummary, type OwlyTrip } from "../lib/owly-trips";
+import { matchCharges, owlyTripUrl, tripSummary, type Charge, type OwlyTrip } from "../lib/owly-trips";
 
 export function OwlyTripStrip({
   trip,
   baseUrl,
   spentOnCard = 0,
+  charges,
   className,
 }: {
   trip: OwlyTrip;
   baseUrl?: string;
   /** The bank entries tagged to the event, for the cost after friends pay back. */
   spentOnCard?: number;
+  /** The card charges tagged to the event; when given, the strip says how they line up with Owly's bills. */
+  charges?: Charge[];
   className?: string;
 }) {
   const { note, facts } = tripSummary(trip, spentOnCard);
+  const [open, setOpen] = useState(false);
+  const lineup = charges && trip.bills?.some((b) => b.paidByYou) ? matchCharges(trip, charges) : null;
+  const mine = lineup ? lineup.matched.length + lineup.billsOnly.length : 0;
+  const allMatched = !!lineup && lineup.billsOnly.length === 0 && lineup.chargesOnly.length === 0;
   return (
     <div className={cn("border-border/40 mt-3 border-t pt-2 text-[11px]", className)} data-testid="owly-trip-strip">
       <div className="flex items-center gap-1.5">
@@ -58,6 +67,42 @@ export function OwlyTripStrip({
         ))}
         {note && <span>{note}</span>}
       </div>
+      {lineup && (
+        <div className="text-muted-foreground/80 mt-1" data-testid="owly-trip-lineup">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="hover:text-foreground inline-flex items-center gap-1 text-left underline-offset-4 hover:underline"
+          >
+            <Icons.ChevronRight className={cn("h-3 w-3 shrink-0 transition-transform", open && "rotate-90")} />
+            {allMatched
+              ? `Card and Owly agree: all ${mine} bills you paid are on the card`
+              : `${lineup.matched.length} of ${mine} Owly bills you paid are on the card`}
+          </button>
+          {open && (
+            <ul className="mt-1 space-y-0.5 pl-4">
+              {lineup.billsOnly.map((b) => (
+                <li key={`b${b.id}`} className="flex justify-between gap-2">
+                  <span className="min-w-0 truncate">In Owly, not on the card: {b.description}</span>
+                  <span className="text-foreground/90 shrink-0 tabular-nums">
+                    <PrivacyAmount value={b.total} currency={b.currency} />
+                  </span>
+                </li>
+              ))}
+              {lineup.chargesOnly.map((c) => (
+                <li key={`c${c.id}`} className="flex justify-between gap-2">
+                  <span className="min-w-0 truncate">On the card, not in Owly: {c.label}</span>
+                  <span className="text-foreground/90 shrink-0 tabular-nums">
+                    <PrivacyAmount value={c.amount} currency={c.currency} />
+                  </span>
+                </li>
+              ))}
+              {allMatched && <li>Every bill has a card charge of the same amount.</li>}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -56,7 +56,7 @@ import {
   useSpendingEventMutations,
 } from "../hooks/use-spending-events";
 import { useOwlyTrips, useSetOwlyTripLink } from "../hooks/use-owly-trips";
-import { eventOfTrip } from "../lib/owly-trips";
+import { eventOfTrip, suggestTrips } from "../lib/owly-trips";
 import type { NewSpendingEvent, SpendingEvent } from "../types/event";
 import type { EventDialogPrefill } from "./event-dialog-provider";
 
@@ -199,6 +199,19 @@ export function EventFormDialog({
   // get tagged with the new event on submit.
   const watchedStart = form.watch("startDate");
   const watchedEnd = form.watch("endDate");
+  const watchedName = form.watch("name");
+  const tripSuggestions = useMemo(
+    () =>
+      showTripPick && tripPick === "none" && watchedName?.trim()
+        ? suggestTrips(owly.data, {
+            id: event?.id,
+            name: watchedName,
+            startDate: watchedStart ? formatDateISO(watchedStart) : "",
+            endDate: watchedEnd ? formatDateISO(watchedEnd) : "",
+          })
+        : [],
+    [showTripPick, tripPick, watchedName, watchedStart, watchedEnd, owly.data, event?.id],
+  );
   const showSuggestions = !isEditing && !activityId;
 
   const candidateFilter = useMemo(() => {
@@ -629,6 +642,23 @@ export function EventFormDialog({
                     })}
                   </SelectContent>
                 </Select>
+                {tripSuggestions.map((s) => (
+                  <div key={s.trip.id} className="text-muted-foreground flex items-center gap-2 text-xs" data-testid="owly-trip-suggestion">
+                    <span className="min-w-0 flex-1 truncate">
+                      Looks like {s.trip.name} ({s.reason})
+                    </span>
+                    <button
+                      type="button"
+                      className="text-foreground shrink-0 underline underline-offset-4"
+                      onClick={() => {
+                        tripTouched.current = true;
+                        setTripPick(String(s.trip.id));
+                      }}
+                    >
+                      Use this trip
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
 

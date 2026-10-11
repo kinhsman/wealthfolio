@@ -1,9 +1,9 @@
-import { render, screen, within } from "@/test/render";
+import { fireEvent, render, screen, within } from "@/test/render";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FOREST_THEME } from "../lib/theme";
-import { useOwlyTrips } from "../hooks/use-owly-trips";
+import { useEventCharges, useOwlyTrips } from "../hooks/use-owly-trips";
 import { useEventSpendingSummaries } from "../hooks/use-spending-events";
 import type { EventSpendingSummary } from "../types/event";
 import { EventsCard } from "./events-card";
@@ -14,6 +14,7 @@ vi.mock("../hooks/use-spending-events", () => ({
 
 vi.mock("../hooks/use-owly-trips", () => ({
   useOwlyTrips: vi.fn(),
+  useEventCharges: vi.fn(),
 }));
 
 vi.mock("./event-dialog-provider", () => ({
@@ -25,6 +26,7 @@ vi.mock("./event-dialog-provider", () => ({
 
 const mockUseEventSpendingSummaries = vi.mocked(useEventSpendingSummaries);
 const mockUseOwlyTrips = vi.mocked(useOwlyTrips);
+const mockUseEventCharges = vi.mocked(useEventCharges);
 
 const dallasTrip = {
   id: 6,
@@ -88,6 +90,7 @@ describe("EventsCard", () => {
       isError: false,
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useEventSpendingSummaries>);
+    mockUseEventCharges.mockReturnValue({ data: undefined } as unknown as ReturnType<typeof useEventCharges>);
     mockUseOwlyTrips.mockReturnValue({
       data: { connected: false, trips: [], links: {} },
     } as unknown as ReturnType<typeof useOwlyTrips>);
@@ -186,6 +189,34 @@ describe("EventsCard", () => {
     expect(strip).toHaveTextContent("Thanh owes you");
     expect(strip).toHaveTextContent("Cost to you after they pay back");
     expect(within(strip).getByRole("link", { name: /open/i })).toHaveAttribute("href", "https://owly.example/trips/6");
+  });
+
+  it("says which Owly bills are on the card and which are not, and opens the list", () => {
+    mockUseEventSpendingSummaries.mockReturnValue({
+      data: [eventSummary({ eventId: "ev-dallas", eventName: "Dallas trip", startDate: "2026-06-20", endDate: "2026-06-22", totalSpending: 676.09, transactionCount: 3 })],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof useEventSpendingSummaries>);
+    const bill = (id: number, description: string, total: number) => ({ id, description, billedOn: "2026-05-19", total, currency: "USD", paidBy: "Sang", paidByYou: true });
+    mockUseOwlyTrips.mockReturnValue({
+      data: { connected: true, trips: [{ ...dallasTrip, bills: [bill(1, "Flight", 220.97), bill(2, "Hotel", 160.2)] }], links: { "ev-dallas": 6 } },
+    } as unknown as ReturnType<typeof useOwlyTrips>);
+    mockUseEventCharges.mockReturnValue({
+      data: [
+        { id: "a", label: "EDREAMS", date: "2026-05-19", amount: 220.97, currency: "USD" },
+        { id: "b", label: "HILTON", date: "2026-06-20", amount: 121.86, currency: "USD" },
+      ],
+    } as unknown as ReturnType<typeof useEventCharges>);
+
+    renderEventsCard("2026-06-01T04:00:00.000Z", "2026-06-30T03:59:59.999Z");
+
+    const lineup = screen.getByTestId("owly-trip-lineup");
+    expect(lineup).toHaveTextContent("1 of 2 Owly bills you paid are on the card");
+    expect(lineup).not.toHaveTextContent("Hotel");
+    fireEvent.click(within(lineup).getByRole("button"));
+    expect(lineup).toHaveTextContent("In Owly, not on the card: Hotel");
+    expect(lineup).toHaveTextContent("On the card, not in Owly: HILTON");
   });
 
   it("shows no Owly strip for an event with no link", () => {

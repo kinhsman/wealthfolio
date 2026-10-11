@@ -1,6 +1,6 @@
 // money-hub patch: the Owly trip strip on the Spending dashboard event card, and the Owly trip
 // picker in the event window, with fixture data (vite.preview.config.ts).
-// ?view=card (default) | form; &case=owed|oweyou|square|empty; &open=1 opens the picker; ?theme=light|dark.
+// ?view=card (default) | form; &case=owed|oweyou|square|empty|allmatch; &details=1 opens the card-vs-Owly list; &open=1 opens the picker; ?theme=light|dark.
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
@@ -14,7 +14,13 @@ import { PrivacyProvider } from "../src/context/privacy-context";
 import { EventDialogProvider } from "../src/features/spending/components/event-dialog-provider";
 import { EventFormDialog } from "../src/features/spending/components/event-form-dialog";
 import { EventsCard } from "../src/features/spending/components/events-card";
-import type { OwlyTrip, OwlyTripsAnswer } from "../src/features/spending/lib/owly-trips";
+import {
+  chargesWindow,
+  eventChargesKey,
+  type Charge,
+  type OwlyTrip,
+  type OwlyTripsAnswer,
+} from "../src/features/spending/lib/owly-trips";
 import { FOREST_THEME } from "../src/features/spending/lib/theme";
 import type { EventSpendingSummary } from "../src/features/spending/types/event";
 import { QueryKeys } from "../src/lib/query-keys";
@@ -48,6 +54,11 @@ const dallas: OwlyTrip = {
     { id: 2, name: "Thanh", isOwner: false },
   ],
   billCount: 3,
+  bills: [
+    { id: 83, description: "Hotel", billedOn: "2026-09-19", total: 160.2, currency: "USD", paidBy: "Sang", paidByYou: true },
+    { id: 84, description: "Flight ORD <-> DFW", billedOn: "2026-09-19", total: 220.97, currency: "USD", paidBy: "Sang", paidByYou: true },
+    { id: 85, description: "Worlds Tickets", billedOn: "2026-09-19", total: 334.26, currency: "USD", paidBy: "Sang", paidByYou: true },
+  ],
   totalSpent: 715.43,
   you: { paid: 715.43, share: 357.72 },
   owedToYou: 357.71,
@@ -98,6 +109,16 @@ const qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTim
 const request = { startDate: iso(addDays(-30)), endDate: iso(addDays(60)) };
 qc.setQueryData([QueryKeys.SPENDING_EVENTS, "summaries", request], [summary]);
 qc.setQueryData(["owly_trips"], owly);
+// The card charges tagged to the event: two match an Owly bill, the hotel card charge differs from Owly's bill.
+const allMatch = which === "allmatch";
+const charges: Charge[] = [
+  { id: "c1", label: "EDREAMS FLIGHT", date: "2026-09-19", amount: 220.97, currency: "USD" },
+  { id: "c2", label: "WORLDS TICKETS", date: "2026-09-19", amount: 334.26, currency: "USD" },
+  allMatch
+    ? { id: "c3", label: "HILTON PLANO", date: "2026-09-19", amount: 160.2, currency: "USD" }
+    : { id: "c3", label: "HILTON PLANO", date: "2026-10-30", amount: 121.86, currency: "USD" },
+];
+qc.setQueryData(eventChargesKey("ev-dallas", chargesWindow({ startDate: start, endDate: end }, owly.trips[0])), charges);
 qc.setQueryData(
   [QueryKeys.SPENDING_EVENT_TYPES],
   [{ id: "travel", key: "Travel", name: "Travel", color: null, createdAt: "", updatedAt: "" }],

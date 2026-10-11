@@ -6,7 +6,7 @@ import type { Activity } from "@/lib/types";
 import { cn, formatDateISO } from "@/lib/utils";
 import { Icons, PrivacyAmount, Skeleton, useDateFormatting } from "@wealthfolio/ui";
 
-import { useOwlyTrips } from "../hooks/use-owly-trips";
+import { useEventCharges, useOwlyTrips } from "../hooks/use-owly-trips";
 import { useEventSpendingSummaries } from "../hooks/use-spending-events";
 import { tripOfEvent } from "../lib/owly-trips";
 import { OwlyTripStrip } from "./owly-trip-strip";
@@ -82,6 +82,8 @@ export function EventsCard({
   }, [eventSummaries, periodEndDate, periodStartDate]);
 
   const ev = pick?.event;
+  const linkedTrip = ev ? tripOfEvent(owlyTrips.data, ev.eventId) : null;
+  const eventCharges = useEventCharges(ev?.eventId, ev, linkedTrip);
   const start = ev ? new Date(ev.startDate.slice(0, 10) + "T00:00:00") : new Date();
   const end = ev ? new Date(ev.endDate.slice(0, 10) + "T00:00:00") : new Date();
   const totalDays = Math.floor((end.getTime() - start.getTime()) / (24 * 3600 * 1000)) + 1;
@@ -360,11 +362,12 @@ export function EventsCard({
         </div>
       )}
 
-      {ev && tripOfEvent(owlyTrips.data, ev.eventId) && (
+      {ev && linkedTrip && (
         <OwlyTripStrip
-          trip={tripOfEvent(owlyTrips.data, ev.eventId)!}
+          trip={linkedTrip}
           baseUrl={owlyTrips.data?.baseUrl}
           spentOnCard={eventSpent}
+          charges={eventCharges.data}
         />
       )}
 

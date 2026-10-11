@@ -11,6 +11,16 @@ export interface OwlyTripTransfer {
   owedToYou: boolean;
 }
 
+export interface OwlyBill {
+  id: number;
+  description: string;
+  billedOn: string;
+  total: number;
+  currency: string;
+  paidBy: string;
+  paidByYou: boolean;
+}
+
 export interface OwlyTrip {
   id: number;
   name: string;
@@ -27,6 +37,8 @@ export interface OwlyTrip {
   owedToYou: number;
   youOwe: number;
   transfers: OwlyTripTransfer[];
+  /** Absent from an Owly that predates the bills list. */
+  bills?: OwlyBill[];
 }
 
 export interface OwlyTripsAnswer {
@@ -92,3 +104,130 @@ const cents = (n: number) => Math.round(n * 100) / 100;
 export function owlyTripUrl(baseUrl: string | undefined, tripId: number): string {
   return `${(baseUrl || "https://owly.sanglam.cc").replace(/\/$/, "")}/trips/${tripId}`;
 }
+
+// ---- Step 2: suggest a trip for an event, and match card charges to Owly bills ----
+
+const STOP_WORDS = new Set(["trip", "the", "and", "for", "with", "vacation", "holiday", "weekend", "tour"]);
+
+/** Lower-case words of a name without accents, years, short words and filler like "trip". */
+function nameWords(name: string): Set<string> {
+  const words = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3 && !/^\d+$/.test(w) && !STOP_WORDS.has(w));
+  return new Set(words);
+}
+
+const DAY = 24 * 3600 * 1000;
+const dayNumber = (iso: string) => Math.floor(new Date(`${iso.slice(0, 10)}T00:00:00Z`).getTime() / DAY);
+
+export interface TripSuggestion {
+  trip: OwlyTrip;
+  reason: "same name" | "same dates";
+}
+
+/**
+ * Trips that look like the event: they share a word with its name, or Owly dates the trip within
+ * a week of the event's dates. A trip already on another event is never suggested. Best first.
+ */
+export function suggestTrips(
+  data: OwlyTripsAnswer | undefined,
+  event: { id?: string | null; name: string; startDate: string; endDate: string },
+  limit = 2,
+): TripSuggestion[] {
+  if (!data?.trips?.length) return [];
+  const eventWords = nameWords(event.name);
+  const hasDates = !!event.startDate && !!event.endDate;
+  const out: (TripSuggestion & { score: number })[] = [];
+  for (const trip of data.trips) {
+    const taken = eventOfTrip(data, trip.id);
+    if (taken !== null && taken !== event.id) continue;
+    if (taken === event.id) continue; // already linked to this event
+    const shared = [...nameWords(trip.name)].filter((w) => eventWords.has(w)).length;
+    const datesMatch =
+      hasDates &&
+      !!trip.startsOn &&
+      !!trip.endsOn &&
+      dayNumber(trip.startsOn) <= dayNumber(event.endDate) + 7 &&
+      dayNumber(trip.endsOn) >= dayNumber(event.startDate) - 7;
+    if (shared > 0) out.push({ trip, reason: "same name", score: 10 + shared });
+    else if (datesMatch) out.push({ trip, reason: "same dates", score: 1 });
+  }
+  return out
+    .sort((a, b) => b.score - a.score || b.trip.id - a.trip.id)
+    .slice(0, limit)
+    .map(({ trip, reason }) => ({ trip, reason }));
+}
+
+export interface Charge {
+  id: string;
+  label: string;
+  date: string;
+  amount: number;
+  currency: string;
+}
+
+export interface BillMatch {
+  bill: OwlyBill;
+  charge: Charge;
+}
+
+export interface ChargeMatching {
+  matched: BillMatch[];
+  /** Bills you paid in Owly with no card charge of the same amount on the event. */
+  billsOnly: OwlyBill[];
+  /** Charges tagged to the event with no Owly bill of the same amount. */
+  chargesOnly: Charge[];
+}
+
+/**
+ * Pairs the bills you paid in Owly with the card charges tagged to the event: same currency and
+ * the same amount to the cent, one to one, the nearest dates first. Bills someone else paid
+ * never touch your card, and charges in another currency than the trip's are left out.
+ */
+export function matchCharges(trip: OwlyTrip, charges: Charge[]): ChargeMatching {
+  const bills = (trip.bills ?? []).filter((b) => b.paidByYou);
+  const pool = charges.filter((c) => c.currency === trip.currency && c.amount > 0);
+  const free = new Set(pool.map((c) => c.id));
+  const matched: BillMatch[] = [];
+  const billsOnly: OwlyBill[] = [];
+  for (const bill of bills) {
+    const hits = pool
+      .filter((c) => free.has(c.id) && Math.abs(cents(c.amount) - cents(bill.total)) < 0.005)
+      .sort(
+        (a, b) =>
+          Math.abs(dayNumber(a.date) - dayNumber(bill.billedOn)) -
+          Math.abs(dayNumber(b.date) - dayNumber(bill.billedOn)),
+      );
+    if (hits.length === 0) {
+      billsOnly.push(bill);
+      continue;
+    }
+    free.delete(hits[0].id);
+    matched.push({ bill, charge: hits[0] });
+  }
+  return { matched, billsOnly, chargesOnly: pool.filter((c) => free.has(c.id)) };
+}
+
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** The dates to read cash activities over: the event and the trip's bills, with room before and after. */
+export function chargesWindow(
+  event: { startDate: string; endDate: string },
+  trip: OwlyTrip | null,
+): { startDate: string; endDate: string } | undefined {
+  const days = [event.startDate, event.endDate, ...(trip?.bills ?? []).map((b) => b.billedOn)]
+    .filter(Boolean)
+    .map((d) => dayNumber(d));
+  if (days.length === 0) return undefined;
+  return {
+    startDate: `${isoDay((Math.min(...days) - 21) * DAY)}T00:00:00.000Z`,
+    endDate: `${isoDay((Math.max(...days) + 45) * DAY)}T23:59:59.999Z`,
+  };
+}
+
+export const eventChargesKey = (eventId: string | undefined, window: unknown) =>
+  ["spending_transactions", "owly-event-charges", eventId, window] as const;
