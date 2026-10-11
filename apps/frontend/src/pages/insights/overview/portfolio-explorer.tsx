@@ -14,7 +14,6 @@ import {
   accountTreeWeights,
   buildBreakdownTree,
   currencyLensItems,
-  flattenAllocationNodes,
   OTHER_COLOR,
   toBreakdownNodes,
   type BreakdownNode,
@@ -104,17 +103,11 @@ function taxonomyLens(
   allocation: TaxonomyAllocation | undefined,
   residualName: (categoryName: string) => string,
 ): Lens {
-  const nodes = buildBreakdownTree(
-    allocation?.categories,
-    sumOfCategories(allocation),
-    residualName,
-  );
   return {
     key,
     label,
     unit,
-    // money-hub patch: the Allocation lens is one flat row per asset class.
-    nodes: key === "allocation" ? flattenAllocationNodes(nodes) : nodes,
+    nodes: buildBreakdownTree(allocation?.categories, sumOfCategories(allocation), residualName),
     allocation,
   };
 }

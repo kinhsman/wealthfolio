@@ -193,7 +193,10 @@ export function NetWorthContent() {
   // Breakdown row → detail drawer. Investments open the existing asset-class
   // allocation sheet; every other row opens the category detail sheet.
   const [selected, setSelected] = useState<SelectedCategory | null>(null);
-  const { allocations } = usePortfolioAllocations({ type: "all" });
+  const { allocations } = usePortfolioAllocations(
+    { type: "all" },
+    { flatAssetClasses: true },
+  );
   const investmentsAlloc = useMemo(
     () => investmentAllocation(allocations?.assetClasses),
     [allocations],

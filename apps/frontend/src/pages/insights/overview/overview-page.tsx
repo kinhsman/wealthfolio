@@ -68,7 +68,9 @@ export function OverviewPage({
     accountFilter,
     { includeAccounts: true },
   );
-  const { allocations, isLoading: allocationsLoading } = usePortfolioAllocations(accountFilter);
+  const { allocations, isLoading: allocationsLoading } = usePortfolioAllocations(accountFilter, {
+    flatAssetClasses: true,
+  });
   const { accounts } = useAccounts();
   const { data: portfolios = [] } = usePortfolios();
   const { targets, isLoading: targetsLoading } = useAllocationTargets();

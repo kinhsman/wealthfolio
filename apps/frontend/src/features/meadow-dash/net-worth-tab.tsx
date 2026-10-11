@@ -214,7 +214,10 @@ export function MeadowNetWorthTab() {
   const localizedPeriodLabel = t(`ui:interval.${periodCode}`);
 
   const [selected, setSelected] = useState<SelectedCategory | null>(null);
-  const { allocations } = usePortfolioAllocations({ type: "all" });
+  const { allocations } = usePortfolioAllocations(
+    { type: "all" },
+    { flatAssetClasses: true },
+  );
   const investmentsAlloc = useMemo(
     () => investmentAllocation(allocations?.assetClasses),
     [allocations],
