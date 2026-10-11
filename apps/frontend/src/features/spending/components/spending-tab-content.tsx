@@ -6,6 +6,7 @@ import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
 import { DashboardCard } from "@/components/dashboard-card";
 import { useAccounts } from "@/hooks/use-accounts";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
+import { useIsMobileViewport } from "@/hooks/use-platform";
 import { useTaxonomy } from "@/hooks/use-taxonomies";
 import { useSettingsContext } from "@/lib/settings-provider";
 import type { DateRange, TaxonomyCategory } from "@/lib/types";
@@ -66,7 +67,8 @@ import {
   localDateParts,
   zonedCalendarDateBoundaryToDate,
 } from "../lib/timezone";
-import { BudgetLineChartCard } from "./budget-line-chart-card";
+import { BudgetLineChartCard, SpentSplitBar, budgetFigures } from "./budget-line-chart-card";
+import { FreeCashTile, LeftToSpendTile, NetTile, SpentTile } from "./spending-kpi-row";
 import { FreeCashStrip } from "./free-cash-strip";
 import { EventsCard } from "./events-card";
 import { RecentActivityCard } from "./recent-activity-card";
@@ -314,6 +316,7 @@ function barKeyToRange(
 }
 
 export default function SpendingTabContent() {
+  const isMobile = useIsMobileViewport();
   // money-hub patch: the dashboard's theme for each mode, Meadow or Bronze Titanium (Settings, Appearance).
   const skins = useDashboardSkins();
   const dateFormatting = useDateFormatting();
@@ -914,8 +917,7 @@ export default function SpendingTabContent() {
   // money-hub patch (owner, 10-02: "merge these cards"): the Spent strip is the Monthly budget card's top
   // row. Spent follows the page's period; the card's bar splits it only when that period is the card's month.
   // The Net tile is a money figure, not a button: green or red by its sign in every theme.
-  const spentHead = (
-    <>
+  const spentLabel = (
       <span className="text-muted-foreground text-[12.5px]">
         {t("spending:tabContent.spentLabel")}
         {periodWord ? ` · ${periodWord.charAt(0).toUpperCase()}${periodWord.slice(1)}` : ""}
@@ -933,6 +935,8 @@ export default function SpendingTabContent() {
           </>
         )}
       </span>
+  );
+  const spentFigure = (
       <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         {isLoading ? (
           <Skeleton className="h-8 w-40" />
@@ -953,6 +957,11 @@ export default function SpendingTabContent() {
           />
         ) : null}
       </span>
+  );
+  const spentHead = (
+    <>
+      {spentLabel}
+      {spentFigure}
     </>
   );
   const cashTiles = (
@@ -989,12 +998,8 @@ export default function SpendingTabContent() {
   // owner's ranking: Cash & cards, Spent, money in and out, Monthly budget, Subscriptions & bills, Where it
   // went, Returns, Dig deeper, Events, Worth a look; the chart and Recent activity sit under More. Every
   // two-card row splits two thirds / one third so the columns line up; each figure shows in one place.
-  return (
-    <div
-      className="meadow flex min-h-screen flex-col gap-3.5 px-3 pb-[var(--mobile-nav-total-offset)] pt-2 max-md:gap-2 md:px-6 md:pb-8 lg:px-8"
-      data-light-skin={skins.light}
-      data-dark-skin={skins.dark}
-    >
+  const errorBannerEl = (
+    <>
       {dataErrored && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-[var(--m-warn-panel-line)] bg-[var(--m-warn-panel)] px-3 py-1.5 text-xs text-[var(--m-warn)]">
           <span>
@@ -1010,7 +1015,10 @@ export default function SpendingTabContent() {
           </button>
         </div>
       )}
-
+    </>
+  );
+  const periodSelEl = (
+    <>
       <div className="flex justify-end">
         <SpendingPeriodSelector
           className="w-auto max-w-full justify-end"
@@ -1024,47 +1032,10 @@ export default function SpendingTabContent() {
           isLoading={isLoading}
         />
       </div>
-
-      {/* money-hub patch: Cash & cards and Cash forecast are the Cash page now (owner, 10-04); one line here. */}
-      <FreeCashStrip currency={currency} />
-
-      <div className="min-w-0">
-        <BudgetLineChartCard
-          monthKey={budgetMonthKey}
-          today={todayParts}
-          isCurrentMonth={budgetMonthKey === currentBudgetMonthKey}
-          onPreviousMonth={() => stepBudgetMonth(-1)}
-          onNextMonth={() => stepBudgetMonth(1)}
-          canGoNextMonth={budgetMonthKey < currentBudgetMonthKey}
-          activityRange={budgetMonthActivityRange}
-          target={budgetCardBudget?.computed.totals.spendingPlanned ?? 0}
-          spent={monthReport?.current.outflow ?? 0}
-          currency={budgetCardBudget?.computed.currency ?? currency}
-          historicalDailyAvg={historicalDailyAvg}
-          forecastParts={budgetForecastParts}
-          forecastPending={subscriptionsPending || !historyReport || !monthReport}
-          allocations={
-            budgetCardBudget?.computed.groupRows.flatMap((row) => row.categories) ?? []
-          }
-          spendingBreakdown={monthReport?.spendingBreakdown ?? []}
-          categoriesMeta={categoriesMeta}
-          monthByDay={monthReport?.byDay ?? []}
-          historicalByDay={historyReport?.byDay ?? []}
-          summary={{ head: spentHead, tiles: cashTiles, sameMonth: spentMatchesBudgetMonth }}
-        />
-      </div>
-
-      {/* money-hub patch: Subscriptions & Bills is its own page (menu: after Cash); here only the summary numbers
-          and the way in (owner, 10-04). The budget above is full width now that it has no card beside it. */}
-      <SubscriptionsStrip
-        currency={currency}
-        from={dateRange?.from ? formatDateISO(dateRange.from) : undefined}
-        to={dateRange?.to ? formatDateISO(dateRange.to) : undefined}
-        rangeLabel={periodWord ? periodWord.charAt(0).toUpperCase() + periodWord.slice(1) : undefined}
-      />
-
-      <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2">
+    </>
+  );
+  const whereCardEl = (
+    <>
           <DashboardCard
             title={t("spending:tabContent.whereItWent")}
             action={
@@ -1110,10 +1081,16 @@ export default function SpendingTabContent() {
               />
             )}
           </DashboardCard>
-        </div>
-        <div className="flex min-w-0 flex-col gap-3.5 max-md:gap-2">
+    </>
+  );
+  const returnsEl = (
+    <>
           {/* money-hub patch: returns still waiting for their refund (lib/returns.ts); nothing while none is. */}
           <ReturnsCard currency={currency} />
+    </>
+  );
+  const digDeeperEl = (
+    <>
           <nav
             aria-label={t("spending:tabContent.digDeeper")}
             data-m="card"
@@ -1140,11 +1117,10 @@ export default function SpendingTabContent() {
               </Link>
             ))}
           </nav>
-        </div>
-      </div>
-
-      <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
-        <div className={cn("min-w-0", insights.length > 0 ? "lg:col-span-2" : "lg:col-span-3")}>
+    </>
+  );
+  const eventsCardEl = (
+    <>
           <EventsCard
             activities={activities}
             accountTypeById={accountTypeById}
@@ -1155,7 +1131,10 @@ export default function SpendingTabContent() {
             periodStartDate={dateRange?.from ? formatDateISO(dateRange.from) : reportReq.startDate}
             theme={theme}
           />
-        </div>
+    </>
+  );
+  const worthALookEl = (
+    <>
         {insights.length > 0 ? (
           <section
             aria-label={t("spending:tabContent.worthALook")}
@@ -1188,13 +1167,10 @@ export default function SpendingTabContent() {
             </div>
           </section>
         ) : null}
-      </div>
-
-      <div className="flex items-center gap-2.5 pt-1">
-        <span className="text-muted-foreground text-xs">More</span>
-        <span className="border-border flex-1 border-t" />
-      </div>
-
+    </>
+  );
+  const periodChartEl = (
+    <>
       <SpendingByPeriodCard
         barData={barData}
         avgValue={avgValue}
@@ -1212,7 +1188,10 @@ export default function SpendingTabContent() {
           navigate(`/activities?tab=spending&from=${from}&to=${to}`);
         }}
       />
-
+    </>
+  );
+  const recentCardEl = (
+    <>
       <RecentActivityCard
         activities={activities}
         accountTypeById={accountTypeById}
@@ -1224,6 +1203,229 @@ export default function SpendingTabContent() {
           to: dateRange?.to ? formatDateISO(dateRange.to) : undefined,
         }}
       />
+    </>
+  );
+
+  // money-hub patch (owner, 10-10: the 4 / 2 / 3 grid): the figures of the top row on a desktop. The same
+  // numbers as the Monthly budget card (budgetFigures), each shown once.
+  const budgetParts = parseMonthKey(budgetMonthKey) ?? todayParts;
+  const isCurrentBudgetMonth = budgetMonthKey === currentBudgetMonthKey;
+  const budgetDaysInMonth = new Date(budgetParts.year, budgetParts.month, 0).getDate();
+  const budgetDaysRemaining = isCurrentBudgetMonth
+    ? Math.max(0, budgetDaysInMonth - Math.min(todayParts.day, budgetDaysInMonth))
+    : 0;
+  const budgetTarget = budgetCardBudget?.computed.totals.spendingPlanned ?? 0;
+  const budgetSpent = monthReport?.current.outflow ?? 0;
+  const figures = budgetFigures({
+    target: budgetTarget,
+    spent: budgetSpent,
+    isCurrentMonth: isCurrentBudgetMonth,
+    daysRemaining: budgetDaysRemaining,
+    historicalDailyAvg,
+    forecastParts: budgetForecastParts,
+  });
+  const budgetPending =
+    isCurrentBudgetMonth && (subscriptionsPending || !historyReport || !monthReport);
+  const leftToSpend = figures.sums
+    ? figures.sums.room - figures.sums.spentOthers
+    : budgetTarget > 0
+      ? budgetTarget - budgetSpent
+      : null;
+  const spentStatus =
+    spentMatchesBudgetMonth && budgetTarget > 0 && figures.planStatus
+      ? figures.planStatus === "over"
+        ? { tone: "bad" as const, label: "Over budget" }
+        : figures.planStatus === "warn"
+          ? { tone: "warn" as const, label: "Heading over" }
+          : { tone: "good" as const, label: "On track" }
+      : null;
+
+  if (isMobile)
+    return (
+    <div
+      className="meadow flex min-h-screen flex-col gap-3.5 px-3 pb-[var(--mobile-nav-total-offset)] pt-2 max-md:gap-2 md:px-6 md:pb-8 lg:px-8"
+      data-light-skin={skins.light}
+      data-dark-skin={skins.dark}
+    >
+      {errorBannerEl}
+
+      {periodSelEl}
+
+      {/* money-hub patch: Cash & cards and Cash forecast are the Cash page now (owner, 10-04); one line here. */}
+      <FreeCashStrip currency={currency} />
+
+      <div className="min-w-0">
+        <BudgetLineChartCard
+          monthKey={budgetMonthKey}
+          today={todayParts}
+          isCurrentMonth={budgetMonthKey === currentBudgetMonthKey}
+          onPreviousMonth={() => stepBudgetMonth(-1)}
+          onNextMonth={() => stepBudgetMonth(1)}
+          canGoNextMonth={budgetMonthKey < currentBudgetMonthKey}
+          activityRange={budgetMonthActivityRange}
+          target={budgetCardBudget?.computed.totals.spendingPlanned ?? 0}
+          spent={monthReport?.current.outflow ?? 0}
+          currency={budgetCardBudget?.computed.currency ?? currency}
+          historicalDailyAvg={historicalDailyAvg}
+          forecastParts={budgetForecastParts}
+          forecastPending={subscriptionsPending || !historyReport || !monthReport}
+          allocations={
+            budgetCardBudget?.computed.groupRows.flatMap((row) => row.categories) ?? []
+          }
+          spendingBreakdown={monthReport?.spendingBreakdown ?? []}
+          categoriesMeta={categoriesMeta}
+          monthByDay={monthReport?.byDay ?? []}
+          historicalByDay={historyReport?.byDay ?? []}
+          summary={{ head: spentHead, tiles: cashTiles, sameMonth: spentMatchesBudgetMonth }}
+        />
+      </div>
+
+      {/* money-hub patch: Subscriptions & Bills is its own page (menu: after Cash); here only the summary numbers
+          and the way in (owner, 10-04). The budget above is full width now that it has no card beside it. */}
+      <SubscriptionsStrip
+        currency={currency}
+        from={dateRange?.from ? formatDateISO(dateRange.from) : undefined}
+        to={dateRange?.to ? formatDateISO(dateRange.to) : undefined}
+        rangeLabel={periodWord ? periodWord.charAt(0).toUpperCase() + periodWord.slice(1) : undefined}
+      />
+
+      <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
+        <div className="min-w-0 lg:col-span-2">
+      {whereCardEl}
+        </div>
+        <div className="flex min-w-0 flex-col gap-3.5 max-md:gap-2">
+      {returnsEl}
+      {digDeeperEl}
+        </div>
+      </div>
+
+      <div className="grid gap-3.5 max-md:gap-2 lg:grid-cols-3">
+        <div className={cn("min-w-0", insights.length > 0 ? "lg:col-span-2" : "lg:col-span-3")}>
+      {eventsCardEl}
+        </div>
+      {worthALookEl}
+      </div>
+
+      <div className="flex items-center gap-2.5 pt-1">
+        <span className="text-muted-foreground text-xs">More</span>
+        <span className="border-border flex-1 border-t" />
+      </div>
+
+      {periodChartEl}
+
+      {recentCardEl}
+    </div>
+  );
+
+  return (
+    <div
+      className="meadow flex min-h-screen flex-col gap-3.5 px-3 pb-8 pt-2 md:px-6 lg:px-8"
+      data-light-skin={skins.light}
+      data-dark-skin={skins.dark}
+    >
+      {errorBannerEl}
+      {periodSelEl}
+
+      {/* Row 1, four answers side by side: Free cash, Spent, Left to spend, Net. */}
+      <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-4">
+        <FreeCashTile currency={currency} />
+        <SpentTile
+          status={spentStatus}
+          head={
+            <>
+              {spentLabel}
+              {spentFigure}
+            </>
+          }
+          bar={
+            spentMatchesBudgetMonth && budgetTarget > 0 ? (
+              <SpentSplitBar
+                fixed={figures.fixedSpent}
+                everyday={Math.max(0, budgetSpent - figures.fixedSpent)}
+                target={budgetTarget}
+                currency={budgetCardBudget?.computed.currency ?? currency}
+              />
+            ) : null
+          }
+        />
+        <LeftToSpendTile
+          loading={budgetPending || (!budgetCardBudget && budgetTarget <= 0 && !monthReport)}
+          left={leftToSpend}
+          hasFixed={!!figures.sums && figures.sums.fixed > 0}
+          perDay={figures.perDay}
+          usualPerDay={budgetForecastParts?.everydayDaily ?? null}
+          daysRemaining={budgetDaysRemaining}
+          currency={budgetCardBudget?.computed.currency ?? currency}
+          noBudget={!!budgetCardBudget && budgetTarget <= 0}
+        />
+        <NetTile
+          net={net}
+          income={income}
+          saved={totalSaved}
+          compact={compact}
+          href={dashboardInsightHref.cashflow}
+        />
+      </div>
+
+      {/* Row 2, two columns: the budget (wide) beside Subscriptions & Bills, Events and what needs a look. */}
+      <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+        <div className="min-w-0">
+          <BudgetLineChartCard
+            liftSummary
+            monthKey={budgetMonthKey}
+            today={todayParts}
+            isCurrentMonth={isCurrentBudgetMonth}
+            onPreviousMonth={() => stepBudgetMonth(-1)}
+            onNextMonth={() => stepBudgetMonth(1)}
+            canGoNextMonth={budgetMonthKey < currentBudgetMonthKey}
+            activityRange={budgetMonthActivityRange}
+            target={budgetTarget}
+            spent={budgetSpent}
+            currency={budgetCardBudget?.computed.currency ?? currency}
+            historicalDailyAvg={historicalDailyAvg}
+            forecastParts={budgetForecastParts}
+            forecastPending={subscriptionsPending || !historyReport || !monthReport}
+            allocations={
+              budgetCardBudget?.computed.groupRows.flatMap((row) => row.categories) ?? []
+            }
+            spendingBreakdown={monthReport?.spendingBreakdown ?? []}
+            categoriesMeta={categoriesMeta}
+            monthByDay={monthReport?.byDay ?? []}
+            historicalByDay={historyReport?.byDay ?? []}
+          />
+        </div>
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <SubscriptionsStrip
+            variant="card"
+            currency={currency}
+            from={dateRange?.from ? formatDateISO(dateRange.from) : undefined}
+            to={dateRange?.to ? formatDateISO(dateRange.to) : undefined}
+            rangeLabel={periodWord ? periodWord.charAt(0).toUpperCase() + periodWord.slice(1) : undefined}
+          />
+          {eventsCardEl}
+          {worthALookEl}
+        </div>
+      </div>
+
+      {/* Row 3, same two columns: Where it went (wide) beside the small ones. */}
+      <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+        <div className="min-w-0">{whereCardEl}</div>
+        <div className="flex min-w-0 flex-col gap-3.5">
+          {returnsEl}
+          {digDeeperEl}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2.5 pt-1">
+        <span className="text-muted-foreground text-xs">More</span>
+        <span className="border-border flex-1 border-t" />
+      </div>
+
+      {/* More, two columns. */}
+      <div className="grid gap-3.5 xl:grid-cols-2">
+        <div className="min-w-0">{periodChartEl}</div>
+        <div className="min-w-0">{recentCardEl}</div>
+      </div>
     </div>
   );
 }

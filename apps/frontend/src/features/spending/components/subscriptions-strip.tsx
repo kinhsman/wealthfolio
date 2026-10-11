@@ -32,9 +32,18 @@ interface SubscriptionsStripProps {
   to?: string;
   /** What the page calls a range that is not one calendar month, "Past 3 months". */
   rangeLabel?: string;
+  /** money-hub patch (owner, 10-10: the 4 / 2 / 3 grid): "card" = the same four numbers stacked two by two in
+   *  a card beside the Monthly budget, instead of one full-width strip. */
+  variant?: "strip" | "card";
 }
 
-export function SubscriptionsStrip({ currency = "USD", from, to, rangeLabel }: SubscriptionsStripProps) {
+export function SubscriptionsStrip({
+  currency = "USD",
+  from,
+  to,
+  rangeLabel,
+  variant = "strip",
+}: SubscriptionsStripProps) {
   const { data, isLoading, isError } = useSubscriptions();
   const today = useMemo(() => ymd(new Date()), []);
   const first = from ?? `${today.slice(0, 8)}01`;
@@ -48,6 +57,69 @@ export function SubscriptionsStrip({ currency = "USD", from, to, rangeLabel }: S
   }, [first, last, rangeLabel]);
   const m = useMemo(() => (data ? billSpan(data.items, today, first, last) : null), [data, today, first, last]);
   const empty = !!data && data.totals.count === 0;
+
+  if (variant === "card") {
+    const paidPct = m && m.count > 0 ? Math.round((m.paidCount / m.count) * 100) : 0;
+    return (
+      <Link
+        to="/spending/subscriptions"
+        data-m="card"
+        aria-label="Open Subscriptions & Bills"
+        className={cn(
+          "flex min-w-0 flex-col gap-3 rounded-[20px] border border-[var(--m-line)] bg-[var(--m-surface)] px-[18px] py-4",
+          "hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--m-forest)]",
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-sm font-medium">Subscriptions &amp; Bills</div>
+            <div className="text-muted-foreground truncate text-xs">
+              {data && !empty ? `${period}, ${data.totals.count} repeating` : period}
+            </div>
+          </div>
+          <span className="flex shrink-0 items-center gap-1 text-[12.5px] text-[var(--m-forest)] underline-offset-4">
+            Open
+            <Icons.ChevronRight className="h-3.5 w-3.5" aria-hidden />
+          </span>
+        </div>
+        {isLoading ? (
+          <Skeleton className="h-24 w-full" />
+        ) : isError ? (
+          <span className="text-muted-foreground text-[13px]">The money app helper did not answer.</span>
+        ) : empty || !data || !m ? (
+          <span className="text-muted-foreground text-[13px]">
+            Nothing repeating found yet. One shows up once it has come back a few months in a row.
+          </span>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              {m.open && (
+                <Stat label="Left to pay">
+                  <PrivacyAmount value={m.leftTotal} currency={currency} />
+                </Stat>
+              )}
+              <Stat label={`Paid, ${m.paidCount} of ${m.count}`}>
+                <PrivacyAmount value={m.paidTotal} currency={currency} />
+              </Stat>
+              <Stat label="A month">
+                <PrivacyAmount value={data.totals.monthly} currency={currency} />
+              </Stat>
+              <Stat label="A year">
+                <PrivacyAmount value={data.totals.yearly} currency={currency} />
+              </Stat>
+            </div>
+            <div
+              className="h-1.5 overflow-hidden rounded-full bg-[var(--m-sand,var(--muted))]"
+              role="img"
+              aria-label={`${m.paidCount} of ${m.count} paid`}
+            >
+              <div className="h-full rounded-full bg-[var(--m-forest)]" style={{ width: `${paidPct}%` }} />
+            </div>
+          </>
+        )}
+      </Link>
+    );
+  }
 
   return (
     <Link

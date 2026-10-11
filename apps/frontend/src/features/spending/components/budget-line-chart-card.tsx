@@ -26,7 +26,7 @@ import type { DayBucket } from "../types/report";
 import { type CategoryMetaMap } from "./category-chips";
 import { PhoneFold } from "./phone-fold";
 
-type Status = "ok" | "warn" | "over";
+export type Status = "ok" | "warn" | "over";
 interface PacePoint {
   day: number;
   value: number;
@@ -78,6 +78,49 @@ const STATUS_ACCENTS: Record<
   },
 };
 
+/** money-hub patch: the month's verdict numbers in one place, so the card and the page's top row (Left to
+ *  spend, the Spent split) read the same figures. */
+export function budgetFigures({
+  target,
+  spent,
+  isCurrentMonth,
+  daysRemaining,
+  historicalDailyAvg,
+  forecastParts,
+}: {
+  target: number;
+  spent: number;
+  isCurrentMonth: boolean;
+  daysRemaining: number;
+  historicalDailyAvg: number;
+  forecastParts?: ForecastParts | null;
+}) {
+  const haveHistory = historicalDailyAvg > 0;
+  const sums =
+    forecastParts && haveHistory && isCurrentMonth && target > 0
+      ? againstBudget(target, spent, forecastParts, daysRemaining)
+      : null;
+  const fixedSpent =
+    forecastParts && isCurrentMonth
+      ? Math.min(
+          forecastParts.fixedPaid.reduce((sum, b) => sum + b.amount, 0),
+          Math.max(0, spent),
+        )
+      : 0;
+  const perDay =
+    sums && daysRemaining > 0 && forecastParts
+      ? (sums.room - sums.spentOthers - forecastParts.billsLeftTotal) / daysRemaining
+      : null;
+  const planStatus: Status | null = sums
+    ? sums.spentOthers + (forecastParts?.billsLeftTotal ?? 0) > sums.room
+      ? "over"
+      : sums.over > 0
+        ? "warn"
+        : "ok"
+    : null;
+  return { haveHistory, sums, fixedSpent, perDay, planStatus };
+}
+
 export function BudgetLineChartCard({
   monthKey,
   today,
@@ -99,6 +142,7 @@ export function BudgetLineChartCard({
   historicalByDay,
   fill = false,
   summary,
+  liftSummary = false,
 }: {
   monthKey: string;
   today: BudgetToday;
@@ -127,6 +171,9 @@ export function BudgetLineChartCard({
    *  the Spent label and figure, `tiles` Income / Saving / Net; `sameMonth` when that figure is this
    *  card's month, so the bar under it can split it into fixed bills and everyday spending. */
   summary?: { head: ReactNode; tiles: ReactNode; sameMonth: boolean };
+  /** money-hub patch (owner, 10-10: the 4 / 2 / 3 grid): the Spent head, Net tiles and Left to spend live in
+   *  the page's top row, so the card drops them and gives the chart and the sums the room. */
+  liftSummary?: boolean;
 }) {
   const dateFormatting = useDateFormatting();
 
@@ -158,6 +205,15 @@ export function BudgetLineChartCard({
   }, [monthKey, isCurrentMonth, dateFormatting, today]);
   const { dayOfMonth, daysInMonth, daysRemaining, monthLabel } = monthMeta;
   const isMobile = useIsMobileViewport();
+  const figures = budgetFigures({
+    target,
+    spent,
+    isCurrentMonth,
+    daysRemaining,
+    historicalDailyAvg,
+    forecastParts,
+  });
+  const lifted = liftSummary && !isMobile;
 
   const cumulative = useMemo(() => {
     const byDay = new Map<number, number>();
@@ -211,7 +267,8 @@ export function BudgetLineChartCard({
   const padB = 14;
   const innerW = chartW - padL - padR;
   const innerH = chartH - padT - padB;
-  const yMax = Math.max(target, spent) * 1.05;
+  const forecastEnd = lifted && figures.sums ? target + figures.sums.over : 0;
+  const yMax = Math.max(target, spent, forecastEnd) * 1.05;
 
   const actualPath = useMemo(() => {
     if (!cumulative.length) return "";
@@ -272,13 +329,7 @@ export function BudgetLineChartCard({
     );
   }, [historicalPace, paceAt, target, daysInMonth, innerW, innerH, padL, padT, yMax]);
 
-  const haveHistory = historicalDailyAvg > 0;
-  // money-hub patch: with the bills apart (lib/budget-forecast.ts), the forecast is everything but the
-  // bills switched to "Exclude from forecast", set against the budget less those (`fixed`).
-  const sums =
-    forecastParts && haveHistory && isCurrentMonth && target > 0
-      ? againstBudget(target, spent, forecastParts, daysRemaining)
-      : null;
+  const { haveHistory, sums, fixedSpent } = figures;
   const forecast =
     target > 0 && isCurrentMonth
       ? haveHistory
@@ -289,14 +340,7 @@ export function BudgetLineChartCard({
           ? (spent / dayOfMonth) * daysInMonth
           : 0
       : 0;
-  const fixedSpent =
-    forecastParts && isCurrentMonth
-      ? Math.min(
-          forecastParts.fixedPaid.reduce((sum, b) => sum + b.amount, 0),
-          Math.max(0, spent),
-        )
-      : 0;
-  const summaryRow = summary ? (
+  const summaryRow = summary && !lifted ? (
     <div className="border-border/60 mb-3 grid gap-x-6 gap-y-2.5 border-b pb-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] md:items-end max-md:mb-2 max-md:gap-y-2 max-md:pb-2">
       <div className="flex min-w-0 flex-col gap-0.5">
         {summary.head}
@@ -384,17 +428,7 @@ export function BudgetLineChartCard({
   // budget, one said over budget, i am totally lost"). With the bills apart, the status, the headline and
   // the chart's bubble all follow the forecast; today's pace is no longer a second opinion.
   // `perDay`: what everyday spending can be each day left and still land on budget.
-  const perDay =
-    sums && daysRemaining > 0 && forecastParts
-      ? (sums.room - sums.spentOthers - forecastParts.billsLeftTotal) / daysRemaining
-      : null;
-  const planStatus: Status | null = sums
-    ? sums.spentOthers + (forecastParts?.billsLeftTotal ?? 0) > sums.room
-      ? "over"
-      : sums.over > 0
-        ? "warn"
-        : "ok"
-    : null;
+  const { perDay, planStatus } = figures;
   const status: Status =
     planStatus ?? (isOver ? "over" : isCurrentMonth && !aheadOfPace ? "warn" : "ok");
   const a = STATUS_ACCENTS[status];
@@ -445,10 +479,18 @@ export function BudgetLineChartCard({
   // money-hub patch: with the Spent row on top, the forecast verdict and the daily line share one strip
   // (one big figure per card).
   const verdictStrip =
-    summary && sums && forecastParts ? (
+    (summary || lifted) && sums && forecastParts ? (
       <div
-        className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 rounded-[12px] px-3 py-2 text-[13px] tabular-nums"
-        style={{ color: a.accent, background: "var(--m-warn-panel, transparent)" }}
+        className={cn(
+          "flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 rounded-[12px] px-3 py-2 text-[13px] tabular-nums",
+          lifted && "text-[15px]",
+        )}
+        style={{
+          color: a.accent,
+          background: lifted
+            ? `color-mix(in srgb, ${a.lineColor} 12%, transparent)`
+            : "var(--m-warn-panel, transparent)",
+        }}
       >
         <span className="font-medium">
           <PrivacyAmount value={Math.abs(sums.over)} currency={currency} />{" "}
@@ -569,8 +611,38 @@ export function BudgetLineChartCard({
         <svg
           viewBox={`0 0 ${chartW} ${chartH}`}
           preserveAspectRatio="none"
-          className={fill ? "absolute inset-0 block h-full w-full" : "block h-[110px] w-full"}
+          className={
+            fill
+              ? "absolute inset-0 block h-full w-full"
+              : lifted
+                ? "block h-[210px] w-full"
+                : "block h-[110px] w-full"
+          }
         >
+          {lifted ? (
+            <line
+              x1={0}
+              x2={chartW}
+              y1={yForVal(target)}
+              y2={yForVal(target)}
+              stroke="var(--m-warn-line, #C28B47)"
+              strokeWidth={1.5}
+              vectorEffect="non-scaling-stroke"
+            />
+          ) : null}
+          {lifted && forecastEnd > 0 && cumulative.length ? (
+            <line
+              x1={endX}
+              y1={endY}
+              x2={xForDay(daysInMonth)}
+              y2={yForVal(forecastEnd)}
+              stroke={a.lineColor}
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          ) : null}
           {targetPacePath ? (
             <path
               d={targetPacePath}
@@ -622,12 +694,47 @@ export function BudgetLineChartCard({
             }}
           />
         )}
+        {lifted ? (
+          <>
+            <span
+              className="text-muted-foreground absolute left-0 -translate-y-full pb-0.5 text-[11.5px] tabular-nums"
+              style={{ top: `${(yForVal(target) / chartH) * 100}%` }}
+            >
+              Budget <PrivacyAmount value={target} currency={currency} />
+            </span>
+            {forecastEnd > 0 && cumulative.length ? (
+              <span
+                className="absolute right-0 -translate-y-full pb-0.5 text-[11.5px] tabular-nums"
+                style={{
+                  top: `${(yForVal(forecastEnd) / chartH) * 100}%`,
+                  color: a.lineColor,
+                }}
+              >
+                Forecast <PrivacyAmount value={forecastEnd} currency={currency} />
+              </span>
+            ) : null}
+          </>
+        ) : null}
       </div>
       <div className="text-muted-foreground mt-1 flex justify-between text-[11px] tabular-nums">
         <span>{t("spending:budgetChart.dayN", { day: 1 })}</span>
-        <span className="flex items-center gap-1.5">
-          <span className="border-muted-foreground w-3.5 border-t-[1.5px] border-dashed" aria-hidden />
-          Usual pace
+        <span className="flex items-center gap-3">
+          {lifted ? (
+            <span className="flex items-center gap-1.5">
+              <span className="w-3.5 border-t-2" style={{ borderColor: a.lineColor }} aria-hidden />
+              Spent
+            </span>
+          ) : null}
+          {lifted && forecastEnd > 0 ? (
+            <span className="flex items-center gap-1.5">
+              <span className="w-3.5 border-t-2 border-dashed" style={{ borderColor: a.lineColor }} aria-hidden />
+              Forecast
+            </span>
+          ) : null}
+          <span className="flex items-center gap-1.5">
+            <span className="border-muted-foreground w-3.5 border-t-[1.5px] border-dashed" aria-hidden />
+            Usual pace
+          </span>
         </span>
         <span>{t("spending:budgetChart.dayN", { day: daysInMonth })}</span>
       </div>
@@ -644,13 +751,14 @@ export function BudgetLineChartCard({
           target={target}
           daysRemaining={daysRemaining}
           currency={currency}
+          list={lifted}
         />
       ) : null}
     </>
   );
   const leftBlock = (
     <>
-      {sums ? (
+      {sums && lifted ? null : sums ? (
         // money-hub patch: what is left to spend this month once the fixed bills are paid (one verdict:
         // no second forecast number down here). Stretched to the card beside it, it sits at the bottom,
         // level with the chart's day labels.
@@ -822,7 +930,7 @@ export function BudgetLineChartCard({
     >
       {summaryRow}
       {verdictStrip ? <div className="mb-1">{verdictStrip}</div> : null}
-      <div className={cn("grid gap-x-6 gap-y-3 lg:grid-cols-[1.15fr_1fr]", fill && "flex-1")}>
+      <div className={cn("grid gap-x-6 gap-y-3 lg:grid-cols-[1.35fr_1fr]", fill && "flex-1")}>
       <div className="flex min-w-0 flex-col">
       {verdictStrip ? null : verdictBlock}
 
@@ -977,7 +1085,7 @@ function BudgetCardHeaderActions({
 }
 
 /** money-hub patch: the month's spending as one bar against the budget, fixed bills and everyday apart. */
-function SpentSplitBar({
+export function SpentSplitBar({
   fixed,
   everyday,
   target,
@@ -1134,12 +1242,15 @@ function ForecastSums({
   target,
   daysRemaining,
   currency,
+  list = false,
 }: {
   parts: ForecastParts;
   sums: ReturnType<typeof againstBudget>;
   target: number;
   daysRemaining: number;
   currency: string;
+  /** money-hub patch: the "Made of" sentence as three lines, one figure each (owner, 10-10: a wall of tiny text). */
+  list?: boolean;
 }) {
   const line = "flex items-baseline justify-between gap-2";
   return (
@@ -1168,6 +1279,37 @@ function ForecastSums({
         </span>
         <PrivacyAmount value={sums.others} currency={currency} />
       </div>
+      {list ? (
+        <div className="border-border/60 space-y-1 border-t pt-1.5 text-xs">
+          <div className={line}>
+            <span className="min-w-0 truncate">
+              Spent so far{sums.fixed > 0 ? " besides fixed bills" : ""}
+            </span>
+            <PrivacyAmount value={sums.spentOthers} currency={currency} />
+          </div>
+          <div className={line}>
+            <span className="min-w-0 truncate">
+              {parts.billsLeft.length} {parts.billsLeft.length === 1 ? "bill" : "bills"} still due
+            </span>
+            <PrivacyAmount value={parts.billsLeftTotal} currency={currency} />
+          </div>
+          <div className={line}>
+            <span className="min-w-0 truncate">
+              Everyday, {daysRemaining} {daysRemaining === 1 ? "day" : "days"} left
+            </span>
+            <span className="shrink-0">
+              <PrivacyAmount value={parts.everydayDaily} currency={currency} /> a day
+            </span>
+          </div>
+          {parts.cappedDays > 0 ? (
+            <div className="text-muted-foreground/80 pt-0.5 text-[11.5px]">
+              Your usual days of the last 3 months. {parts.cappedDays} one-off big{" "}
+              {parts.cappedDays === 1 ? "day counts" : "days count"} as{" "}
+              <PrivacyAmount value={parts.everydayCap} currency={currency} />.
+            </div>
+          ) : null}
+        </div>
+      ) : (
       <div className="text-muted-foreground pt-0.5 text-xs">
         Made of <PrivacyAmount value={sums.spentOthers} currency={currency} /> spent so far
         {sums.fixed > 0 ? " besides fixed bills" : ""},{" "}
@@ -1185,6 +1327,7 @@ function ForecastSums({
         ) : null}
         .
       </div>
+      )}
     </div>
   );
 }

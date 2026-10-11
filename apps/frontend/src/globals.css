@@ -1459,16 +1459,16 @@ html.light.mh-skin[data-light-skin="bronze"] {
 }
 .dark .meadow[data-dark-skin="bronze"],
 html.dark.mh-skin[data-dark-skin="bronze"] {
-  --m-page: #12100f;
-  --m-surface: #1e1a18;
-  --m-tile: rgba(255, 240, 225, 0.05);
-  --m-sand: rgba(255, 240, 225, 0.06);
-  --m-track: #46382f;
-  --m-line: #4b3a30;
-  --m-line-soft: rgba(237, 226, 214, 0.08);
-  --m-ink: #f0e9e1;
-  --m-ink-2: #cdc0b3;
-  --m-muted: #b5aa9f;
+  --m-page: #0e1012;
+  --m-surface: #171a1e;
+  --m-tile: rgba(255, 255, 255, 0.05);
+  --m-sand: rgba(255, 255, 255, 0.06);
+  --m-track: #2a3036;
+  --m-line: #2d3238;
+  --m-line-soft: rgba(255, 255, 255, 0.07);
+  --m-ink: #eceae6;
+  --m-ink-2: #c4c6c8;
+  --m-muted: #9aa0a6;
   --m-forest: #c9a27a;
   --m-forest-today: #e8d2b2;
   --m-on-forest: #211c1b;
@@ -1478,32 +1478,32 @@ html.dark.mh-skin[data-dark-skin="bronze"] {
   --m-mint-muted: #d3c4b4;
   --m-mint-tile: rgba(237, 230, 222, 0.08);
   --m-mint-line: rgba(196, 183, 170, 0.22);
-  --m-warn: #e6c887;
-  --m-warn-soft: #3d3222;
-  --m-warn-line: #e2be6e;
-  --m-warn-panel: #2a221a;
-  --m-warn-panel-line: #5a4730;
+  --m-warn: #e8b04a;
+  --m-warn-soft: rgba(232, 176, 74, 0.14);
+  --m-warn-line: #e8b04a;
+  --m-warn-panel: rgba(232, 176, 74, 0.10);
+  --m-warn-panel-line: rgba(232, 176, 74, 0.28);
   --m-bad: #d08c7c;
   --m-info-soft: rgba(46, 47, 65, 0.62);
   --m-info-ink: #bdbed3;
-  --m-cat-other: #6d584b;
+  --m-cat-other: #6b7178;
   --m-bills: #e59ab8;
-  --m-cushion: #4b3a30;
-  --m-ring-ok: #8fd19e;
-  --m-up: #8fd19e;
-  --m-down: #ff8a80;
-  --m-bad: #ff8a80;
+  --m-cushion: #3a4047;
+  --m-ring-ok: #4cc38a;
+  --m-up: #4cc38a;
+  --m-down: #f2705e;
+  --m-bad: #f2705e;
   --m-higher: var(--m-down);
   --m-higher-ink: var(--m-down);
-  --m-higher-soft: rgba(255, 138, 128, 0.14);
+  --m-higher-soft: rgba(242, 112, 94, 0.15);
   --m-chart: #5fc8c0;
   --m-chart-today: #a3e4de;
   --m-chart-2: #9aa8f0;
   --m-chart-3: #e59ab8;
-  --m-done: #8fd19e;
+  --m-done: #4cc38a;
   --m-on-done: #0e2e17;
-  --m-good-soft: rgba(143, 209, 158, 0.14);
-  --m-good-ink: #8fd19e;
+  --m-good-soft: rgba(76, 195, 138, 0.15);
+  --m-good-ink: #4cc38a;
   --m-seg-cards: #9aa8f0;
   --m-free: #6fb383;
   --m-tint: 30%;
@@ -1518,9 +1518,9 @@ html.dark.mh-skin[data-dark-skin="bronze"] {
   --m-cat-9: #b79be0;
   --m-cat-10: #e8a0b8;
   --m-cat-11: #c7a57e;
-  --bt-glass: rgba(30, 26, 24, 0.78);
-  --bt-glass-line: rgba(237, 226, 214, 0.09);
-  --bt-sheen: rgba(255, 240, 222, 0.07);
+  --bt-glass: rgba(23, 26, 30, 0.82);
+  --bt-glass-line: rgba(255, 255, 255, 0.07);
+  --bt-sheen: rgba(255, 255, 255, 0.035);
   --bt-glass-edge:
     inset 0 2px 4px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 236, 214, 0.16),
     inset 0 -1px 0 rgba(0, 0, 0, 0.22), 0 0 2px rgba(255, 236, 214, 0.08),
@@ -1531,31 +1531,22 @@ html.dark.mh-skin[data-dark-skin="bronze"] {
     inset 0 1px 0 rgba(255, 246, 232, 0.45), inset 0 -1px 0 rgba(90, 55, 25, 0.35),
     0 4px 14px rgba(0, 0, 0, 0.35);
   --bt-hero:
-    linear-gradient(
-      145deg,
-      rgba(255, 236, 210, 0.11) 0.6%,
-      rgba(255, 236, 210, 0.03) 22%,
-      rgba(255, 236, 210, 0) 55%
-    ),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.06) 0.6%, rgba(255, 255, 255, 0.015) 30%, transparent 60%),
     radial-gradient(
       140% 120% at 0% 0%,
-      rgba(116, 76, 42, 0.56) 0%,
-      rgba(66, 44, 26, 0.52) 45%,
-      rgba(30, 24, 20, 0.74) 100%
+      rgba(176, 116, 60, 0.2) 0%,
+      rgba(30, 28, 27, 0.7) 55%,
+      rgba(23, 26, 30, 0.82) 100%
     );
-  --bt-hero-line: rgba(236, 208, 172, 0.2);
+  --bt-hero-line: rgba(255, 255, 255, 0.1);
   --bt-hero-edge:
-    inset 0 1px 0 rgba(255, 238, 214, 0.3), inset 0 2px 6px rgba(255, 220, 180, 0.06),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.28), 0 18px 40px rgba(0, 0, 0, 0.55);
-  --bt-notice: rgba(60, 45, 24, 0.6);
-  --bt-notice-line: rgba(226, 190, 110, 0.2);
+    inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 18px 40px rgba(0, 0, 0, 0.5);
+  --bt-notice: rgba(232, 176, 74, 0.10);
+  --bt-notice-line: rgba(232, 176, 74, 0.26);
   --bt-ground:
-    linear-gradient(to bottom, #12100f 0, rgba(18, 16, 15, 0) 110px),
-    radial-gradient(520px 420px at 8% 0%, rgba(176, 116, 60, 0.2), transparent 70%),
-    radial-gradient(380px 320px at 100% 22%, rgba(214, 196, 170, 0.05), transparent 70%),
-    radial-gradient(460px 400px at 0% 45%, rgba(150, 98, 52, 0.11), transparent 70%),
-    radial-gradient(420px 360px at 100% 68%, rgba(170, 120, 70, 0.08), transparent 70%),
-    radial-gradient(460px 380px at 0% 88%, rgba(78, 80, 124, 0.14), transparent 70%), #12100f;
+    linear-gradient(to bottom, #0e1012 0, rgba(14, 16, 18, 0) 110px),
+    radial-gradient(520px 420px at 8% 0%, rgba(176, 116, 60, 0.08), transparent 70%), #0e1012;
   background: var(--bt-ground);
 }
 /* Liquid glass: every card is frosted glass with a lit top edge and a 145deg sheen. */
@@ -1744,12 +1735,12 @@ html.dark.mh-skin[data-dark-skin="bronze"] {
     rgba(251, 248, 244, 0.92);
 }
 .dark :is([data-mside], [data-mbar])[data-dark-skin="bronze"] {
-  --ms-line: rgba(237, 226, 214, 0.09);
-  --ms-ink: #f0e9e1;
-  --ms-ink-2: #cdc0b3;
-  --ms-muted: #b5aa9f;
-  --ms-hover: rgba(255, 240, 225, 0.07);
-  --ms-page: #12100f;
+  --ms-line: rgba(255, 255, 255, 0.07);
+  --ms-ink: #eceae6;
+  --ms-ink-2: #c4c6c8;
+  --ms-muted: #9aa0a6;
+  --ms-hover: rgba(255, 255, 255, 0.06);
+  --ms-page: #0e1012;
   --ms-accent: #c9a27a;
   --ms-fill: linear-gradient(180deg, #d4b18a, #b68c60);
   --ms-on-fill: #211c1b;
@@ -1757,14 +1748,14 @@ html.dark.mh-skin[data-dark-skin="bronze"] {
     inset 0 1px 0 rgba(255, 246, 232, 0.45), inset 0 -1px 0 rgba(90, 55, 25, 0.35),
     0 4px 14px rgba(0, 0, 0, 0.35);
   --ms-bar:
-    linear-gradient(145deg, rgba(255, 240, 222, 0.07) 0.6%, transparent 60%), rgba(30, 26, 24, 0.84);
-  --ms-bar-line: rgba(237, 226, 214, 0.09);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.035) 0.6%, transparent 60%), rgba(23, 26, 30, 0.88);
+  --ms-bar-line: rgba(255, 255, 255, 0.07);
   --ms-bar-edge:
     inset 0 2px 4px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 236, 214, 0.16),
     inset 0 -1px 0 rgba(0, 0, 0, 0.22), 0 10px 28px rgba(0, 0, 0, 0.45);
   --ms-bar-blur: blur(24px) saturate(160%);
   --ms-sheet:
-    linear-gradient(145deg, rgba(255, 240, 222, 0.07) 0.6%, transparent 60%), rgba(30, 26, 24, 0.94);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.035) 0.6%, transparent 60%), rgba(23, 26, 30, 0.95);
 }
 /* The sidebar: a card-coloured column (Meadow), glass over the bronze glows (Bronze). */
 [data-mside] {
@@ -1782,11 +1773,10 @@ html.dark.mh-skin[data-dark-skin="bronze"] {
 }
 .dark [data-mside][data-dark-skin="bronze"] {
   background:
-    linear-gradient(145deg, rgba(255, 240, 222, 0.07) 0.6%, transparent 60%),
-    linear-gradient(rgba(26, 22, 20, 0.76), rgba(26, 22, 20, 0.76)),
-    radial-gradient(360px 420px at 100% 0%, rgba(176, 116, 60, 0.18), transparent 70%),
-    radial-gradient(300px 380px at 100% 88%, rgba(78, 80, 124, 0.12), transparent 70%), #12100f;
-  box-shadow: inset -1px 0 0 rgba(255, 236, 214, 0.06);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.035) 0.6%, transparent 60%),
+    linear-gradient(rgba(18, 21, 24, 0.82), rgba(18, 21, 24, 0.82)),
+    radial-gradient(360px 420px at 100% 0%, rgba(176, 116, 60, 0.07), transparent 70%), #0e1012;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.05);
 }
 /* Rows: Meadow's tile corners, kept in step with the compact 36px rows (the top row's icons a notch
    tighter); the current page (and Add-ons while one is open) in the fill. */
@@ -1930,7 +1920,7 @@ html.light.mh-skin[data-light-skin="bronze"] {
   --bt-pop: rgba(251, 248, 244, 0.9);
 }
 html.dark.mh-skin[data-dark-skin="bronze"] {
-  --bt-pop: rgba(30, 26, 24, 0.92);
+  --bt-pop: rgba(23, 26, 30, 0.94);
 }
 /* Bronze's glows behind the stock pages too: the page area paints them and a stock page's box lets them
    through (a .meadow page keeps its solid header strip above its own ground, as before). */
