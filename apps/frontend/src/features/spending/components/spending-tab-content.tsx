@@ -1038,6 +1038,7 @@ export default function SpendingTabContent() {
     <>
           <DashboardCard
             title={t("spending:tabContent.whereItWent")}
+            fill={!isMobile}
             action={
               <div className="flex items-center gap-3">
                 <SegmentedToggle
@@ -1078,6 +1079,7 @@ export default function SpendingTabContent() {
                 groupRows={budget?.computed.groupRows ?? []}
                 hasNoIncludedAccounts={hasNoIncludedAccounts}
                 activityHrefFor={activityHrefFor}
+                expandAll={!isMobile}
               />
             )}
           </DashboardCard>
@@ -1172,6 +1174,7 @@ export default function SpendingTabContent() {
   const periodChartEl = (
     <>
       <SpendingByPeriodCard
+        fill={!isMobile}
         barData={barData}
         avgValue={avgValue}
         avgLabel={avgLabel}
@@ -1193,6 +1196,7 @@ export default function SpendingTabContent() {
   const recentCardEl = (
     <>
       <RecentActivityCard
+        fill={!isMobile}
         activities={activities}
         accountTypeById={accountTypeById}
         accountById={accountById}
@@ -1367,10 +1371,11 @@ export default function SpendingTabContent() {
         />
       </div>
 
-      {/* Row 2, two columns: the budget (wide) beside Subscriptions & Bills, Events and what needs a look. */}
-      <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-        <div className="min-w-0">
+      {/* Row 2: the budget (wide) with Where it went, fully open, right beside it; equal heights. */}
+      <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col [&>*]:flex-1">
           <BudgetLineChartCard
+            fill
             liftSummary
             monthKey={budgetMonthKey}
             today={todayParts}
@@ -1394,7 +1399,12 @@ export default function SpendingTabContent() {
             historicalByDay={historyReport?.byDay ?? []}
           />
         </div>
-        <div className="flex min-w-0 flex-col gap-3.5">
+        <div className="flex min-w-0 flex-col [&>*]:flex-1">{whereCardEl}</div>
+      </div>
+
+      {/* Row 3, three across, same height: Subscriptions & Bills, Where I am (dig deeper), Events. */}
+      <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="flex min-w-0 flex-col [&>*]:flex-1">
           <SubscriptionsStrip
             variant="card"
             currency={currency}
@@ -1402,18 +1412,15 @@ export default function SpendingTabContent() {
             to={dateRange?.to ? formatDateISO(dateRange.to) : undefined}
             rangeLabel={periodWord ? periodWord.charAt(0).toUpperCase() + periodWord.slice(1) : undefined}
           />
-          {eventsCardEl}
-          {worthALookEl}
         </div>
+        <div className="flex min-w-0 flex-col [&>*]:flex-1 [&>nav>a]:flex-1">{digDeeperEl}</div>
+        <div className="flex min-w-0 flex-col [&>*]:flex-1">{eventsCardEl}</div>
       </div>
 
-      {/* Row 3, same two columns: Where it went (wide) beside the small ones. */}
-      <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-        <div className="min-w-0">{whereCardEl}</div>
-        <div className="flex min-w-0 flex-col gap-3.5">
-          {returnsEl}
-          {digDeeperEl}
-        </div>
+      {/* Only when there is something: a return waiting for its refund, signals worth a look. */}
+      <div className="flex flex-wrap gap-3.5 empty:hidden [&>*]:min-w-[300px] [&>*]:flex-1">
+        {returnsEl}
+        {worthALookEl}
       </div>
 
       <div className="flex items-center gap-2.5 pt-1">
@@ -1421,10 +1428,10 @@ export default function SpendingTabContent() {
         <span className="border-border flex-1 border-t" />
       </div>
 
-      {/* More, two columns. */}
+      {/* More, two columns, same height. */}
       <div className="grid gap-3.5 xl:grid-cols-2">
-        <div className="min-w-0">{periodChartEl}</div>
-        <div className="min-w-0">{recentCardEl}</div>
+        <div className="flex min-w-0 flex-col [&>*]:flex-1">{periodChartEl}</div>
+        <div className="flex min-w-0 flex-col [&>*]:flex-1">{recentCardEl}</div>
       </div>
     </div>
   );
@@ -1763,12 +1770,15 @@ export function CategoryRankedBar({
   groupRows = [],
   hasNoIncludedAccounts,
   activityHrefFor,
+  expandAll = false,
 }: {
   rows: CategoryRow[];
   total: number;
   currency: string;
   themeColor: string;
   hasNoIncludedAccounts: boolean;
+  /** money-hub patch (owner, 10-11): every group opens with its categories showing (desktop). */
+  expandAll?: boolean;
   /**
    * Budget groups (Needs / Wants / …). When any category here is assigned to a
    * group, the list switches to a grouped layout with collapsible group rows.
@@ -1909,6 +1919,7 @@ export function CategoryRankedBar({
         currency={currency}
         themeColor={themeColor}
         activityHrefFor={activityHrefFor}
+        defaultExpanded={expandAll}
       />
     );
 
@@ -2003,6 +2014,7 @@ function GroupedCategoryBlock({
   currency,
   themeColor,
   activityHrefFor,
+  defaultExpanded = false,
 }: {
   bucket: {
     id: string;
@@ -2015,9 +2027,10 @@ function GroupedCategoryBlock({
   currency: string;
   themeColor: string;
   activityHrefFor: (id: string) => string;
+  defaultExpanded?: boolean;
 }) {
   const numberFormatting = useNumberFormatting();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const share = total > 0 ? (bucket.total / total) * 100 : 0;
   const accent = bucket.color ?? themeColor;
   // Sort categories by spend descending, but always pin the uncategorized

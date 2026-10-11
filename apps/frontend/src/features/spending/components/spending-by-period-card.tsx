@@ -45,7 +45,10 @@ export function SpendingByPeriodCard({
   currency,
   rangeLabel,
   onOpen,
+  fill = false,
 }: {
+  /** money-hub patch (owner, 10-11): as tall as the card beside it, the bars taking the extra height. */
+  fill?: boolean;
   barData: PeriodBar[];
   avgValue: number;
   avgLabel: string;
@@ -198,7 +201,8 @@ export function SpendingByPeriodCard({
             <>
               <div
                 className={cn(
-                  "relative ml-11 h-[150px] max-md:h-[132px]",
+                  "relative ml-11 max-md:h-[132px]",
+                  fill ? "min-h-[150px] flex-1" : "h-[150px]",
                   twoCapRows ? "mt-9" : "mt-5",
                 )}
               >

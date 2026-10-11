@@ -36,7 +36,10 @@ export function RecentActivityCard({
   categoriesMeta,
   uncategorizedCount = 0,
   pendingRange,
+  fill = false,
 }: {
+  /** money-hub patch (owner, 10-11): as tall as the card beside it. */
+  fill?: boolean;
   activities: Activity[];
   accountTypeById?: Map<string, string>;
   /** money-hub patch: each row's account, for the bank logo on ATM cash (lib/merchants.ts). */
@@ -191,6 +194,7 @@ export function RecentActivityCard({
   return (
     <DashboardCard
       title={t("spending:dashboard.recentActivity")}
+      fill={fill}
       padded={false}
       className="overflow-hidden"
       action={
