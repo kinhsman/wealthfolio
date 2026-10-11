@@ -1,6 +1,7 @@
 import type { Account, Holding } from "@/lib/types";
 import { describe, expect, it } from "vitest";
 import {
+  flattenAllocationNodes,
   accountTreeWeights,
   computeValueStrip,
   valueStripFromCurrentSummary,
@@ -269,5 +270,20 @@ describe("allocation dashboard derivations", () => {
 
     expect(nodes).toHaveLength(2);
     expect(nodes.map((n) => n.value)).toEqual([100, 50]);
+  });
+});
+
+describe("flattenAllocationNodes", () => {
+  it("drops sub-rows and renames the classes the owner named", () => {
+    const sub = { id: "EQUITY_PUBLIC", name: "Public Stocks", value: 10, percentage: 50, color: "#111", depth: 1 };
+    const nodes = [
+      { id: "EQUITY", name: "Equity", value: 10, percentage: 50, color: "#111", depth: 0, children: [sub] },
+      { id: "CASH", name: "Cash", value: 6, percentage: 30, color: "#222", depth: 0, children: [{ ...sub, id: "CASH_BANK_DEPOSITS", name: "Bank Deposits" }] },
+      { id: "OPT", name: "Options", value: 4, percentage: 20, color: "#333", depth: 0 },
+    ];
+    const flat = flattenAllocationNodes(nodes);
+    expect(flat.map((n) => n.name)).toEqual(["Stocks & ETFs", "Cash", "Stock Options"]);
+    expect(flat.every((n) => !n.children)).toBe(true);
+    expect(flat.map((n) => n.value)).toEqual([10, 6, 4]);
   });
 });

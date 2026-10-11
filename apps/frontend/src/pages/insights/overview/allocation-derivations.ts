@@ -263,6 +263,26 @@ export function buildBreakdownTree(
     });
 }
 
+/** Row names the owner wants on the Allocation lens (money-hub patch), keyed by lower-case name. */
+const FLAT_ALLOCATION_NAMES: Record<string, string> = {
+  equity: "Stocks & ETFs",
+  options: "Stock Options",
+};
+
+/**
+ * money-hub patch (owner, 2026-10-10): the Allocation lens shows ONE flat row per asset class
+ * ("Stocks & ETFs", "Cash", "Stock Options") instead of a class with a sub-type under it. The
+ * sub-rows are dropped, not summed again: a class already carries its whole value. A row with no
+ * children opens the detail sheet for the class itself.
+ */
+export function flattenAllocationNodes(nodes: BreakdownNode[]): BreakdownNode[] {
+  return nodes.map((node) => ({
+    ...node,
+    name: FLAT_ALLOCATION_NAMES[node.name.trim().toLowerCase()] ?? node.name,
+    children: undefined,
+  }));
+}
+
 /** Flat lens items (currency, …) as breakdown nodes (no children). */
 export function toBreakdownNodes(items: LensItem[]): BreakdownNode[] {
   return items.map((i) => ({
