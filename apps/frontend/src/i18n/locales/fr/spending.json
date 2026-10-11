@@ -493,6 +493,7 @@
     "noTaggedYet": "Aucune transaction associée pour le moment",
     "top": "Top",
     "planEvent": "Planifier un événement",
+    "allEvents": "Tous les événements",
     "seeBreakdown": "Voir la répartition",
     "openEvent": "Ouvrir l'événement"
   },

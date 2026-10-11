@@ -139,7 +139,10 @@ export function EventsCard({
   // a server outage looks identical to "user has no events".
   if (eventSummariesErrored) {
     return (
-      <div data-meadow-card className="border-border/40 bg-card/70 rounded-xl border p-4 text-center text-xs backdrop-blur-xl md:p-5">
+      <div
+        data-meadow-card
+        className="border-border/40 bg-card/70 rounded-xl border p-4 text-center text-xs backdrop-blur-xl md:p-5"
+      >
         <div className="text-muted-foreground">{t("spending:events.loadError")}</div>
         <button
           type="button"
@@ -154,7 +157,10 @@ export function EventsCard({
 
   if (eventSummariesLoading) {
     return (
-      <div data-meadow-card className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5">
+      <div
+        data-meadow-card
+        className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5"
+      >
         <div className="flex items-center gap-2">
           <Skeleton className="h-4 w-4 rounded-full" />
           <div className="flex-1 space-y-1.5">
@@ -172,7 +178,10 @@ export function EventsCard({
 
   if (!pick) {
     return (
-      <div data-meadow-card className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5">
+      <div
+        data-meadow-card
+        className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5"
+      >
         <div className="flex items-center gap-2">
           <Icons.Calendar className="h-4 w-4 shrink-0" style={{ color: theme.deep }} />
           <div className="min-w-0 flex-1">
@@ -189,14 +198,23 @@ export function EventsCard({
           {t("spending:eventsCard.createPrompt")}
         </div>
 
-        <button
-          type="button"
-          onClick={() => openEventDialog()}
-          className="text-muted-foreground hover:text-foreground mt-3 inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
-        >
-          {t("spending:events.createEvent")}
-          <Icons.ChevronRight className="h-3 w-3" />
-        </button>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <button
+            type="button"
+            onClick={() => openEventDialog()}
+            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
+          >
+            {t("spending:events.createEvent")}
+            <Icons.ChevronRight className="h-3 w-3" />
+          </button>
+          <Link
+            to="/settings/spending/events"
+            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
+          >
+            {t("spending:eventsCard.allEvents")}
+            <Icons.ChevronRight className="h-3 w-3" />
+          </Link>
+        </div>
       </div>
     );
   }
@@ -252,7 +270,10 @@ export function EventsCard({
   }
 
   return (
-    <div data-meadow-card className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5">
+    <div
+      data-meadow-card
+      className="border-border/40 bg-card/70 rounded-xl border p-4 backdrop-blur-xl md:p-5"
+    >
       <div className="flex items-center gap-2">
         <HeaderIcon className="h-4 w-4 shrink-0" style={{ color: theme.deep }} />
         <div className="min-w-0 flex-1">
@@ -371,30 +392,39 @@ export function EventsCard({
         />
       )}
 
-      {pick.mode === "upcoming" && eventSpent <= 0 ? (
-        <button
-          type="button"
-          onClick={() => {
-            const start = new Date();
-            start.setDate(start.getDate() + 7);
-            openEventDialog({ prefill: { startDate: start, endDate: start } });
-          }}
-          className="text-muted-foreground hover:text-foreground mt-3 inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
-        >
-          {t("spending:eventsCard.planEvent")}
-          <Icons.ChevronRight className="h-3 w-3" />
-        </button>
-      ) : (
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        {pick.mode === "upcoming" && eventSpent <= 0 ? (
+          <button
+            type="button"
+            onClick={() => {
+              const start = new Date();
+              start.setDate(start.getDate() + 7);
+              openEventDialog({ prefill: { startDate: start, endDate: start } });
+            }}
+            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
+          >
+            {t("spending:eventsCard.planEvent")}
+            <Icons.ChevronRight className="h-3 w-3" />
+          </button>
+        ) : (
+          <Link
+            to="/spending/insights?stage=when"
+            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
+          >
+            {pick.mode === "recent"
+              ? t("spending:eventsCard.seeBreakdown")
+              : t("spending:eventsCard.openEvent")}
+            <Icons.ChevronRight className="h-3 w-3" />
+          </Link>
+        )}
         <Link
-          to="/spending/insights?stage=when"
-          className="text-muted-foreground hover:text-foreground mt-3 inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
+          to="/settings/spending/events"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
         >
-          {pick.mode === "recent"
-            ? t("spending:eventsCard.seeBreakdown")
-            : t("spending:eventsCard.openEvent")}
+          {t("spending:eventsCard.allEvents")}
           <Icons.ChevronRight className="h-3 w-3" />
         </Link>
-      )}
+      </div>
     </div>
   );
 }

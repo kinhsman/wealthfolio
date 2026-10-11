@@ -461,6 +461,7 @@
     "noTaggedYet": "아직 태그된 거래가 없습니다",
     "top": "상위",
     "planEvent": "이벤트 계획",
+    "allEvents": "모든 이벤트",
     "seeBreakdown": "세부 내역 보기",
     "openEvent": "이벤트 열기"
   },

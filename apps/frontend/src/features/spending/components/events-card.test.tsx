@@ -90,7 +90,9 @@ describe("EventsCard", () => {
       isError: false,
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useEventSpendingSummaries>);
-    mockUseEventCharges.mockReturnValue({ data: undefined } as unknown as ReturnType<typeof useEventCharges>);
+    mockUseEventCharges.mockReturnValue({ data: undefined } as unknown as ReturnType<
+      typeof useEventCharges
+    >);
     mockUseOwlyTrips.mockReturnValue({
       data: { connected: false, trips: [], links: {} },
     } as unknown as ReturnType<typeof useOwlyTrips>);
@@ -107,6 +109,10 @@ describe("EventsCard", () => {
     expect(screen.getByText("Sister Wedding")).toBeInTheDocument();
     expect(screen.getByText("PERIOD")).toBeInTheDocument();
     expect(screen.queryByText("No events in this period")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /all events/i })).toHaveAttribute(
+      "href",
+      "/settings/spending/events",
+    );
   });
 
   it("keeps the empty state when events are outside the selected dashboard period", () => {
@@ -114,6 +120,10 @@ describe("EventsCard", () => {
 
     expect(screen.getByText("No events in this period")).toBeInTheDocument();
     expect(screen.queryByText("Sister Wedding")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /all events/i })).toHaveAttribute(
+      "href",
+      "/settings/spending/events",
+    );
   });
 
   it("shows event-reporting totals from summaries even without period activities", () => {
@@ -179,7 +189,12 @@ describe("EventsCard", () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useEventSpendingSummaries>);
     mockUseOwlyTrips.mockReturnValue({
-      data: { connected: true, baseUrl: "https://owly.example", trips: [dallasTrip], links: { "ev-dallas": 6 } },
+      data: {
+        connected: true,
+        baseUrl: "https://owly.example",
+        trips: [dallasTrip],
+        links: { "ev-dallas": 6 },
+      },
     } as unknown as ReturnType<typeof useOwlyTrips>);
 
     renderEventsCard("2026-06-01T04:00:00.000Z", "2026-06-30T03:59:59.999Z");
@@ -188,19 +203,43 @@ describe("EventsCard", () => {
     expect(strip).toHaveTextContent("Dallas - Worlds 2026");
     expect(strip).toHaveTextContent("Thanh owes you");
     expect(strip).toHaveTextContent("Cost to you after they pay back");
-    expect(within(strip).getByRole("link", { name: /open/i })).toHaveAttribute("href", "https://owly.example/trips/6");
+    expect(within(strip).getByRole("link", { name: /open/i })).toHaveAttribute(
+      "href",
+      "https://owly.example/trips/6",
+    );
   });
 
   it("says which Owly bills are on the card and which are not, and opens the list", () => {
     mockUseEventSpendingSummaries.mockReturnValue({
-      data: [eventSummary({ eventId: "ev-dallas", eventName: "Dallas trip", startDate: "2026-06-20", endDate: "2026-06-22", totalSpending: 676.09, transactionCount: 3 })],
+      data: [
+        eventSummary({
+          eventId: "ev-dallas",
+          eventName: "Dallas trip",
+          startDate: "2026-06-20",
+          endDate: "2026-06-22",
+          totalSpending: 676.09,
+          transactionCount: 3,
+        }),
+      ],
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof useEventSpendingSummaries>);
-    const bill = (id: number, description: string, total: number) => ({ id, description, billedOn: "2026-05-19", total, currency: "USD", paidBy: "Sang", paidByYou: true });
+    const bill = (id: number, description: string, total: number) => ({
+      id,
+      description,
+      billedOn: "2026-05-19",
+      total,
+      currency: "USD",
+      paidBy: "Sang",
+      paidByYou: true,
+    });
     mockUseOwlyTrips.mockReturnValue({
-      data: { connected: true, trips: [{ ...dallasTrip, bills: [bill(1, "Flight", 220.97), bill(2, "Hotel", 160.2)] }], links: { "ev-dallas": 6 } },
+      data: {
+        connected: true,
+        trips: [{ ...dallasTrip, bills: [bill(1, "Flight", 220.97), bill(2, "Hotel", 160.2)] }],
+        links: { "ev-dallas": 6 },
+      },
     } as unknown as ReturnType<typeof useOwlyTrips>);
     mockUseEventCharges.mockReturnValue({
       data: [
