@@ -1,3 +1,4 @@
+import { queueOwlyBillSync } from "../lib/owly-bill-sync";
 import { invoke, logger } from "#platform";
 import type { Activity } from "@/lib/types";
 
@@ -131,7 +132,9 @@ export const setActivityEvent = async (
   eventId: string | null,
 ): Promise<Activity> => {
   try {
-    return await invoke<Activity>("set_activity_event", { activityId, eventId });
+    const saved = await invoke<Activity>("set_activity_event", { activityId, eventId });
+    queueOwlyBillSync();
+    return saved;
   } catch (error) {
     logger.error("Error setting activity event.");
     throw error;

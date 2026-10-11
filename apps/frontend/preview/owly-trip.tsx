@@ -1,6 +1,6 @@
 // money-hub patch: the Owly trip strip on the Spending dashboard event card, and the Owly trip
 // picker in the event window, with fixture data (vite.preview.config.ts).
-// ?view=card (default) | form (&edit=1 edits the linked Dallas event; &dates=none|differs|same is what Owly has); &case=owed|oweyou|square|empty|allmatch; &details=1 opens the card-vs-Owly list; &open=1 opens the picker; ?theme=light|dark.
+// ?view=card (default) | form (&edit=1 edits the linked Dallas event; &dates=none|differs|same is what Owly has; &bills=on|refused is the add-charges switch); &case=owed|oweyou|square|empty|allmatch; &details=1 opens the card-vs-Owly list; &open=1 opens the picker; ?theme=light|dark.
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
@@ -55,9 +55,33 @@ const dallas: OwlyTrip = {
   ],
   billCount: 3,
   bills: [
-    { id: 83, description: "Hotel", billedOn: "2026-09-19", total: 160.2, currency: "USD", paidBy: "Sang", paidByYou: true },
-    { id: 84, description: "Flight ORD <-> DFW", billedOn: "2026-09-19", total: 220.97, currency: "USD", paidBy: "Sang", paidByYou: true },
-    { id: 85, description: "Worlds Tickets", billedOn: "2026-09-19", total: 334.26, currency: "USD", paidBy: "Sang", paidByYou: true },
+    {
+      id: 83,
+      description: "Hotel",
+      billedOn: "2026-09-19",
+      total: 160.2,
+      currency: "USD",
+      paidBy: "Sang",
+      paidByYou: true,
+    },
+    {
+      id: 84,
+      description: "Flight ORD <-> DFW",
+      billedOn: "2026-09-19",
+      total: 220.97,
+      currency: "USD",
+      paidBy: "Sang",
+      paidByYou: true,
+    },
+    {
+      id: 85,
+      description: "Worlds Tickets",
+      billedOn: "2026-09-19",
+      total: 334.26,
+      currency: "USD",
+      paidBy: "Sang",
+      paidByYou: true,
+    },
   ],
   totalSpent: 715.43,
   you: { paid: 715.43, share: 357.72 },
@@ -75,7 +99,14 @@ const cases: Record<string, OwlyTrip> = {
     transfers: [{ from: "Sang", to: "Thanh", amount: 237.72, youOwe: true, owedToYou: false }],
   },
   square: { ...dallas, status: "settled", owedToYou: 0, transfers: [] },
-  empty: { ...dallas, billCount: 0, totalSpent: 0, you: { paid: 0, share: 0 }, owedToYou: 0, transfers: [] },
+  empty: {
+    ...dallas,
+    billCount: 0,
+    totalSpent: 0,
+    you: { paid: 0, share: 0 },
+    owedToYou: 0,
+    transfers: [],
+  },
 };
 const datesCase = params.get("dates"); // none (default) | differs | same
 const baseTrip = cases[which] ?? dallas;
@@ -87,14 +118,44 @@ const trip: OwlyTrip =
       : baseTrip;
 
 const others: OwlyTrip[] = [
-  { ...dallas, id: 2, name: "Kash bach", billCount: 11, totalSpent: 2210.4, transfers: [], owedToYou: 0 },
-  { ...dallas, id: 4, name: "Vegas weekend", billCount: 5, totalSpent: 940.1, transfers: [], owedToYou: 0 },
+  {
+    ...dallas,
+    id: 2,
+    name: "Kash bach",
+    billCount: 11,
+    totalSpent: 2210.4,
+    transfers: [],
+    owedToYou: 0,
+  },
+  {
+    ...dallas,
+    id: 4,
+    name: "Vegas weekend",
+    billCount: 5,
+    totalSpent: 940.1,
+    transfers: [],
+    owedToYou: 0,
+  },
 ];
 const owly: OwlyTripsAnswer = {
   connected: true,
   baseUrl: "https://owly.sanglam.cc",
   trips: [trip, ...others],
   links: view === "form" && !params.get("edit") ? {} : { "ev-dallas": trip.id },
+  tripBills:
+    params.get("bills") === "on"
+      ? { "ev-dallas": { on: true, lastRun: "2026-10-11T10:00:00Z", lastError: null, added: 2 } }
+      : params.get("bills") === "refused"
+        ? {
+            "ev-dallas": {
+              on: true,
+              lastRun: "2026-10-11T10:00:00Z",
+              lastError:
+                'This key may not add bills to trips. In Owly, Settings, Keys for other apps: tick "May add bills to trips" for it.',
+              added: 0,
+            },
+          }
+        : {},
 };
 
 const summary: EventSpendingSummary = {
@@ -125,7 +186,10 @@ const charges: Charge[] = [
     ? { id: "c3", label: "HILTON PLANO", date: "2026-09-19", amount: 160.2, currency: "USD" }
     : { id: "c3", label: "HILTON PLANO", date: "2026-10-30", amount: 121.86, currency: "USD" },
 ];
-qc.setQueryData(eventChargesKey("ev-dallas", chargesWindow({ startDate: start, endDate: end }, owly.trips[0])), charges);
+qc.setQueryData(
+  eventChargesKey("ev-dallas", chargesWindow({ startDate: start, endDate: end }, owly.trips[0])),
+  charges,
+);
 qc.setQueryData(
   [QueryKeys.SPENDING_EVENT_TYPES],
   [{ id: "travel", key: "Travel", name: "Travel", color: null, createdAt: "", updatedAt: "" }],
@@ -140,10 +204,23 @@ function Shell() {
         onOpenChange={() => undefined}
         event={
           params.get("edit")
-            ? { id: "ev-dallas", name: "Dallas trip", description: null, eventTypeId: "travel", startDate: start, endDate: end, createdAt: "", updatedAt: "" }
+            ? {
+                id: "ev-dallas",
+                name: "Dallas trip",
+                description: null,
+                eventTypeId: "travel",
+                startDate: start,
+                endDate: end,
+                createdAt: "",
+                updatedAt: "",
+              }
             : undefined
         }
-        prefill={{ name: "Dallas trip", startDate: new Date(start + "T00:00:00"), endDate: new Date(end + "T00:00:00") }}
+        prefill={{
+          name: "Dallas trip",
+          startDate: new Date(start + "T00:00:00"),
+          endDate: new Date(end + "T00:00:00"),
+        }}
       />
     );
   }

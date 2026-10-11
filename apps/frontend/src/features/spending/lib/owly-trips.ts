@@ -13,6 +13,8 @@ export interface OwlyTripTransfer {
 
 export interface OwlyBill {
   id: number;
+  /** Set on a bill the money app added ("money:<activity id>"); null for one made by hand in Owly. */
+  ref?: string | null;
   description: string;
   billedOn: string;
   total: number;
@@ -47,6 +49,40 @@ export interface OwlyTripsAnswer {
   trips: OwlyTrip[];
   /** event id -> Owly trip id */
   links: Record<string, number>;
+  /** event id -> adding tagged charges to the trip as Owly bills (Settings of the event). */
+  tripBills?: Record<string, OwlyTripBillsState>;
+}
+
+export interface OwlyTripBillsState {
+  on: boolean;
+  lastRun: string | null;
+  lastError: string | null;
+  /** How many charges of this event the money app has put on the trip. */
+  added: number;
+}
+
+/** The words under the switch: what turning it on does, or how it is going. */
+export function tripBillsNote(
+  trip: OwlyTrip,
+  state: OwlyTripBillsState | undefined,
+): { text: string; warn: boolean } {
+  const names = trip.members.map((m) => (m.isOwner ? "you" : m.name));
+  const split =
+    names.length > 1
+      ? `split evenly between ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+      : "yours alone";
+  if (!state?.on) {
+    return {
+      text: `When on, each charge you tag to this event is added to the trip, paid by you and ${split}.`,
+      warn: false,
+    };
+  }
+  if (state.lastError) return { text: state.lastError, warn: true };
+  if (!state.lastRun) return { text: "Adding charges to Owly…", warn: false };
+  return {
+    text: `${state.added} ${state.added === 1 ? "charge" : "charges"} added, paid by you and ${split}.`,
+    warn: false,
+  };
 }
 
 /** The trip an event is linked to, if Owly still has it. */
@@ -92,9 +128,15 @@ export function tripSummary(trip: OwlyTrip, spentOnCard = 0): TripSummary {
   }
   const square = trip.transfers.every((t) => !t.owedToYou && !t.youOwe);
   if (spentOnCard > 0 && trip.owedToYou > 0 && !trip.mixedCurrency) {
-    facts.push({ label: "Cost to you after they pay back", amount: Math.max(0, cents(spentOnCard - trip.owedToYou)) });
+    facts.push({
+      label: "Cost to you after they pay back",
+      amount: Math.max(0, cents(spentOnCard - trip.owedToYou)),
+    });
   }
-  return { note: square ? (trip.status === "settled" ? "Settled up" : "All square so far") : null, facts };
+  return {
+    note: square ? (trip.status === "settled" ? "Settled up" : "All square so far") : null,
+    facts,
+  };
 }
 
 /** Money to the cent, so 715.43 - 357.71 is 357.72 and not 357.71999999999997. */
@@ -107,7 +149,17 @@ export function owlyTripUrl(baseUrl: string | undefined, tripId: number): string
 
 // ---- Step 2: suggest a trip for an event, and match card charges to Owly bills ----
 
-const STOP_WORDS = new Set(["trip", "the", "and", "for", "with", "vacation", "holiday", "weekend", "tour"]);
+const STOP_WORDS = new Set([
+  "trip",
+  "the",
+  "and",
+  "for",
+  "with",
+  "vacation",
+  "holiday",
+  "weekend",
+  "tour",
+]);
 
 /** Lower-case words of a name without accents, years, short words and filler like "trip". */
 function nameWords(name: string): Set<string> {
@@ -122,7 +174,8 @@ function nameWords(name: string): Set<string> {
 }
 
 const DAY = 24 * 3600 * 1000;
-const dayNumber = (iso: string) => Math.floor(new Date(`${iso.slice(0, 10)}T00:00:00Z`).getTime() / DAY);
+const dayNumber = (iso: string) =>
+  Math.floor(new Date(`${iso.slice(0, 10)}T00:00:00Z`).getTime() / DAY);
 
 export interface TripSuggestion {
   trip: OwlyTrip;
@@ -239,7 +292,8 @@ export type TripDatesState = "same" | "none" | "differs";
 /** How the trip's own dates in Owly compare with the event's (plain YYYY-MM-DD, end included). */
 export function tripDatesState(trip: OwlyTrip, startDate: string, endDate: string): TripDatesState {
   if (!trip.startsOn || !trip.endsOn) return "none";
-  return trip.startsOn.slice(0, 10) === startDate.slice(0, 10) && trip.endsOn.slice(0, 10) === endDate.slice(0, 10)
+  return trip.startsOn.slice(0, 10) === startDate.slice(0, 10) &&
+    trip.endsOn.slice(0, 10) === endDate.slice(0, 10)
     ? "same"
     : "differs";
 }

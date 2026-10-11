@@ -1,10 +1,18 @@
 // money-hub patch: Owly trips and the event links (see ../lib/owly-trips.ts).
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { listCashActivities } from "../adapters/cash-activities";
 import { getVisibleSpendingAmount } from "../lib/constants";
-import { chargesWindow, eventChargesKey, type Charge, type OwlyTrip, type OwlyTripsAnswer } from "../lib/owly-trips";
+import { onOwlyBillsSynced } from "../lib/owly-bill-sync";
+import {
+  chargesWindow,
+  eventChargesKey,
+  type Charge,
+  type OwlyTrip,
+  type OwlyTripsAnswer,
+} from "../lib/owly-trips";
 
 const BASE = "/api/money-hub/owly";
 const KEY = "owly_trips";
@@ -22,7 +30,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const err = new OwlyError((data as { error?: string }).error || `The money app helper said ${res.status}`);
+    const err = new OwlyError(
+      (data as { error?: string }).error || `The money app helper said ${res.status}`,
+    );
     err.eventId = (data as { eventId?: string }).eventId;
     throw err;
   }
@@ -31,6 +41,12 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 /** Owly's trips and which event each is linked to. Quiet when Owly is not connected or not answering. */
 export function useOwlyTrips() {
+  const queryClient = useQueryClient();
+  // A sync that added or removed bills refreshes what the strip shows.
+  useEffect(
+    () => onOwlyBillsSynced(() => void queryClient.invalidateQueries({ queryKey: [KEY] })),
+    [queryClient],
+  );
   return useQuery<OwlyTripsAnswer, Error>({
     queryKey: [KEY],
     queryFn: () => call<OwlyTripsAnswer>("GET", "/trips"),
@@ -52,14 +68,32 @@ export function useCopyDatesToOwly() {
   });
 }
 
+/** Turns adding an event's tagged charges to its Owly trip on or off. Turning on adds them right away. */
+export function useSetOwlyTripBills() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, OwlyError, { eventId: string; on: boolean }>({
+    mutationFn: (body) => call("PUT", "/trip-bills", body),
+    onSuccess: async (_data, vars) => {
+      await queryClient.invalidateQueries({ queryKey: [KEY] });
+      toast.success(vars.on ? "Tagged charges are going to Owly" : "Adding charges to Owly is off");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+}
+
 /** Links an event to a trip, or unlinks it (tripId null). `quiet` leaves the success toast out. */
 export function useSetOwlyTripLink() {
   const queryClient = useQueryClient();
-  return useMutation<unknown, OwlyError, { eventId: string; tripId: number | null; quiet?: boolean }>({
+  return useMutation<
+    unknown,
+    OwlyError,
+    { eventId: string; tripId: number | null; quiet?: boolean }
+  >({
     mutationFn: ({ eventId, tripId }) => call("PUT", "/trip-link", { eventId, tripId }),
     onSuccess: async (_data, vars) => {
       await queryClient.invalidateQueries({ queryKey: [KEY] });
-      if (!vars.quiet) toast.success(vars.tripId === null ? "Owly trip unlinked" : "Owly trip linked");
+      if (!vars.quiet)
+        toast.success(vars.tripId === null ? "Owly trip unlinked" : "Owly trip linked");
     },
     onError: (err) => toast.error(err.message),
   });
@@ -69,7 +103,11 @@ export function useSetOwlyTripLink() {
  * The card charges tagged to an event, wherever their dates fall (a flight is bought weeks before
  * the trip). Reads the cash activities around the event and the trip's bills, once a trip is linked.
  */
-export function useEventCharges(eventId: string | undefined, event: { startDate: string; endDate: string } | undefined, trip: OwlyTrip | null) {
+export function useEventCharges(
+  eventId: string | undefined,
+  event: { startDate: string; endDate: string } | undefined,
+  trip: OwlyTrip | null,
+) {
   const filter = event ? chargesWindow(event, trip) : undefined;
   return useQuery<Charge[], Error>({
     queryKey: eventChargesKey(eventId, filter),

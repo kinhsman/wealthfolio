@@ -5,6 +5,7 @@ import {
   matchCharges,
   owlyTripUrl,
   suggestTrips,
+  tripBillsNote,
   tripDatesState,
   type Charge,
   tripOfEvent,
@@ -28,9 +29,33 @@ const trip = (over: Partial<OwlyTrip> = {}): OwlyTrip => ({
   ],
   billCount: 3,
   bills: [
-    { id: 83, description: "Hotel", billedOn: "2026-09-19", total: 160.2, currency: "USD", paidBy: "Sang", paidByYou: true },
-    { id: 84, description: "Flight", billedOn: "2026-09-19", total: 220.97, currency: "USD", paidBy: "Sang", paidByYou: true },
-    { id: 85, description: "Tickets", billedOn: "2026-09-19", total: 334.26, currency: "USD", paidBy: "Sang", paidByYou: true },
+    {
+      id: 83,
+      description: "Hotel",
+      billedOn: "2026-09-19",
+      total: 160.2,
+      currency: "USD",
+      paidBy: "Sang",
+      paidByYou: true,
+    },
+    {
+      id: 84,
+      description: "Flight",
+      billedOn: "2026-09-19",
+      total: 220.97,
+      currency: "USD",
+      paidBy: "Sang",
+      paidByYou: true,
+    },
+    {
+      id: 85,
+      description: "Tickets",
+      billedOn: "2026-09-19",
+      total: 334.26,
+      currency: "USD",
+      paidBy: "Sang",
+      paidByYou: true,
+    },
   ],
   totalSpent: 715.43,
   you: { paid: 715.43, share: 357.72 },
@@ -40,7 +65,11 @@ const trip = (over: Partial<OwlyTrip> = {}): OwlyTrip => ({
   ...over,
 });
 
-const answer: OwlyTripsAnswer = { connected: true, trips: [trip(), trip({ id: 2, name: "Kash bach" })], links: { "ev-dallas": 6 } };
+const answer: OwlyTripsAnswer = {
+  connected: true,
+  trips: [trip(), trip({ id: 2, name: "Kash bach" })],
+  links: { "ev-dallas": 6 },
+};
 
 describe("event and trip links", () => {
   it("finds the trip of an event, and the event of a trip", () => {
@@ -71,8 +100,16 @@ describe("tripSummary", () => {
       amount: 357.72,
     });
     expect(tripSummary(trip(), 0).facts.some((f) => f.label.startsWith("Cost to you"))).toBe(false);
-    expect(tripSummary(trip({ owedToYou: 0, transfers: [] }), 500).facts.some((f) => f.label.startsWith("Cost to you"))).toBe(false);
-    expect(tripSummary(trip({ mixedCurrency: true }), 500).facts.some((f) => f.label.startsWith("Cost to you"))).toBe(false);
+    expect(
+      tripSummary(trip({ owedToYou: 0, transfers: [] }), 500).facts.some((f) =>
+        f.label.startsWith("Cost to you"),
+      ),
+    ).toBe(false);
+    expect(
+      tripSummary(trip({ mixedCurrency: true }), 500).facts.some((f) =>
+        f.label.startsWith("Cost to you"),
+      ),
+    ).toBe(false);
   });
   it("shows what the owner owes in a warning tone", () => {
     const s = tripSummary(
@@ -85,9 +122,14 @@ describe("tripSummary", () => {
     expect(s.facts.at(-1)).toEqual({ label: "You owe Thanh", amount: 40, tone: "warn" });
   });
   it("says settled or all square when nothing is owed, and no bills when there are none", () => {
-    expect(tripSummary(trip({ status: "settled", transfers: [], owedToYou: 0 })).note).toBe("Settled up");
+    expect(tripSummary(trip({ status: "settled", transfers: [], owedToYou: 0 })).note).toBe(
+      "Settled up",
+    );
     expect(tripSummary(trip({ transfers: [], owedToYou: 0 })).note).toBe("All square so far");
-    expect(tripSummary(trip({ billCount: 0 }))).toEqual({ note: "No bills in Owly yet", facts: [] });
+    expect(tripSummary(trip({ billCount: 0 }))).toEqual({
+      note: "No bills in Owly yet",
+      facts: [],
+    });
   });
 });
 
@@ -117,7 +159,12 @@ describe("suggestTrips", () => {
     expect(suggestTrips(data, { ...ev, name: "Da Lat 2026" }).map((s) => s.trip.id)).toEqual([3]);
   });
   it("suggests by dates when Owly dates the trip within a week of the event", () => {
-    const hit = suggestTrips(data, { ...ev, name: "Weekend away", startDate: "2026-07-28", endDate: "2026-07-30" });
+    const hit = suggestTrips(data, {
+      ...ev,
+      name: "Weekend away",
+      startDate: "2026-07-28",
+      endDate: "2026-07-30",
+    });
     expect(hit.map((s) => [s.trip.id, s.reason])).toEqual([[2, "same dates"]]);
   });
   it("never suggests a trip on another event, nor the one already on this event", () => {
@@ -135,7 +182,12 @@ describe("matchCharges", () => {
     currency,
   });
   it("pairs bills with charges of the same amount and lists what is left on each side", () => {
-    const m = matchCharges(trip(), [charge("flight", 220.97), charge("tickets", 334.26), charge("hotel", 121.86), charge("uber", 23.1)]);
+    const m = matchCharges(trip(), [
+      charge("flight", 220.97),
+      charge("tickets", 334.26),
+      charge("hotel", 121.86),
+      charge("uber", 23.1),
+    ]);
     expect(m.matched.map((x) => [x.bill.description, x.charge.id])).toEqual([
       ["Flight", "flight"],
       ["Tickets", "tickets"],
@@ -146,9 +198,33 @@ describe("matchCharges", () => {
   it("uses a charge once, nearest date first, and ignores bills paid by someone else", () => {
     const t = trip({
       bills: [
-        { id: 1, description: "A", billedOn: "2026-09-19", total: 50, currency: "USD", paidBy: "Sang", paidByYou: true },
-        { id: 2, description: "B", billedOn: "2026-10-30", total: 50, currency: "USD", paidBy: "Sang", paidByYou: true },
-        { id: 3, description: "C", billedOn: "2026-10-30", total: 50, currency: "USD", paidBy: "Thanh", paidByYou: false },
+        {
+          id: 1,
+          description: "A",
+          billedOn: "2026-09-19",
+          total: 50,
+          currency: "USD",
+          paidBy: "Sang",
+          paidByYou: true,
+        },
+        {
+          id: 2,
+          description: "B",
+          billedOn: "2026-10-30",
+          total: 50,
+          currency: "USD",
+          paidBy: "Sang",
+          paidByYou: true,
+        },
+        {
+          id: 3,
+          description: "C",
+          billedOn: "2026-10-30",
+          total: 50,
+          currency: "USD",
+          paidBy: "Thanh",
+          paidByYou: false,
+        },
       ],
     });
     const m = matchCharges(t, [charge("far", 50, "2026-09-01"), charge("near", 50, "2026-10-30")]);
@@ -159,16 +235,72 @@ describe("matchCharges", () => {
     expect(m.billsOnly).toEqual([]);
   });
   it("leaves out charges in another currency and trips with no bills list", () => {
-    expect(matchCharges(trip(), [charge("eur", 220.97, "2026-09-19", "EUR")]).chargesOnly).toEqual([]);
-    expect(matchCharges(trip({ bills: undefined }), [charge("x", 5)])).toEqual({ matched: [], billsOnly: [], chargesOnly: [charge("x", 5)] });
+    expect(matchCharges(trip(), [charge("eur", 220.97, "2026-09-19", "EUR")]).chargesOnly).toEqual(
+      [],
+    );
+    expect(matchCharges(trip({ bills: undefined }), [charge("x", 5)])).toEqual({
+      matched: [],
+      billsOnly: [],
+      chargesOnly: [charge("x", 5)],
+    });
   });
 });
 
 describe("tripDatesState", () => {
   it("says whether Owly has the event's dates, other dates, or none", () => {
     expect(tripDatesState(trip(), "2026-10-30", "2026-11-01")).toBe("none");
-    expect(tripDatesState(trip({ startsOn: "2026-10-30", endsOn: "2026-11-01" }), "2026-10-30", "2026-11-01")).toBe("same");
-    expect(tripDatesState(trip({ startsOn: "2026-10-29", endsOn: "2026-11-02" }), "2026-10-30", "2026-11-01")).toBe("differs");
-    expect(tripDatesState(trip({ startsOn: "2026-10-30", endsOn: null }), "2026-10-30", "2026-11-01")).toBe("none");
+    expect(
+      tripDatesState(
+        trip({ startsOn: "2026-10-30", endsOn: "2026-11-01" }),
+        "2026-10-30",
+        "2026-11-01",
+      ),
+    ).toBe("same");
+    expect(
+      tripDatesState(
+        trip({ startsOn: "2026-10-29", endsOn: "2026-11-02" }),
+        "2026-10-30",
+        "2026-11-01",
+      ),
+    ).toBe("differs");
+    expect(
+      tripDatesState(trip({ startsOn: "2026-10-30", endsOn: null }), "2026-10-30", "2026-11-01"),
+    ).toBe("none");
+  });
+});
+
+describe("tripBillsNote", () => {
+  it("says what turning it on does, in plain words, before it is on", () => {
+    expect(tripBillsNote(trip(), undefined)).toEqual({
+      text: "When on, each charge you tag to this event is added to the trip, paid by you and split evenly between you and Thanh.",
+      warn: false,
+    });
+    const three = trip({ members: [...trip().members, { id: 3, name: "Quan", isOwner: false }] });
+    expect(
+      tripBillsNote(three, { on: false, lastRun: null, lastError: null, added: 0 }).text,
+    ).toContain("between you, Thanh and Quan");
+  });
+
+  it("counts what was added once it is on, and shows Owly's refusal as a warning", () => {
+    expect(
+      tripBillsNote(trip(), {
+        on: true,
+        lastRun: "2026-10-11T10:00:00Z",
+        lastError: null,
+        added: 1,
+      }).text,
+    ).toBe("1 charge added, paid by you and split evenly between you and Thanh.");
+    expect(tripBillsNote(trip(), { on: true, lastRun: null, lastError: null, added: 0 }).text).toBe(
+      "Adding charges to Owly…",
+    );
+    const refused = tripBillsNote(trip(), {
+      on: true,
+      lastRun: "T",
+      lastError:
+        'This key may not add bills to trips. In Owly, Settings, Keys for other apps: tick "May add bills to trips" for it.',
+      added: 0,
+    });
+    expect(refused.warn).toBe(true);
+    expect(refused.text).toContain("May add bills to trips");
   });
 });
