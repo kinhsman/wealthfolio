@@ -58,11 +58,18 @@ import {
 import { Switch } from "@wealthfolio/ui/components/ui/switch";
 import {
   useCopyDatesToOwly,
+  useEventCharges,
   useOwlyTrips,
   useSetOwlyTripBills,
   useSetOwlyTripLink,
 } from "../hooks/use-owly-trips";
-import { eventOfTrip, suggestTrips, tripBillsNote, tripDatesState } from "../lib/owly-trips";
+import {
+  eventOfTrip,
+  matchCharges,
+  suggestTrips,
+  tripBillsNote,
+  tripDatesState,
+} from "../lib/owly-trips";
 import type { NewSpendingEvent, SpendingEvent } from "../types/event";
 import type { EventDialogPrefill } from "./event-dialog-provider";
 
@@ -212,6 +219,17 @@ export function EventFormDialog({
   // Step 3: the trip this event is saved against, and how its dates in Owly compare with the form's.
   const linkedTrip =
     linkedTripId === null ? null : (owly.data?.trips.find((t) => t.id === linkedTripId) ?? null);
+  // Adding tagged charges to Owly: before it is turned on, say which charges it would add and let
+  // the owner leave some out (a charge Owly has under another amount, or one that is not for the group).
+  const billsState = event ? owly.data?.tripBills?.[event.id] : undefined;
+  const tripCharges = useEventCharges(event?.id, event, linkedTrip);
+  const wouldAdd = useMemo(
+    () =>
+      linkedTrip && tripCharges.data ? matchCharges(linkedTrip, tripCharges.data).chargesOnly : [],
+    [linkedTrip, tripCharges.data],
+  );
+  const [askBills, setAskBills] = useState(false);
+  const [leftOut, setLeftOut] = useState<string[]>([]);
   const formStartIso = watchedStart ? formatDateISO(watchedStart) : "";
   const formEndIso = watchedEnd ? formatDateISO(watchedEnd) : "";
   const datesState =
@@ -698,31 +716,94 @@ export function EventFormDialog({
                   </div>
                 )}
                 {linkedTrip && event && linkedTrip.status === "active" && (
-                  <div className="flex items-start gap-2" data-testid="owly-trip-bills">
-                    <Switch
-                      aria-label="Add tagged charges to Owly"
-                      checked={!!owly.data?.tripBills?.[event.id]?.on}
-                      disabled={setTripBills.isPending}
-                      onCheckedChange={(on) => setTripBills.mutate({ eventId: event.id, on })}
-                      className="mt-0.5 shrink-0"
-                    />
-                    <div className="min-w-0 text-xs">
-                      <div className="text-foreground">Add tagged charges to Owly</div>
-                      {(() => {
-                        const note = tripBillsNote(linkedTrip, owly.data?.tripBills?.[event.id]);
-                        return (
-                          <div
-                            className={
-                              note.warn
-                                ? "text-amber-600 dark:text-amber-400"
-                                : "text-muted-foreground"
+                  <div className="space-y-2" data-testid="owly-trip-bills">
+                    <div className="flex items-start gap-2">
+                      <Switch
+                        aria-label="Add tagged charges to Owly"
+                        checked={!!billsState?.on || askBills}
+                        disabled={setTripBills.isPending}
+                        onCheckedChange={(on) => {
+                          if (!on) {
+                            setAskBills(false);
+                            if (billsState?.on)
+                              setTripBills.mutate({ eventId: event.id, on: false });
+                          } else if (wouldAdd.length > 0) {
+                            setLeftOut(billsState?.skipped ?? []);
+                            setAskBills(true);
+                          } else {
+                            setTripBills.mutate({ eventId: event.id, on: true });
+                          }
+                        }}
+                        className="mt-0.5 shrink-0"
+                      />
+                      <div className="min-w-0 text-xs">
+                        <div className="text-foreground">Add tagged charges to Owly</div>
+                        {(() => {
+                          const note = tripBillsNote(linkedTrip, billsState);
+                          return (
+                            <div
+                              className={
+                                note.warn
+                                  ? "text-amber-600 dark:text-amber-400"
+                                  : "text-muted-foreground"
+                              }
+                            >
+                              {note.text}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    {askBills && !billsState?.on && (
+                      <div
+                        className="border-border/60 space-y-1.5 rounded-md border p-2 text-xs"
+                        data-testid="owly-trip-bills-confirm"
+                      >
+                        <div className="text-muted-foreground">
+                          These charges are on the card but not in Owly. Untick any Owly already has
+                          under another amount, or that is not for the group.
+                        </div>
+                        {wouldAdd.map((c) => (
+                          <label key={c.id} className="flex cursor-pointer items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={!leftOut.includes(c.id)}
+                              onChange={(e) =>
+                                setLeftOut((cur) =>
+                                  e.target.checked ? cur.filter((x) => x !== c.id) : [...cur, c.id],
+                                )
+                              }
+                            />
+                            <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                            <span className="text-foreground tabular-nums">
+                              <PrivacyAmount value={c.amount} currency={c.currency} />
+                            </span>
+                          </label>
+                        ))}
+                        <div className="flex justify-end gap-3 pt-1">
+                          <button
+                            type="button"
+                            className="text-muted-foreground underline underline-offset-4"
+                            onClick={() => setAskBills(false)}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            disabled={setTripBills.isPending}
+                            className="text-foreground underline underline-offset-4 disabled:opacity-50"
+                            onClick={() =>
+                              setTripBills.mutate(
+                                { eventId: event.id, on: true, skipped: leftOut },
+                                { onSuccess: () => setAskBills(false) },
+                              )
                             }
                           >
-                            {note.text}
-                          </div>
-                        );
-                      })()}
-                    </div>
+                            {`Add ${wouldAdd.filter((c) => !leftOut.includes(c.id)).length} to Owly`}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {tripSuggestions.map((s) => (

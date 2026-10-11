@@ -68,14 +68,18 @@ export function useCopyDatesToOwly() {
   });
 }
 
-/** Turns adding an event's tagged charges to its Owly trip on or off. Turning on adds them right away. */
+/**
+ * Turns adding an event's tagged charges to its Owly trip on or off, and/or sets which charges are
+ * left out of Owly. Turning on adds the rest right away.
+ */
 export function useSetOwlyTripBills() {
   const queryClient = useQueryClient();
-  return useMutation<unknown, OwlyError, { eventId: string; on: boolean }>({
+  return useMutation<unknown, OwlyError, { eventId: string; on?: boolean; skipped?: string[] }>({
     mutationFn: (body) => call("PUT", "/trip-bills", body),
     onSuccess: async (_data, vars) => {
       await queryClient.invalidateQueries({ queryKey: [KEY] });
-      toast.success(vars.on ? "Tagged charges are going to Owly" : "Adding charges to Owly is off");
+      if (vars.on === true) toast.success("Tagged charges are going to Owly");
+      else if (vars.on === false) toast.success("Adding charges to Owly is off");
     },
     onError: (err) => toast.error(err.message),
   });

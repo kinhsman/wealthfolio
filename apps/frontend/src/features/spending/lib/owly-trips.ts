@@ -59,6 +59,8 @@ export interface OwlyTripBillsState {
   lastError: string | null;
   /** How many charges of this event the money app has put on the trip. */
   added: number;
+  /** Activity ids of charges the owner left out of Owly. */
+  skipped: string[];
 }
 
 /** The words under the switch: what turning it on does, or how it is going. */

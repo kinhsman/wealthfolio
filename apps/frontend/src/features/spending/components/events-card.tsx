@@ -6,7 +6,7 @@ import type { Activity } from "@/lib/types";
 import { cn, formatDateISO } from "@/lib/utils";
 import { Icons, PrivacyAmount, Skeleton, useDateFormatting } from "@wealthfolio/ui";
 
-import { useEventCharges, useOwlyTrips } from "../hooks/use-owly-trips";
+import { useEventCharges, useOwlyTrips, useSetOwlyTripBills } from "../hooks/use-owly-trips";
 import { useEventSpendingSummaries } from "../hooks/use-spending-events";
 import { tripOfEvent } from "../lib/owly-trips";
 import { OwlyTripStrip } from "./owly-trip-strip";
@@ -84,6 +84,7 @@ export function EventsCard({
   const ev = pick?.event;
   const linkedTrip = ev ? tripOfEvent(owlyTrips.data, ev.eventId) : null;
   const eventCharges = useEventCharges(ev?.eventId, ev, linkedTrip);
+  const setTripBills = useSetOwlyTripBills();
   const start = ev ? new Date(ev.startDate.slice(0, 10) + "T00:00:00") : new Date();
   const end = ev ? new Date(ev.endDate.slice(0, 10) + "T00:00:00") : new Date();
   const totalDays = Math.floor((end.getTime() - start.getTime()) / (24 * 3600 * 1000)) + 1;
@@ -389,6 +390,13 @@ export function EventsCard({
           baseUrl={owlyTrips.data?.baseUrl}
           spentOnCard={eventSpent}
           charges={eventCharges.data}
+          billsState={owlyTrips.data?.tripBills?.[ev.eventId]}
+          onSkip={(activityId, skip) => {
+            const left = new Set(owlyTrips.data?.tripBills?.[ev.eventId]?.skipped ?? []);
+            if (skip) left.add(activityId);
+            else left.delete(activityId);
+            setTripBills.mutate({ eventId: ev.eventId, skipped: [...left] });
+          }}
         />
       )}
 

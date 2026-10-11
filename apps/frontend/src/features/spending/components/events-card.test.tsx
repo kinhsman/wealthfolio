@@ -15,6 +15,7 @@ vi.mock("../hooks/use-spending-events", () => ({
 vi.mock("../hooks/use-owly-trips", () => ({
   useOwlyTrips: vi.fn(),
   useEventCharges: vi.fn(),
+  useSetOwlyTripBills: () => ({ mutate: vi.fn() }),
 }));
 
 vi.mock("./event-dialog-provider", () => ({

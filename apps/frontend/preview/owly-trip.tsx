@@ -144,7 +144,15 @@ const owly: OwlyTripsAnswer = {
   links: view === "form" && !params.get("edit") ? {} : { "ev-dallas": trip.id },
   tripBills:
     params.get("bills") === "on"
-      ? { "ev-dallas": { on: true, lastRun: "2026-10-11T10:00:00Z", lastError: null, added: 2 } }
+      ? {
+          "ev-dallas": {
+            on: true,
+            lastRun: "2026-10-11T10:00:00Z",
+            lastError: null,
+            added: 2,
+            skipped: [],
+          },
+        }
       : params.get("bills") === "refused"
         ? {
             "ev-dallas": {

@@ -277,7 +277,8 @@ describe("tripBillsNote", () => {
     });
     const three = trip({ members: [...trip().members, { id: 3, name: "Quan", isOwner: false }] });
     expect(
-      tripBillsNote(three, { on: false, lastRun: null, lastError: null, added: 0 }).text,
+      tripBillsNote(three, { on: false, lastRun: null, lastError: null, added: 0, skipped: [] })
+        .text,
     ).toContain("between you, Thanh and Quan");
   });
 
@@ -288,17 +289,20 @@ describe("tripBillsNote", () => {
         lastRun: "2026-10-11T10:00:00Z",
         lastError: null,
         added: 1,
+        skipped: [],
       }).text,
     ).toBe("1 charge added, paid by you and split evenly between you and Thanh.");
-    expect(tripBillsNote(trip(), { on: true, lastRun: null, lastError: null, added: 0 }).text).toBe(
-      "Adding charges to Owly…",
-    );
+    expect(
+      tripBillsNote(trip(), { on: true, lastRun: null, lastError: null, added: 0, skipped: [] })
+        .text,
+    ).toBe("Adding charges to Owly…");
     const refused = tripBillsNote(trip(), {
       on: true,
       lastRun: "T",
       lastError:
         'This key may not add bills to trips. In Owly, Settings, Keys for other apps: tick "May add bills to trips" for it.',
       added: 0,
+      skipped: [],
     });
     expect(refused.warn).toBe(true);
     expect(refused.text).toContain("May add bills to trips");
