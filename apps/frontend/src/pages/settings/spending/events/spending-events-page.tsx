@@ -26,6 +26,8 @@ import {
   useSpendingEvents,
 } from "@/features/spending/hooks/use-spending-events";
 import { useSpendingSettings } from "@/features/spending/hooks/use-spending-settings";
+import { useOwlyTrips, useSetOwlyTripLink } from "@/features/spending/hooks/use-owly-trips";
+import { tripOfEvent } from "@/features/spending/lib/owly-trips";
 import type { EventType, SpendingEvent } from "@/features/spending/types/event";
 
 import { SettingsHeader } from "../../settings-header";
@@ -43,6 +45,8 @@ export default function SpendingEventsPage() {
   const { remove: removeEventType } = useEventTypeMutations();
   const { remove: removeEvent } = useSpendingEventMutations();
   const { openEventDialog, openEventTypeDialog } = useEventDialog();
+  const owlyTrips = useOwlyTrips();
+  const setTripLink = useSetOwlyTripLink();
 
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
 
@@ -152,8 +156,15 @@ export default function SpendingEventsPage() {
                         key={event.id}
                         event={event}
                         color={type.color ?? null}
+                        owlyTripName={tripOfEvent(owlyTrips.data, event.id)?.name ?? null}
                         onEdit={() => handleEditEvent(event)}
-                        onDelete={() => removeEvent.mutate(event.id)}
+                        onDelete={() => {
+                          removeEvent.mutate(event.id);
+                          // a deleted event must not keep its Owly trip taken
+                          if (owlyTrips.data?.links?.[event.id] !== undefined) {
+                            setTripLink.mutate({ eventId: event.id, tripId: null, quiet: true });
+                          }
+                        }}
                       />
                     ))}
                   </div>
@@ -332,11 +343,13 @@ function EventTypeRow({
 function EventRow({
   event,
   color,
+  owlyTripName,
   onEdit,
   onDelete,
 }: {
   event: SpendingEvent;
   color: string | null;
+  owlyTripName: string | null;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -378,6 +391,12 @@ function EventRow({
               <span>
                 {event.startDate} – {event.endDate}
               </span>
+              {owlyTripName && (
+                <span className="inline-flex min-w-0 items-center gap-1" title="Linked Owly trip">
+                  <Icons.Users className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{owlyTripName}</span>
+                </span>
+              )}
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import * as z from "zod";
@@ -38,6 +38,13 @@ import {
   useDateFormatting,
 } from "@wealthfolio/ui";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@wealthfolio/ui/components/ui/select";
 import { QueryKeys } from "@/lib/query-keys";
 import type { Activity } from "@/lib/types";
 import { formatDateISO, parseLocalDate } from "@/lib/utils";
@@ -48,6 +55,8 @@ import {
   useEventTypes,
   useSpendingEventMutations,
 } from "../hooks/use-spending-events";
+import { useOwlyTrips, useSetOwlyTripLink } from "../hooks/use-owly-trips";
+import { eventOfTrip } from "../lib/owly-trips";
 import type { NewSpendingEvent, SpendingEvent } from "../types/event";
 import type { EventDialogPrefill } from "./event-dialog-provider";
 
@@ -126,6 +135,14 @@ export function EventFormDialog({
   // Type picker popover state.
   const [typePopoverOpen, setTypePopoverOpen] = useState(false);
 
+  // money-hub patch: the Owly trip this event is linked to ("none" = no link).
+  const owly = useOwlyTrips();
+  const setTripLink = useSetOwlyTripLink();
+  const [tripPick, setTripPick] = useState<string>("none");
+  const tripTouched = useRef(false);
+  const showTripPick = !!owly.data?.connected && owly.data.trips.length > 0;
+  const linkedTripId = event ? (owly.data?.links?.[event.id] ?? null) : null;
+
   const form = useForm<EventFormValues>({
     resolver: zodResolver(eventSchema) as never,
     defaultValues: {
@@ -136,6 +153,14 @@ export function EventFormDialog({
       endDate: new Date(),
     },
   });
+
+  useEffect(() => {
+    if (!open) {
+      tripTouched.current = false;
+      return;
+    }
+    if (!tripTouched.current) setTripPick(linkedTripId === null ? "none" : String(linkedTripId));
+  }, [open, linkedTripId]);
 
   useEffect(() => {
     if (!open) return;
@@ -252,6 +277,15 @@ export function EventFormDialog({
     }
   };
 
+  /** Links or unlinks the Owly trip when the pick differs from what is saved. A failure shows its own toast. */
+  const saveTripLink = async (eventId: string) => {
+    if (!showTripPick) return;
+    const want = tripPick === "none" ? null : Number(tripPick);
+    const have = owly.data?.links?.[eventId] ?? null;
+    if (want === have) return;
+    await setTripLink.mutateAsync({ eventId, tripId: want, quiet: true }).catch(() => undefined);
+  };
+
   const handleSubmit = async (values: EventFormValues) => {
     setIsSubmitting(true);
     try {
@@ -269,6 +303,7 @@ export function EventFormDialog({
             endDate: endDateStr,
           },
         });
+        await saveTripLink(updated.id);
         onUpdated?.(updated);
       } else {
         const newEvent: NewSpendingEvent = {
@@ -297,6 +332,7 @@ export function EventFormDialog({
             ),
           );
         }
+        await saveTripLink(created.id);
         // The dashboard event card reads both the event list and cash activity tags.
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: [QueryKeys.SPENDING_EVENTS] }),
@@ -565,6 +601,36 @@ export function EventFormDialog({
                 )}
               />
             </div>
+
+            {showTripPick && owly.data && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium leading-none">Owly trip</div>
+                <Select
+                  value={tripPick}
+                  onValueChange={(v) => {
+                    tripTouched.current = true;
+                    setTripPick(v);
+                  }}
+                >
+                  <SelectTrigger aria-label="Owly trip">
+                    <SelectValue placeholder="No trip" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No trip</SelectItem>
+                    {owly.data.trips.map((trip) => {
+                      const taken = eventOfTrip(owly.data, trip.id);
+                      const other = taken !== null && taken !== event?.id;
+                      return (
+                        <SelectItem key={trip.id} value={String(trip.id)} disabled={other}>
+                          {trip.name} · {trip.billCount} {trip.billCount === 1 ? "bill" : "bills"}
+                          {other ? " · on another event" : ""}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {showSuggestions && candidateFilter && (
               <SuggestedTransactions

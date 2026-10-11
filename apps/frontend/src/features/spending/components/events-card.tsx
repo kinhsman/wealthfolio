@@ -6,7 +6,10 @@ import type { Activity } from "@/lib/types";
 import { cn, formatDateISO } from "@/lib/utils";
 import { Icons, PrivacyAmount, Skeleton, useDateFormatting } from "@wealthfolio/ui";
 
+import { useOwlyTrips } from "../hooks/use-owly-trips";
 import { useEventSpendingSummaries } from "../hooks/use-spending-events";
+import { tripOfEvent } from "../lib/owly-trips";
+import { OwlyTripStrip } from "./owly-trip-strip";
 import { getVisibleSpendingAmount } from "../lib/constants";
 import { themeBg, type Palette } from "../lib/theme";
 import { CategoryIcon, type CategoryMetaMap } from "./category-chips";
@@ -44,6 +47,7 @@ export function EventsCard({
     refetch: refetchEventSummaries,
   } = useEventSpendingSummaries(eventSummaryRequest);
   const { openEventDialog } = useEventDialog();
+  const owlyTrips = useOwlyTrips();
 
   const pick = useMemo(() => {
     const todayKey = formatDateISO(new Date());
@@ -354,6 +358,14 @@ export function EventsCard({
             );
           })}
         </div>
+      )}
+
+      {ev && tripOfEvent(owlyTrips.data, ev.eventId) && (
+        <OwlyTripStrip
+          trip={tripOfEvent(owlyTrips.data, ev.eventId)!}
+          baseUrl={owlyTrips.data?.baseUrl}
+          spentOnCard={eventSpent}
+        />
       )}
 
       {pick.mode === "upcoming" && eventSpent <= 0 ? (

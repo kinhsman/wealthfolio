@@ -32,6 +32,7 @@ export default defineConfig({
         pending: path.resolve(__dirname, "preview/pending.html"),
         returns: path.resolve(__dirname, "preview/returns.html"),
         "cash-forecast": path.resolve(__dirname, "preview/cash-forecast.html"),
+        "owly-trip": path.resolve(__dirname, "preview/owly-trip.html"),
       },
     },
   },
