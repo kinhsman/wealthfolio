@@ -5,6 +5,7 @@ import {
   matchCharges,
   owlyTripUrl,
   suggestTrips,
+  tripDatesState,
   type Charge,
   tripOfEvent,
   tripSummary,
@@ -160,5 +161,14 @@ describe("matchCharges", () => {
   it("leaves out charges in another currency and trips with no bills list", () => {
     expect(matchCharges(trip(), [charge("eur", 220.97, "2026-09-19", "EUR")]).chargesOnly).toEqual([]);
     expect(matchCharges(trip({ bills: undefined }), [charge("x", 5)])).toEqual({ matched: [], billsOnly: [], chargesOnly: [charge("x", 5)] });
+  });
+});
+
+describe("tripDatesState", () => {
+  it("says whether Owly has the event's dates, other dates, or none", () => {
+    expect(tripDatesState(trip(), "2026-10-30", "2026-11-01")).toBe("none");
+    expect(tripDatesState(trip({ startsOn: "2026-10-30", endsOn: "2026-11-01" }), "2026-10-30", "2026-11-01")).toBe("same");
+    expect(tripDatesState(trip({ startsOn: "2026-10-29", endsOn: "2026-11-02" }), "2026-10-30", "2026-11-01")).toBe("differs");
+    expect(tripDatesState(trip({ startsOn: "2026-10-30", endsOn: null }), "2026-10-30", "2026-11-01")).toBe("none");
   });
 });

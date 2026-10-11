@@ -39,6 +39,19 @@ export function useOwlyTrips() {
   });
 }
 
+/** Copies an event's dates onto the Owly trip it is linked to. Owly's own refusal (key not ticked) is shown as is. */
+export function useCopyDatesToOwly() {
+  const queryClient = useQueryClient();
+  return useMutation<unknown, OwlyError, { eventId: string; startDate: string; endDate: string }>({
+    mutationFn: (body) => call("PUT", "/trip-dates", body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: [KEY] });
+      toast.success("Owly trip dates updated");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+}
+
 /** Links an event to a trip, or unlinks it (tripId null). `quiet` leaves the success toast out. */
 export function useSetOwlyTripLink() {
   const queryClient = useQueryClient();

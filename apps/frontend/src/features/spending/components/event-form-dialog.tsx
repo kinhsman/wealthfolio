@@ -55,8 +55,8 @@ import {
   useEventTypes,
   useSpendingEventMutations,
 } from "../hooks/use-spending-events";
-import { useOwlyTrips, useSetOwlyTripLink } from "../hooks/use-owly-trips";
-import { eventOfTrip, suggestTrips } from "../lib/owly-trips";
+import { useCopyDatesToOwly, useOwlyTrips, useSetOwlyTripLink } from "../hooks/use-owly-trips";
+import { eventOfTrip, suggestTrips, tripDatesState } from "../lib/owly-trips";
 import type { NewSpendingEvent, SpendingEvent } from "../types/event";
 import type { EventDialogPrefill } from "./event-dialog-provider";
 
@@ -138,6 +138,8 @@ export function EventFormDialog({
   // money-hub patch: the Owly trip this event is linked to ("none" = no link).
   const owly = useOwlyTrips();
   const setTripLink = useSetOwlyTripLink();
+  const copyDates = useCopyDatesToOwly();
+  const dateFormatting = useDateFormatting();
   const [tripPick, setTripPick] = useState<string>("none");
   const tripTouched = useRef(false);
   const showTripPick = !!owly.data?.connected && owly.data.trips.length > 0;
@@ -200,6 +202,15 @@ export function EventFormDialog({
   const watchedStart = form.watch("startDate");
   const watchedEnd = form.watch("endDate");
   const watchedName = form.watch("name");
+  // Step 3: the trip this event is saved against, and how its dates in Owly compare with the form's.
+  const linkedTrip = linkedTripId === null ? null : (owly.data?.trips.find((t) => t.id === linkedTripId) ?? null);
+  const formStartIso = watchedStart ? formatDateISO(watchedStart) : "";
+  const formEndIso = watchedEnd ? formatDateISO(watchedEnd) : "";
+  const datesState =
+    isEditing && linkedTrip && tripPick === String(linkedTrip.id) && formStartIso && formEndIso && formStartIso <= formEndIso
+      ? tripDatesState(linkedTrip, formStartIso, formEndIso)
+      : null;
+  const shortDay = (iso: string) => dateFormatting.formatCalendarDate(iso.slice(0, 10), { month: "short", day: "numeric" });
   const tripSuggestions = useMemo(
     () =>
       showTripPick && tripPick === "none" && watchedName?.trim()
@@ -642,6 +653,27 @@ export function EventFormDialog({
                     })}
                   </SelectContent>
                 </Select>
+                {datesState && linkedTrip && event && (
+                  <div className="text-muted-foreground flex items-center gap-2 text-xs" data-testid="owly-trip-dates">
+                    <span className="min-w-0 flex-1 truncate">
+                      {datesState === "same"
+                        ? "Owly has these dates"
+                        : datesState === "none"
+                          ? "Owly has no dates for this trip"
+                          : `Owly has ${shortDay(linkedTrip.startsOn!)} to ${shortDay(linkedTrip.endsOn!)}`}
+                    </span>
+                    {datesState !== "same" && (
+                      <button
+                        type="button"
+                        disabled={copyDates.isPending}
+                        className="text-foreground shrink-0 underline underline-offset-4 disabled:opacity-50"
+                        onClick={() => copyDates.mutate({ eventId: event.id, startDate: formStartIso, endDate: formEndIso })}
+                      >
+                        Copy these dates to Owly
+                      </button>
+                    )}
+                  </div>
+                )}
                 {tripSuggestions.map((s) => (
                   <div key={s.trip.id} className="text-muted-foreground flex items-center gap-2 text-xs" data-testid="owly-trip-suggestion">
                     <span className="min-w-0 flex-1 truncate">

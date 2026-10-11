@@ -231,3 +231,15 @@ export function chargesWindow(
 
 export const eventChargesKey = (eventId: string | undefined, window: unknown) =>
   ["spending_transactions", "owly-event-charges", eventId, window] as const;
+
+// ---- Step 3: copy the event's dates onto the Owly trip ----
+
+export type TripDatesState = "same" | "none" | "differs";
+
+/** How the trip's own dates in Owly compare with the event's (plain YYYY-MM-DD, end included). */
+export function tripDatesState(trip: OwlyTrip, startDate: string, endDate: string): TripDatesState {
+  if (!trip.startsOn || !trip.endsOn) return "none";
+  return trip.startsOn.slice(0, 10) === startDate.slice(0, 10) && trip.endsOn.slice(0, 10) === endDate.slice(0, 10)
+    ? "same"
+    : "differs";
+}

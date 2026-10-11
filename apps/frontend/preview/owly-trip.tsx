@@ -1,6 +1,6 @@
 // money-hub patch: the Owly trip strip on the Spending dashboard event card, and the Owly trip
 // picker in the event window, with fixture data (vite.preview.config.ts).
-// ?view=card (default) | form; &case=owed|oweyou|square|empty|allmatch; &details=1 opens the card-vs-Owly list; &open=1 opens the picker; ?theme=light|dark.
+// ?view=card (default) | form (&edit=1 edits the linked Dallas event; &dates=none|differs|same is what Owly has); &case=owed|oweyou|square|empty|allmatch; &details=1 opens the card-vs-Owly list; &open=1 opens the picker; ?theme=light|dark.
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
@@ -77,7 +77,14 @@ const cases: Record<string, OwlyTrip> = {
   square: { ...dallas, status: "settled", owedToYou: 0, transfers: [] },
   empty: { ...dallas, billCount: 0, totalSpent: 0, you: { paid: 0, share: 0 }, owedToYou: 0, transfers: [] },
 };
-const trip = cases[which] ?? dallas;
+const datesCase = params.get("dates"); // none (default) | differs | same
+const baseTrip = cases[which] ?? dallas;
+const trip: OwlyTrip =
+  datesCase === "differs"
+    ? { ...baseTrip, startsOn: iso(addDays(19)), endsOn: iso(addDays(23)) }
+    : datesCase === "same"
+      ? { ...baseTrip, startsOn: start, endsOn: end }
+      : baseTrip;
 
 const others: OwlyTrip[] = [
   { ...dallas, id: 2, name: "Kash bach", billCount: 11, totalSpent: 2210.4, transfers: [], owedToYou: 0 },
@@ -87,7 +94,7 @@ const owly: OwlyTripsAnswer = {
   connected: true,
   baseUrl: "https://owly.sanglam.cc",
   trips: [trip, ...others],
-  links: view === "form" ? {} : { "ev-dallas": trip.id },
+  links: view === "form" && !params.get("edit") ? {} : { "ev-dallas": trip.id },
 };
 
 const summary: EventSpendingSummary = {
@@ -131,6 +138,11 @@ function Shell() {
       <EventFormDialog
         open
         onOpenChange={() => undefined}
+        event={
+          params.get("edit")
+            ? { id: "ev-dallas", name: "Dallas trip", description: null, eventTypeId: "travel", startDate: start, endDate: end, createdAt: "", updatedAt: "" }
+            : undefined
+        }
         prefill={{ name: "Dallas trip", startDate: new Date(start + "T00:00:00"), endDate: new Date(end + "T00:00:00") }}
       />
     );
