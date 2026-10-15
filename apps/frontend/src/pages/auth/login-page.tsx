@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -81,8 +80,7 @@ export function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <CardTitle>Wealthfolio</CardTitle>
-              <CardDescription>{t("auth:login.description")}</CardDescription>
+              <CardTitle>Lam’sfolio</CardTitle>
             </div>
           </CardHeader>
           <CardContent>
