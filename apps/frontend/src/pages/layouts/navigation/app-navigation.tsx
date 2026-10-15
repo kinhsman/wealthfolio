@@ -81,6 +81,15 @@ function buildStaticNavigation(t: TFunction): NavigationProps {
         label: "Subscriptions and bills: what repeats, what is due and when",
       },
       {
+        // money-hub patch: Trips (features/trips), the bookings of a Travel event and the search of the linked Gmail
+        // for them (owner, 10-15). After Subscriptions & Bills, before Maintenance; the 84px rail shows "Trips".
+        icon: <Icons.Plane className="size-6" />,
+        title: "Trips",
+        href: "/trips",
+        keywords: ["trip", "trips", "travel", "flight", "hotel", "booking", "confirmation", "tour", "vacation", "itinerary", "email"],
+        label: "Trips: the flights, hotels and tours of a trip, found in your email",
+      },
+      {
         // money-hub patch: Maintenance (features/upkeep), the upkeep of the house, the car and anything else in
         // Holdings: what is due, what was done and what it cost (owner, 10-08). After Subscriptions & Bills so the
         // phone's bar keeps Dashboard and Transactions. The 84px rail and the phone pill show "Maintenance".

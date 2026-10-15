@@ -33,6 +33,7 @@ export default defineConfig({
         returns: path.resolve(__dirname, "preview/returns.html"),
         "cash-forecast": path.resolve(__dirname, "preview/cash-forecast.html"),
         "owly-trip": path.resolve(__dirname, "preview/owly-trip.html"),
+        trips: path.resolve(__dirname, "preview/trips.html"),
       },
     },
   },
