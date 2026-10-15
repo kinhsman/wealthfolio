@@ -90,6 +90,8 @@ export interface SearchRow {
   code: string | null;
   amountMatch: boolean;
   noise: boolean;
+  /** The email in Gmail, to open it before picking it. */
+  link: string | null;
   onTrip: { bookingId: string; eventId: string } | null;
 }
 
@@ -128,6 +130,18 @@ export interface EmailRead {
   lines?: string[];
 }
 
+export interface EmailPeek {
+  key: string;
+  email: {
+    from: string;
+    subject: string;
+    date: string;
+    link: string | null;
+    mailbox: string;
+    body: string;
+  };
+}
+
 export interface ReadAnswer {
   key: string;
   email: { from: string; subject: string; date: string; link: string | null; mailbox: string };
@@ -158,6 +172,8 @@ export const tripsApi = {
   update: (id: string, input: BookingInput) => call<Booking>("PUT", `/bookings/${seg(id)}`, input),
   remove: (id: string) => call<{ removed: string }>("DELETE", `/bookings/${seg(id)}`),
   search: (input: SearchInput) => call<SearchAnswer>("POST", "/search", input),
+  peek: (mailboxId: string, msgId: string) =>
+    call<EmailPeek>("POST", "/peek", { mailboxId, msgId }),
   read: (mailboxId: string, msgId: string, again = false) =>
     call<ReadAnswer>("POST", "/read", { mailboxId, msgId, again }),
 };

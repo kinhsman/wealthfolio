@@ -55,6 +55,74 @@ const LOOKBACKS = [
   { days: 365, label: "A year before" },
 ];
 
+function EmailView({ row }: { row: SearchRow }) {
+  const q = useQuery({
+    queryKey: ["money-hub", "trips", "peek", row.mailboxId, row.msgId],
+    queryFn: () => tripsApi.peek(row.mailboxId, row.msgId),
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  const link = q.data?.email.link ?? row.link;
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-col">
+          <span className="text-[13px] leading-snug">{row.subject}</span>
+          <span className="text-muted-foreground truncate text-[11.5px]">
+            {q.data?.email.from || row.from}, {shortDay(row.date)}
+          </span>
+        </div>
+        {link ? (
+          <a
+            href={link}
+            target="_blank"
+            rel="noreferrer"
+            className="border-border hover:bg-muted inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[12px]"
+          >
+            <Icons.ExternalLink className="size-3.5" aria-hidden />
+            Open in Gmail
+          </a>
+        ) : null}
+      </div>
+      {q.isLoading ? (
+        <p className="text-muted-foreground flex items-center gap-2 text-[12.5px]" aria-busy>
+          <Icons.Spinner className="size-3.5 animate-spin" aria-hidden />
+          Loading the email
+        </p>
+      ) : q.error ? (
+        <p className="text-destructive text-[12.5px]">{q.error.message}</p>
+      ) : (
+        <pre className="bg-background border-border/60 text-foreground/90 max-h-56 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border p-2 font-[inherit] text-[12px] leading-relaxed">
+          {q.data?.email.body || "This email has no text, open it in Gmail to see it."}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+/** What a picked row shows: the email itself first, then what the app read from it. */
+function Preview({
+  rowKey,
+  row,
+  noisy,
+  onAnyway,
+}: {
+  rowKey: string;
+  row: SearchRow;
+  noisy: boolean;
+  onAnyway: () => void;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <EmailView row={row} />
+      <div className="border-border/60 flex flex-col gap-2 border-t pt-2.5">
+        <h3 className="text-muted-foreground text-[12px]">What the app read</h3>
+        <ReadPanel rowKey={rowKey} row={row} noisy={noisy} onAnyway={onAnyway} />
+      </div>
+    </div>
+  );
+}
+
 function ReadPanel({
   rowKey,
   row,
@@ -262,7 +330,7 @@ function Body({
   const noMail = status && !status.mailboxes.length;
   const readPanel =
     preview && previewKey ? (
-      <ReadPanel
+      <Preview
         key={previewKey}
         rowKey={previewKey}
         row={preview}
@@ -271,7 +339,7 @@ function Body({
       />
     ) : (
       <p className="text-muted-foreground text-[12.5px]">
-        Tick an email to see what the app read from it.
+        Tap an email to read it here, then tick it to add it to the trip.
       </p>
     );
 
@@ -466,6 +534,18 @@ function Body({
                               {note.text}
                             </Pill>
                           </button>
+                          {r.link ? (
+                            <a
+                              href={r.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={`Open ${r.subject} in Gmail`}
+                              title="Open in Gmail"
+                              className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-8 shrink-0 items-center justify-center rounded-md"
+                            >
+                              <Icons.ExternalLink className="size-4" aria-hidden />
+                            </a>
+                          ) : null}
                         </div>
                         {open ? (
                           <div className="bg-muted/50 mb-2.5 ml-7 rounded-xl p-2.5">
@@ -501,10 +581,9 @@ function Body({
         </div>
         {phone ? null : (
           <aside
-            aria-label="What the app read"
-            className="bg-muted/50 flex min-h-[200px] flex-col gap-2 rounded-xl p-3"
+            aria-label="The email"
+            className="bg-muted/50 flex min-h-[200px] min-w-0 flex-col gap-2 rounded-xl p-3"
           >
-            <h3 className="text-muted-foreground text-[12px]">What the app read</h3>
             {readPanel}
           </aside>
         )}

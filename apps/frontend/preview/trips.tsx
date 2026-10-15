@@ -199,6 +199,7 @@ const row = (o: Partial<SearchRow> & { key: string; subject: string }): SearchRo
   code: null,
   amountMatch: false,
   noise: false,
+  link: "https://mail.google.com/",
   onTrip: null,
   ...o,
 });
@@ -269,6 +270,22 @@ window.fetch = async (input, init) => {
   if (url.includes("/api/money-hub/trips/search")) {
     await new Promise((r) => setTimeout(r, 400));
     return json({ query: "", rows: searchRows, hidden: 1, errors: [], truncated: false });
+  }
+  if (url.includes("/api/money-hub/trips/peek")) {
+    const key = JSON.parse(String(init?.body ?? "{}")).msgId as string;
+    await new Promise((r) => setTimeout(r, 300));
+    const hit = searchRows.find((r) => r.key === key);
+    return json({
+      key: `box1:${key}`,
+      email: {
+        from: hit?.from ?? "Sender",
+        subject: hit?.subject ?? "",
+        date: hit?.date ?? day(-1),
+        link: "https://mail.google.com/",
+        mailbox: "me@gmail.com",
+        body: `Hi Sang,\n\nYour reservation for 6 is confirmed.\n\nWhen: Saturday, ${mid} at 7:30 PM\nWhere: Pecan Lodge, 2702 Main St, Dallas\nParty size: 6\nPay at the table.\n\nSee you there,\nThe team`,
+      },
+    });
   }
   if (url.includes("/api/money-hub/trips/read")) {
     const key = JSON.parse(String(init?.body ?? "{}")).msgId as string;

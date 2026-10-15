@@ -189,6 +189,7 @@ describe("search rows", () => {
     code: null,
     amountMatch: false,
     noise: false,
+    link: null,
     onTrip: null,
     ...o,
   });
