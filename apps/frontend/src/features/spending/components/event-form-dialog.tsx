@@ -63,6 +63,7 @@ import {
   useSetOwlyTripBills,
   useSetOwlyTripLink,
 } from "../hooks/use-owly-trips";
+import { earlierCharges, earlierWindow, looksLikeTravel } from "../lib/prebooked-charges";
 import {
   eventOfTrip,
   matchCharges,
@@ -312,6 +313,46 @@ export function EventFormDialog({
     [candidates, activeOverrides],
   );
 
+  // money-hub patch: charges paid BEFORE the event starts (flights and hotels are booked weeks ahead).
+  // Offered on a new event and when editing one. Nothing starts ticked (an earlier trip's flights look
+  // the same), only untagged spending is listed so nothing is ever re-tagged, and only travel-looking
+  // charges show until "Show other charges" is clicked.
+  const earlierFilter = useMemo(
+    () => (!activityId && watchedStart ? earlierWindow(watchedStart) : undefined),
+    [activityId, watchedStart],
+  );
+  const { data: earlierRows = [], isFetching: isFetchingEarlier } =
+    useCashActivities(earlierFilter);
+  const earlier = useMemo(() => earlierCharges(earlierRows), [earlierRows]);
+  const earlierKey = earlierFilter ? `${earlierFilter.startDate}|${earlierFilter.endDate}` : "";
+  const [earlierOverrides, setEarlierOverrides] = useState<{
+    key: string;
+    map: Record<string, boolean>;
+  }>({ key: "", map: {} });
+  const activeEarlier = earlierOverrides.key === earlierKey ? earlierOverrides.map : {};
+  const isEarlierSelected = (c: Activity): boolean =>
+    Object.prototype.hasOwnProperty.call(activeEarlier, c.id) ? activeEarlier[c.id] : false;
+  const selectedEarlierIds = useMemo(
+    () => earlier.filter(isEarlierSelected).map((c) => c.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [earlier, activeEarlier],
+  );
+  const setEarlierSelected = (id: string, value: boolean) =>
+    setEarlierOverrides((prev) => ({
+      key: earlierKey,
+      map: { ...(prev.key === earlierKey ? prev.map : {}), [id]: value },
+    }));
+  const tagEarlier = async (eventId: string) => {
+    if (selectedEarlierIds.length === 0) return;
+    await Promise.allSettled(
+      selectedEarlierIds.map((id) => setEventOnActivity.mutateAsync({ activityId: id, eventId })),
+    );
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: [QueryKeys.SPENDING_EVENTS] }),
+      queryClient.invalidateQueries({ queryKey: [QueryKeys.SPENDING_TRANSACTIONS] }),
+    ]);
+  };
+
   const handleCreateType = async () => {
     const name = newTypeName.trim();
     if (!name) {
@@ -359,6 +400,7 @@ export function EventFormDialog({
             endDate: endDateStr,
           },
         });
+        await tagEarlier(updated.id);
         await saveTripLink(updated.id);
         onUpdated?.(updated);
       } else {
@@ -388,6 +430,7 @@ export function EventFormDialog({
             ),
           );
         }
+        await tagEarlier(created.id);
         await saveTripLink(created.id);
         // The dashboard event card reads both the event list and cash activity tags.
         await Promise.all([
@@ -842,6 +885,16 @@ export function EventFormDialog({
               />
             )}
 
+            {!activityId && earlierFilter && (
+              <EarlierCharges
+                charges={earlier}
+                isFetching={isFetchingEarlier}
+                isSelected={isEarlierSelected}
+                onToggle={setEarlierSelected}
+                selectedCount={selectedEarlierIds.length}
+              />
+            )}
+
             {replacedTagCount > 0 && (
               <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                 {t("spending:eventForm.replaceTagsWarning", { count: replacedTagCount })}
@@ -989,6 +1042,98 @@ function SuggestedTransactions({
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+interface EarlierChargesProps {
+  charges: Activity[];
+  isFetching: boolean;
+  isSelected: (c: Activity) => boolean;
+  onToggle: (id: string, value: boolean) => void;
+  selectedCount: number;
+}
+
+/** Charges paid before the event starts. Hidden when there are none, so it never adds noise. */
+function EarlierCharges({
+  charges,
+  isFetching,
+  isSelected,
+  onToggle,
+  selectedCount,
+}: EarlierChargesProps) {
+  const formatting = useDateFormatting();
+  const [showOthers, setShowOthers] = useState(false);
+  const travel = useMemo(() => charges.filter((c) => looksLikeTravel(c as never)), [charges]);
+  const shown = showOthers ? charges : travel;
+  if (charges.length === 0) {
+    return isFetching ? (
+      <p className="text-muted-foreground text-xs">Looking for charges booked earlier…</p>
+    ) : null;
+  }
+  return (
+    <div
+      className="border-input overflow-hidden rounded-md border"
+      data-testid="event-booked-earlier"
+    >
+      <div className="flex items-center justify-between gap-2 border-b px-3 py-1.5">
+        <div className="min-w-0">
+          <p className="text-foreground text-xs font-semibold">Booked earlier</p>
+          <p className="text-muted-foreground text-[11px]">
+            {showOthers
+              ? "All charges before the start date"
+              : "Travel charges before the start date"}
+            {selectedCount > 0 ? ` · ${selectedCount} selected` : ""}
+          </p>
+        </div>
+        {charges.length > travel.length && (
+          <button
+            type="button"
+            onClick={() => setShowOthers((v) => !v)}
+            className="text-muted-foreground hover:text-foreground shrink-0 text-[11px] underline underline-offset-2"
+          >
+            {showOthers ? "Travel only" : `Show other charges (${charges.length - travel.length})`}
+          </button>
+        )}
+      </div>
+      {shown.length === 0 ? (
+        <p className="text-muted-foreground px-3 py-2 text-xs">
+          No travel charges found yet. A booking made today shows up after the next bank sync.
+        </p>
+      ) : (
+        <ul className="max-h-40 divide-y overflow-y-auto">
+          {shown.map((c) => {
+            const amt = c.amount ? Math.abs(Number(c.amount)) : 0;
+            return (
+              <li key={c.id}>
+                <label className="hover:bg-muted/30 flex cursor-pointer items-center gap-3 px-3 py-1.5">
+                  <input
+                    type="checkbox"
+                    className="border-input h-3.5 w-3.5 shrink-0 rounded"
+                    checked={isSelected(c)}
+                    onChange={(e) => onToggle(c.id, e.target.checked)}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <span className="text-foreground block truncate text-xs">
+                      {c.notes || c.activityType}
+                    </span>
+                    <p className="text-muted-foreground text-[10px]">
+                      {formatting.formatCalendarDate(c.activityDate.slice(0, 10), {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                  <span className="text-foreground shrink-0 text-xs font-medium tabular-nums">
+                    <PrivacyAmount value={amt} currency={c.currency || "USD"} />
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
