@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type FC } from "react";
+import { useCallback, useEffect, useMemo, useState, type FC } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
@@ -79,6 +79,8 @@ import { ReturnsCard } from "./returns-card";
 import { SpendingByPeriodCard } from "./spending-by-period-card";
 import { SpendingPeriodSelector } from "./spending-period-toggle";
 import { CategoryMark } from "./category-chips";
+import { LeftOutChip, WhyMovedChip } from "./spending-popups";
+import { WhereDonut } from "./where-donut";
 import { PhoneFold } from "./phone-fold";
 import { useDashboardSkins } from "../lib/dashboard-skin";
 
@@ -895,6 +897,21 @@ export default function SpendingTabContent() {
   const periodWord = selectedIntervalDescription?.startsWith("spending:")
     ? t(selectedIntervalDescription)
     : selectedIntervalDescription;
+  // money-hub patch (owner, 10-18): "Sep 1 to 18", the window the change chip compares against.
+  const priorRangeLabel = useMemo(() => {
+    if (!priorRangeForReport?.from || !priorRangeForReport?.to) return undefined;
+    const from = formatDateISO(priorRangeForReport.from);
+    const to = formatDateISO(priorRangeForReport.to);
+    const sameYear = from.slice(0, 4) === to.slice(0, 4);
+    const opts = sameYear
+      ? ({ month: "short", day: "numeric" } as const)
+      : ({ month: "short", day: "numeric", year: "numeric" } as const);
+    const end =
+      from.slice(0, 7) === to.slice(0, 7)
+        ? String(priorRangeForReport.to.getDate())
+        : dateFormatting.formatCalendarDate(to, opts);
+    return `${dateFormatting.formatCalendarDate(from, opts)} to ${end}`;
+  }, [priorRangeForReport, dateFormatting]);
   // "Sep 1 to 30" for the chart title; "Aug 3 to Sep 30" across months.
   const chartRangeLabel = useMemo(() => {
     if (!dateRange?.from || !dateRange?.to) return undefined;
@@ -924,14 +941,18 @@ export default function SpendingTabContent() {
         {excludedCategoryCount > 0 && (
           <>
             {" · "}
-            <Link
-              to="/settings/spending/categories"
-              className="hover:text-foreground hover:underline"
-            >
-              {t("spending:tabContent.excludedCategoriesHint", {
+            <LeftOutChip
+              excludedIds={excludedCategoryIds}
+              categories={taxonomy.data?.categories ?? []}
+              startDate={reportReq.startDate}
+              endDate={reportReq.endDate}
+              currency={currency}
+              label={t("spending:tabContent.excludedCategoriesHint", {
                 count: excludedCategoryCount,
               })}
-            </Link>
+              periodWord={periodWord}
+              hrefFor={activityHrefFor}
+            />
           </>
         )}
       </span>
@@ -948,12 +969,21 @@ export default function SpendingTabContent() {
         {isPriorLoading ? (
           <Skeleton className="h-5 w-48" />
         ) : priorSpending > 0 ? (
-          <SpendingDeltaLine
+          <WhyMovedChip
+            chip={
+              <SpendingDeltaLine
+                delta={delta}
+                currency={currency}
+                deltaPct={
+                  displayDeltaPct !== null && Math.abs(displayDeltaPct) <= 5 ? displayDeltaPct : null
+                }
+              />
+            }
+            rows={spendRows}
             delta={delta}
             currency={currency}
-            deltaPct={
-              displayDeltaPct !== null && Math.abs(displayDeltaPct) <= 5 ? displayDeltaPct : null
-            }
+            priorLabel={priorRangeLabel}
+            hrefFor={activityHrefFor}
           />
         ) : null}
       </span>
@@ -1348,6 +1378,14 @@ export default function SpendingTabContent() {
                 everyday={Math.max(0, budgetSpent - figures.fixedSpent)}
                 target={budgetTarget}
                 currency={budgetCardBudget?.computed.currency ?? currency}
+                monthFraction={
+                  isCurrentBudgetMonth
+                    ? (() => {
+                        const dim = new Date(todayParts.year, todayParts.month, 0).getDate();
+                        return Math.min(todayParts.day, dim) / dim;
+                      })()
+                    : null
+                }
               />
             ) : null
           }
@@ -1790,6 +1828,10 @@ export function CategoryRankedBar({
   const numberFormatting = useNumberFormatting();
   const { t } = useTranslation();
   const { isBalanceHidden } = useBalancePrivacy();
+  // money-hub patch (owner, 10-18): on a desktop the bar above the list is a donut; tapping an arc opens that
+  // group's categories in the list. A phone keeps the bar.
+  const isMobile = useIsMobileViewport();
+  const [focusId, setFocusId] = useState<string | null>(null);
   // Memoize derivations so we don't rebuild the Map + reduce + slices on every
   // parent re-render — this card lives inside a chart-heavy page.
   const derived = useMemo(() => {
@@ -1852,6 +1894,25 @@ export function CategoryRankedBar({
         );
       })}
     </div>
+  );
+
+  const DONUT_FALLBACK = ["#4cc38a", "#e8b04a", "#3b82f6", "#c084fc", "#2dd4bf", "#fb923c", "#f2705e"];
+  const donut = (segments: CategoryRow[], grouped = false) => (
+    <WhereDonut
+      segments={segments.map((s, i) => ({
+        id: s.id,
+        name: s.name,
+        amount: s.amount,
+        color:
+          s.id === "__other__" && !grouped
+            ? "var(--m-cat-other)"
+            : (s.color ?? (grouped ? themeColor : DONUT_FALLBACK[i % DONUT_FALLBACK.length])),
+      }))}
+      total={total}
+      currency={currency}
+      activeId={grouped ? focusId : null}
+      onSelect={grouped ? (id) => setFocusId((cur) => (cur === id ? null : id)) : undefined}
+    />
   );
 
   if (hasAnyGroup) {
@@ -1923,16 +1984,15 @@ export function CategoryRankedBar({
         themeColor={themeColor}
         activityHrefFor={activityHrefFor}
         defaultExpanded={expandAll}
+        focused={focusId === bucket.id}
       />
     );
+    const groupSegments = orderedBuckets.map((b) => ({ id: b.id, name: b.name, color: b.color, icon: null, amount: b.total }));
 
     return (
-      <div>
-        {stackedBar(
-          orderedBuckets.map((b) => ({ id: b.id, name: b.name, color: b.color, icon: null, amount: b.total })),
-          true,
-        )}
-        <div className="mt-3 space-y-1.5 max-md:mt-2">
+      <div className={cn(!isMobile && "flex flex-col items-center gap-4")}>
+        {isMobile ? stackedBar(groupSegments, true) : donut(groupSegments, true)}
+        <div className={cn("space-y-1.5 max-md:mt-2", isMobile ? "mt-3" : "w-full min-w-0")}>
           {orderedBuckets.slice(0, 4).map(renderBucket)}
           {orderedBuckets.length > 4 ? (
             <PhoneFold
@@ -1973,9 +2033,10 @@ export function CategoryRankedBar({
   };
   const uncategorizedShare = total > 0 ? (uncategorizedAmount / total) * 100 : 0;
   return (
-    <div className="flex flex-col gap-3">
-      {stackedBar(barSegments)}
+    <div className={cn(isMobile ? "flex flex-col gap-3" : "flex flex-col items-center gap-4")}>
+      {isMobile ? stackedBar(barSegments) : donut(barSegments)}
 
+      <div className={cn("flex flex-col gap-3", !isMobile && "w-full min-w-0")}>
       <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr))]">
         {top.slice(0, 4).map(renderRow)}
         <PhoneFold
@@ -2010,6 +2071,7 @@ export function CategoryRankedBar({
           <PrivacyAmount value={restAmount} currency={currency} />
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -2021,6 +2083,7 @@ function GroupedCategoryBlock({
   themeColor,
   activityHrefFor,
   defaultExpanded = false,
+  focused = false,
 }: {
   bucket: {
     id: string;
@@ -2034,9 +2097,14 @@ function GroupedCategoryBlock({
   themeColor: string;
   activityHrefFor: (id: string) => string;
   defaultExpanded?: boolean;
+  /** money-hub patch (owner, 10-18): its donut arc was tapped, so it opens. */
+  focused?: boolean;
 }) {
   const numberFormatting = useNumberFormatting();
   const [expanded, setExpanded] = useState(defaultExpanded);
+  useEffect(() => {
+    if (focused) setExpanded(true);
+  }, [focused]);
   const share = total > 0 ? (bucket.total / total) * 100 : 0;
   const accent = bucket.color ?? themeColor;
   // Sort categories by spend descending, but always pin the uncategorized

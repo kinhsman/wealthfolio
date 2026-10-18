@@ -34,6 +34,25 @@ function niceStep(raw: number): number {
 }
 
 /**
+ * The top of the Spending by day scale. Usually the biggest bar; when a day is far above the rest it is
+ * the usual top (the 85th percentile or the average, whichever is higher) plus a little, and the big day
+ * is cut there. "Far above" is twice the 85th percentile, or four times a middle day, whichever is lower.
+ * `sorted` is the days' amounts, smallest first.
+ */
+export function dayScale(
+  sorted: number[],
+  avgValue: number,
+): { top: number; step: number; outliers: boolean } {
+  const max = sorted[sorted.length - 1];
+  const usual = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.85))];
+  const middle = sorted[Math.floor((sorted.length - 1) / 2)];
+  const line = Math.min(usual * 2, middle * STANDOUT_TIMES);
+  const outliers = sorted.length >= 4 && max > line;
+  const step = niceStep((outliers ? Math.max(line / 2, avgValue) * 1.15 : max) / 3);
+  return { top: step * 3, step, outliers };
+}
+
+/**
  * money-hub patch: the Spending by day chart, Meadow (owner picked design 5 on 10-02). A short plot
  * (150px) with a $ scale. One or two huge days (the mortgage, a flight) used to flatten every other
  * bar, so a bar far above the rest is cut at the top of the scale with its amount over it. A sentence
@@ -88,11 +107,9 @@ export function SpendingByPeriodCard({
     if (spent.length === 0) return null;
     const sorted = [...spent].sort((a, b) => a - b);
     const max = sorted[sorted.length - 1];
-    // The usual top: the 85th percentile. A bar more than twice that is an outlier and gets cut.
-    const usual = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.85))];
-    const outliers = sorted.length >= 4 && max > usual * 2;
-    const step = niceStep((outliers ? Math.max(usual, avgValue) * 1.15 : max) / 3);
-    const top = step * 3;
+    // money-hub patch (owner, 10-18): a day over four times a middle day is cut at the top of the scale
+    // too, so a few bill days (which lift the 85th percentile) no longer flatten the usual days.
+    const { top, step } = dayScale(sorted, avgValue);
     const tall = past.filter((b) => b.value > top).sort((a, b) => b.value - a.value);
     // money-hub patch (owner, 10-17: "No day stands out" beside a $3,138 day): a few bill days lift the
     // 85th percentile, so no bar gets cut. What stands out is measured against a middle day instead.
@@ -105,6 +122,12 @@ export function SpendingByPeriodCard({
         : [];
     return { top, step, tall, max, middle, standouts };
   }, [barData, avgValue]);
+
+  // money-hub patch (owner, 10-18): the days that stand out (cut or not) are drawn in orange.
+  const bigKeys = useMemo(
+    () => new Set([...(chart?.tall ?? []), ...(chart?.standouts ?? [])].map((b) => b.key)),
+    [chart],
+  );
 
   const todayKey = useMemo(() => {
     const last = [...barData].reverse().find((b) => !b.future);
@@ -279,7 +302,9 @@ export function SpendingByPeriodCard({
                               ? "var(--m-line)"
                               : b.key === todayKey
                                 ? "var(--m-chart-today)"
-                                : "var(--m-chart)",
+                                : bigKeys.has(b.key)
+                                  ? "var(--m-chart-big, #fb923c)"
+                                  : "var(--m-chart)",
                           }}
                         />
                         {capped ? (
@@ -334,6 +359,12 @@ export function SpendingByPeriodCard({
                   <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--m-chart)]" />
                   Spent that {unit.one}
                 </span>
+                {bigKeys.size > 0 ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--m-chart-big,#fb923c)]" />
+                    Stands out
+                  </span>
+                ) : null}
                 {hasFuture ? (
                   <span className="flex items-center gap-1.5">
                     <span className="h-2.5 w-2.5 rounded-[3px] bg-[var(--m-line)]" />

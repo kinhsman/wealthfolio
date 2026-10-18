@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 
@@ -23,7 +23,7 @@ import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import { topCategoryId } from "../lib/category-rollup";
 import type { BudgetCategoryRow } from "../types/budget";
 import type { DayBucket } from "../types/report";
-import { type CategoryMetaMap } from "./category-chips";
+import { CategoryMark, type CategoryMetaMap } from "./category-chips";
 import { PhoneFold } from "./phone-fold";
 
 export type Status = "ok" | "warn" | "over";
@@ -350,6 +350,7 @@ export function BudgetLineChartCard({
             everyday={Math.max(0, spent - fixedSpent)}
             target={target}
             currency={currency}
+            monthFraction={isCurrentMonth ? dayOfMonth / daysInMonth : null}
           />
         ) : null}
       </div>
@@ -839,11 +840,7 @@ export function BudgetLineChartCard({
             </Link>
           </div>
         ) : (
-          <div className="grid gap-x-1 gap-y-2.5 [grid-template-columns:repeat(auto-fill,minmax(96px,1fr))] max-md:gap-y-1.5 max-md:[grid-template-columns:repeat(4,minmax(0,1fr))]">
-            {rings.map((r) => (
-              <BudgetRing key={r.id} ring={r} currency={currency} activityRange={activityRange} />
-            ))}
-          </div>
+          <BudgetCategories rings={rings} currency={currency} activityRange={activityRange} />
         )}
       </div>
   );
@@ -1092,22 +1089,38 @@ export function SpentSplitBar({
   everyday,
   target,
   currency,
+  monthFraction,
 }: {
   fixed: number;
   everyday: number;
   target: number;
   currency: string;
+  /** money-hub patch (owner, 10-18): how much of the month has gone (0 to 1), as a tick on the bar. */
+  monthFraction?: number | null;
 }) {
   const scale = Math.max(target, fixed + everyday);
+  const showToday = monthFraction != null && monthFraction > 0 && monthFraction < 1 && target > 0;
+  const todayPct = showToday ? Math.round(monthFraction * 100) : 0;
+  const spentPct = target > 0 ? Math.round(((fixed + everyday) / target) * 100) : 0;
   const pct = (v: number) => `${scale > 0 ? (v / scale) * 100 : 0}%`;
   const dot = "mr-1 inline-block h-[7px] w-[7px] rounded-[2px] align-middle";
   return (
     <div className="mt-1.5 flex flex-col gap-1">
-      <div className="flex h-1.5 overflow-hidden rounded-full bg-[var(--m-sand,var(--muted))]">
-        {fixed > 0 ? (
-          <div className="bg-[var(--m-forest)] opacity-45" style={{ width: pct(fixed) }} />
+      <div className="relative">
+        <div className="flex h-1.5 overflow-hidden rounded-full bg-[var(--m-sand,var(--muted))]">
+          {fixed > 0 ? (
+            <div className="bg-[var(--m-forest)] opacity-45" style={{ width: pct(fixed) }} />
+          ) : null}
+          <div className="bg-[var(--m-forest)]" style={{ width: pct(everyday) }} />
+        </div>
+        {showToday ? (
+          <span
+            aria-hidden
+            title={`Today: ${todayPct}% of the month gone, ${spentPct}% of the budget spent`}
+            className="bg-foreground pointer-events-none absolute -top-[3px] h-[12px] w-[2px] -translate-x-1/2 rounded-full"
+            style={{ left: pct(monthFraction * target) }}
+          />
         ) : null}
-        <div className="bg-[var(--m-forest)]" style={{ width: pct(everyday) }} />
       </div>
       <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] tabular-nums">
         {fixed > 0 ? (
@@ -1123,6 +1136,12 @@ export function SpentSplitBar({
         <span className="max-md:hidden">
           of <PrivacyAmount value={target} currency={currency} /> budget
         </span>
+        {showToday ? (
+          <span>
+            <span className="bg-foreground mr-1 inline-block h-[9px] w-[2px] rounded-full align-middle" />
+            Today
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -1151,6 +1170,128 @@ const BudgetManageLink = ({ monthKey }: { monthKey: string }) => {
     </Link>
   );
 };
+
+type Ring = {
+  id: string;
+  categoryId: string;
+  name: string;
+  color: string | null;
+  icon: string | null;
+  target: number;
+  spent: number;
+  pct: number;
+};
+
+/** A category at or past this share of its budget gets a card of its own. */
+const NEEDS_LOOK_FROM = 0.85;
+
+/**
+ * money-hub patch (owner, 10-18): the categories over budget or close to it first, as cards; the ones that
+ * are fine fold under "Show N on-track categories" as the ring grid they always were. With none that need
+ * a look the ring grid shows as before.
+ */
+function BudgetCategories({
+  rings,
+  currency,
+  activityRange,
+}: {
+  rings: Ring[];
+  currency: string;
+  activityRange: { from: string; to: string };
+}) {
+  const [showRest, setShowRest] = useState(false);
+  const needLook = rings.filter((r) => r.pct >= NEEDS_LOOK_FROM);
+  const rest = rings.filter((r) => r.pct < NEEDS_LOOK_FROM);
+  const grid = (
+    <div className="grid gap-x-1 gap-y-2.5 [grid-template-columns:repeat(auto-fill,minmax(96px,1fr))] max-md:gap-y-1.5 max-md:[grid-template-columns:repeat(4,minmax(0,1fr))]">
+      {rest.map((r) => (
+        <BudgetRing key={r.id} ring={r} currency={currency} activityRange={activityRange} />
+      ))}
+    </div>
+  );
+  if (needLook.length === 0) return grid;
+  return (
+    <div className="flex flex-col gap-2 max-md:gap-1.5">
+      <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(210px,1fr))] max-md:gap-1.5 max-md:grid-cols-1">
+        {needLook.map((r) => (
+          <BudgetCategoryCard key={r.id} ring={r} currency={currency} activityRange={activityRange} />
+        ))}
+      </div>
+      {rest.length > 0 ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowRest((v) => !v)}
+            aria-expanded={showRest}
+            className="text-muted-foreground hover:text-foreground flex items-center gap-1 self-start text-xs underline-offset-4 hover:underline"
+          >
+            {showRest ? "Hide" : "Show"} {rest.length} on-track {rest.length === 1 ? "category" : "categories"}
+            {showRest ? <Icons.ChevronUp className="h-3 w-3" /> : <Icons.ChevronDown className="h-3 w-3" />}
+          </button>
+          {showRest ? grid : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function BudgetCategoryCard({
+  ring,
+  currency,
+  activityRange,
+}: {
+  ring: Ring;
+  currency: string;
+  activityRange: { from: string; to: string };
+}) {
+  const formatting = useAmountFormatting();
+  const { isBalanceHidden } = useBalancePrivacy();
+  const isOver = ring.spent > ring.target;
+  const money = (v: number) => (isBalanceHidden ? "••••" : formatting.formatRoundedAmount(v, currency));
+  const tone = isOver ? "var(--m-bad, var(--destructive))" : "var(--m-warn-line, #C28B47)";
+  const isMobile = useIsMobileViewport();
+  const status = isOver ? `${money(ring.spent - ring.target)} over` : `${money(ring.target - ring.spent)} left`;
+  return (
+    <Link
+      to={`/activities?tab=spending&category=${encodeURIComponent(ring.categoryId)}&from=${
+        activityRange.from
+      }&to=${activityRange.to}`}
+      className={cn(
+        "border-border/60 hover:bg-muted/40 flex min-w-0 flex-col rounded-[14px] border bg-[var(--m-sand,transparent)] px-3 transition-colors",
+        isMobile ? "gap-1 py-1.5" : "gap-1.5 py-2.5",
+      )}
+      title={`${ring.name}: ${ring.spent.toFixed(2)} / ${ring.target.toFixed(2)}`}
+    >
+      <div className="flex items-center gap-2">
+        <CategoryMark icon={ring.icon} color={ring.color} />
+        <span className="text-foreground min-w-0 flex-1 truncate text-[13px] font-medium">{ring.name}</span>
+        {isMobile ? (
+          <span className="text-[12px] tabular-nums" style={{ color: tone }}>
+            {status} · {Math.round(ring.pct * 100)}%
+          </span>
+        ) : (
+          <span
+            className="rounded-full px-2 py-0.5 text-[11px] tabular-nums"
+            style={{ color: tone, background: "var(--m-warn-soft, transparent)" }}
+          >
+            {isOver ? "Over" : "Close"} · {Math.round(ring.pct * 100)}%
+          </span>
+        )}
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-[var(--m-track,var(--muted))]">
+        <div className="h-full rounded-full" style={{ width: `${Math.min(100, ring.pct * 100)}%`, background: tone }} />
+      </div>
+      {isMobile ? null : (
+        <div className="text-muted-foreground flex items-baseline justify-between gap-2 text-[11.5px] tabular-nums">
+          <span style={{ color: tone }}>{status}</span>
+          <span>
+            {money(ring.spent)} of {money(ring.target)}
+          </span>
+        </div>
+      )}
+    </Link>
+  );
+}
 
 function BudgetRing({
   ring,
