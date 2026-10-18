@@ -38,6 +38,7 @@ import {
   type Merchant,
   type MerchantDraft,
 } from "../lib/merchants";
+import { logoFromSite } from "@/features/trips/lib/logo-key";
 import { KeywordChips, withTyped } from "./keyword-chips";
 import { bankWordsFor, useBankLines } from "../lib/bank-lines";
 import { useNotes } from "../lib/notes";
@@ -196,6 +197,21 @@ export function MerchantDialog({
     }
   };
   const [dragging, setDragging] = useState(false);
+  // "Add logos using their website" (owner, 10-17): the logo from logo.dev, saved like a chosen picture.
+  const [site, setSite] = useState("");
+  const [fetching, setFetching] = useState(false);
+  const fromSite = async () => {
+    if (!site.trim() || fetching) return;
+    setErr(null);
+    setFetching(true);
+    try {
+      pick(await logoFromSite(site));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFetching(false);
+    }
+  };
 
   // No scan and no update step: transactions are matched each time they show. The preview only
   // shows what the words catch now (owner, 09-30: "how do we scan and preview and update?").
@@ -298,6 +314,7 @@ export function MerchantDialog({
         </div>
 
         {useBank ? null : (
+          <div className="space-y-3">
           <div className="flex items-center gap-4">
             <button
               type="button"
@@ -344,6 +361,29 @@ export function MerchantDialog({
                 e.target.value = "";
               }}
             />
+          </div>
+          <div className="flex gap-2">
+            <Input
+              value={site}
+              onChange={(e) => setSite(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void fromSite();
+                }
+              }}
+              placeholder="Website, like starbucks.com"
+              aria-label="Merchant website"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={busy || fetching}
+              className="h-8 min-w-0 flex-1 text-xs"
+            />
+            <Button type="button" variant="outline" size="sm" onClick={() => void fromSite()} disabled={busy || fetching || !site.trim()}>
+              {fetching ? <Icons.Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Icons.Globe className="mr-1.5 h-3.5 w-3.5" />}
+              Get logo
+            </Button>
+          </div>
           </div>
         )}
 

@@ -36,3 +36,22 @@ export function useSetLogoKey() {
     onSuccess: (data) => qc.setQueryData(LOGO_KEY, data),
   });
 }
+
+/**
+ * A company's logo from its website, as a picture file ready to save like a chosen one (the merchant window).
+ * Throws the helper's own words when there is no key, no such logo, or the site is not a site.
+ */
+export async function logoFromSite(site: string): Promise<File> {
+  const res = await fetch(`${BASE}/logo`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ site }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error || `The money app helper said ${res.status}`);
+  }
+  const domain = res.headers.get("X-Logo-Site") || "logo";
+  return new File([await res.blob()], `${domain}.png`, { type: "image/png" });
+}
