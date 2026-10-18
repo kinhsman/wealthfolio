@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 import { SPENDING_TAXONOMY } from "@/features/spending/hooks/use-rule-form-options";
 import { useMerchants } from "@/features/spending/lib/merchants";
+import { cleanPayee } from "@/features/spending/lib/payee-name";
 import { shortDay } from "@/features/upkeep/lib/upkeep";
 
 import {
@@ -214,7 +215,7 @@ function RecentRow({
     <div className="grid min-h-8 grid-cols-[56px_minmax(0,1fr)_auto_24px] items-center gap-2 text-sm">
       <span className="text-muted-foreground text-xs">{shortDay(charge.date)}</span>
       <span className="truncate">
-        {charge.notes}
+        {cleanPayee(charge.notes)}
         {charge.via === "include" ? (
           <span className="text-muted-foreground ml-1.5 text-xs">picked</span>
         ) : null}

@@ -27,6 +27,7 @@ import {
   toCents,
 } from "../lib/split-utils";
 import type { TransactionRowVM } from "../lib/transactions-helpers";
+import { cleanPayee } from "../lib/payee-name";
 import type { NewActivitySplit } from "../types/cash-activity";
 import { QuickCategorizePopover, type QuickCategorizeScope } from "./quick-categorize-popover";
 
@@ -275,7 +276,7 @@ function SplitTransactionSheetOwn({
         <SheetHeader className={cn(isMobile && "border-border border-b px-6 py-4 text-left")}>
           <SheetTitle>{t("spending:split.title")}</SheetTitle>
           <SheetDescription>
-            {activity?.notes ?? t("spending:split.transactionFallback")} ·{" "}
+            {activity?.notes != null ? cleanPayee(activity.notes) : t("spending:split.transactionFallback")} ·{" "}
             {activity?.currency ?? ""}
           </SheetDescription>
         </SheetHeader>

@@ -24,6 +24,7 @@ import { merchantFor, useMerchants } from "../lib/merchants";
 import { MerchantLogo } from "./merchant-logo";
 import { usePendingTransactions, type PendingTransaction } from "./pending-transactions";
 import { PhoneFold } from "./phone-fold";
+import { cleanPayee } from "../lib/payee-name";
 import { useShownAmount } from "@/lib/display-currency";
 
 const SPENDING_TAXONOMY = "spending_categories";
@@ -252,7 +253,7 @@ export function RecentActivityCard({
                   <div key={p.id} className="flex items-center gap-2.5 py-1.5 opacity-70" title="Not posted by the bank yet. Editable once it posts.">
                     {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} className="h-6 w-6 max-md:h-7 max-md:w-7" /> : null}
                     <div className="min-w-0 flex-1 md:flex md:items-center md:gap-2.5">
-                      <div className="text-foreground/90 min-w-0 truncate text-xs font-medium md:flex-1 max-md:text-[13px]">{name}</div>
+                      <div className="text-foreground/90 min-w-0 truncate text-xs font-medium md:flex-1 max-md:text-[13px]">{cleanPayee(name)}</div>
                       <span className="text-muted-foreground inline-block shrink-0 rounded-full border border-dashed px-1.5 py-px text-[10px] font-medium uppercase tracking-wide max-md:mt-0.5">
                         Pending
                       </span>
@@ -300,7 +301,7 @@ export function RecentActivityCard({
                   {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} className="h-6 w-6 max-md:h-7 max-md:w-7" /> : null}
                   <div className="min-w-0 flex-1 md:flex md:items-center md:gap-2.5">
                     <div className="text-foreground/90 min-w-0 truncate text-xs font-medium md:flex-1 max-md:text-[13px]">
-                      {payee || (
+                      {(payee && cleanPayee(payee)) || (
                         <span className="text-muted-foreground italic">
                           {t("spending:dashboard.noPayee")}
                         </span>

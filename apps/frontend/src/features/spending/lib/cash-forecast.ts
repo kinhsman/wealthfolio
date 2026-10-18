@@ -9,6 +9,7 @@ import type { Account } from "@/lib/types";
 
 import { cardName } from "./credit-cards";
 import { merchantFor, type Merchant } from "./merchants";
+import { cleanPayee } from "./payee-name";
 
 export interface ForecastEvent {
   date: string;
@@ -69,19 +70,14 @@ export const shortDay = (iso: string) =>
   new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /** A payment's name without the bank's words: the owner's label before a colon ("Rent received: Zelle
- *  payment from…" -> "Rent received"), else the payee as the bank wrote it, shortened. */
-const BANK_PREFIX = /^(DEBIT CARD PURCHASE|POS PURCHASE|PURCHASE AUTHORIZED ON \S+|ACH ELECTRONIC CREDIT|ACH CREDIT|ACH DEBIT|ELECTRONIC CREDIT|DIRECT DEPOSIT|DIRECT DEBIT|ONLINE PAYMENT|RECURRING PAYMENT)\s+/i;
-const titleCase = (s: string) => s.toLowerCase().replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+ *  payment from…" -> "Rent received"), else the payee as every list shows it (lib/payee-name.ts), shortened. */
 
 export function plainName(name: string): string {
   const t = String(name || "").trim();
   const head = t.split(":")[0].trim();
   // The owner's labels are written in lower case; a bank's "PPD ID:" is not one.
   if (head && head !== t && head.length >= 4 && /\p{Ll}/u.test(head)) return head.replace(/\s*\(on the Rental page\)/i, "");
-  // The bank's line: its filler in front, the store number after a star, ids and phone numbers go.
-  let n = t.replace(BANK_PREFIX, "").replace(/\*.*$/, "").replace(/\b(PPD|WEB|CO)?\s*ID:?.*$/i, "").replace(/[\d-]{6,}.*$/, "").trim() || t;
-  const letters = n.replace(/[^\p{L}]/gu, "");
-  if (letters && letters.replace(/[^\p{Lu}]/gu, "").length / letters.length > 0.7) n = titleCase(n);
+  const n = cleanPayee(t);
   return n.length > 36 ? `${n.slice(0, 35).trim()}…` : n;
 }
 

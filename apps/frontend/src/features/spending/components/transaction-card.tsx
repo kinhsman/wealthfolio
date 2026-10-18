@@ -32,6 +32,7 @@ import { canSetCountsAs, countsAsStore } from "../lib/counts-as";
 import { MerchantLogo } from "./merchant-logo";
 import { AccountLogo } from "./account-mark";
 import { CategoryMark } from "./category-chips";
+import { cleanPayee } from "../lib/payee-name";
 import { useShownAmount } from "@/lib/display-currency";
 
 interface TransactionCardProps {
@@ -170,7 +171,7 @@ function TransactionCardImpl({
               </span>
             )}
             <span className="text-foreground min-w-0 flex-1 truncate text-sm font-medium">
-              {renamed ?? a.notes ?? <span className="text-muted-foreground italic">—</span>}
+              {renamed ?? (a.notes != null ? cleanPayee(a.notes) : <span className="text-muted-foreground italic">—</span>)}
             </span>
             {/* money-hub patch: sent back, or the refund for something sent back (lib/returns.ts). */}
             <ReturnBadge mark={returnMark} />

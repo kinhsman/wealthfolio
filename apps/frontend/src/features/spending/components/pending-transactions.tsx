@@ -15,6 +15,7 @@ import { Button, Card, Icons, PrivacyAmount, TableCell, TableRow, useDateFormatt
 import { useMerchantFor } from "../lib/merchants";
 import { AccountLogo, AccountMark } from "./account-mark";
 import { MerchantLogo } from "./merchant-logo";
+import { cleanPayee } from "../lib/payee-name";
 
 export interface PendingTransaction {
   id: string;
@@ -64,7 +65,7 @@ function PendingVsPosted({ className }: { className?: string }) {
 function usePendingView(p: PendingTransaction, account: Account | undefined) {
   const { formatDate } = useDateFormatting();
   const merchant = useMerchantFor(p.notes || p.bankText, account, p.amount < 0 ? "WITHDRAWAL" : "DEPOSIT");
-  const name = p.notes || p.bankText;
+  const name = cleanPayee(p.notes || p.bankText);
   return {
     merchant,
     name,

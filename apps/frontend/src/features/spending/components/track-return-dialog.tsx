@@ -50,6 +50,7 @@ import {
 import { MerchantLogo } from "./merchant-logo";
 import { ReturnSteps } from "./return-timeline";
 import { StreamLogo } from "./stream-logo";
+import { cleanPayee } from "../lib/payee-name";
 
 const caps = "text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.08em]";
 const errorText = (e: unknown) => (e as Error)?.message ?? String(e);
@@ -152,7 +153,7 @@ function PickPurchase({ currency, onPick, onClose }: { currency: string; onPick:
             <button key={p.id} type="button" onClick={() => onPick(p)} className="hover:bg-muted/40 flex w-full items-center gap-3 px-3 py-2 text-left transition-colors">
               <PayeeLogo notes={p.notes} accountId={p.accountId} type="WITHDRAWAL" className="h-8 w-8" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">{p.notes || "No description"}</span>
+                <span className="block truncate text-sm">{cleanPayee(p.notes) || "No description"}</span>
                 <span className="text-muted-foreground block truncate text-xs">{[shortDay(p.date), accountName.get(p.accountId)].filter(Boolean).join(" · ")}</span>
               </span>
               <span className="shrink-0 text-sm tabular-nums">
@@ -255,7 +256,7 @@ function ReturnForm({
       <div className="bg-muted/40 flex items-center gap-3 rounded-lg border px-3 py-2.5">
         {item ? <StreamLogo s={item} className="h-9 w-9 text-sm" /> : <PayeeLogo notes={bought.notes} accountId={bought.accountId} type="WITHDRAWAL" />}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-medium">{item?.name || bought.notes || "This purchase"}</div>
+          <div className="truncate text-sm font-medium">{item?.name || cleanPayee(bought.notes) || "This purchase"}</div>
           <div className="text-muted-foreground truncate text-xs">
             {["Bought " + shortDay(bought.date), bought.accountId ? accountName.get(bought.accountId) : null].filter(Boolean).join(" · ")}
           </div>
@@ -420,7 +421,7 @@ export function MoneyInRow({ row, currency, account, hint, look, children }: { r
   return (
     <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md px-2.5 py-2 ${look ? "bg-amber-500/10" : "bg-muted/40"}`}>
       <div className="min-w-0 flex-1 basis-40">
-        <div className="truncate text-sm">{row.notes || "Money in"}</div>
+        <div className="truncate text-sm">{cleanPayee(row.notes) || "Money in"}</div>
         <div className="text-muted-foreground text-xs leading-snug">{[shortDay(row.date), account, hint].filter(Boolean).join(" · ")}</div>
       </div>
       <span className="shrink-0 text-sm tabular-nums" style={{ color: "#16a34a" }}>

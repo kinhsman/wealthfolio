@@ -51,6 +51,7 @@ import { StreamLogo } from "../components/stream-logo";
 import { billMonth, ymd, type BillMonth } from "../lib/bill-calendar";
 import type { BillDue } from "../lib/budget-forecast";
 import { ruleOfferStore } from "../lib/rule-offer";
+import { cleanPayee } from "../lib/payee-name";
 import { FrequencyPicker } from "../components/frequency-picker";
 import {
   EVERY_LABELS,
@@ -546,7 +547,7 @@ export default function SpendingSubscriptionsPage() {
                         {data.leftOut.map((c) => (
                           <div key={c.id} className="flex items-center gap-3 px-4 py-2.5">
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-sm">{c.notes || "No description"}</span>
+                              <span className="block truncate text-sm">{cleanPayee(c.notes) || "No description"}</span>
                               <span className="text-muted-foreground block text-xs">{day(c.date)}</span>
                             </span>
                             <span className="text-muted-foreground text-xs tabular-nums">
@@ -1381,7 +1382,7 @@ function EditStreamDialog({
                     return (
                       <label key={c.id} className={cn("flex cursor-pointer items-center gap-3 px-3 py-2", isOut && "opacity-60")}>
                         <span className="min-w-0 flex-1">
-                          <span className={cn("block truncate text-sm", isOut && "line-through")}>{c.notes || "No description"}</span>
+                          <span className={cn("block truncate text-sm", isOut && "line-through")}>{cleanPayee(c.notes) || "No description"}</span>
                           <span className="text-muted-foreground block truncate text-xs">
                             {[day(c.date), c.accountId ? accountName.get(c.accountId) : null, why].filter(Boolean).join(" · ")}
                           </span>

@@ -13,9 +13,9 @@ describe("cash forecast", () => {
   it("names a payment without the bank's words", () => {
     expect(plainName("Rent received: Zelle payment from FELICIA CRUZ 306")).toBe("Rent received");
     expect(plainName("Mortgage paid (on the Rental page): DIRECT DEBIT US BANK")).toBe("Mortgage paid");
-    expect(plainName("DEBIT CARD PURCHASE TMOBILE*AUTO PAY 800-937-8997 WA")).toBe("Tmobile");
-    expect(plainName("CISCO SYSTEMS IN PAYROLL PPD ID: 9111111101")).toBe("Cisco Systems In Payroll");
-    expect(plainName("DIRECT DEPOSIT CISCO SYSTEMPAYROLL (Cash)")).toBe("Cisco Systempayroll (Cash)");
+    expect(plainName("DEBIT CARD PURCHASE TMOBILE*AUTO PAY 800-937-8997 WA")).toBe("T-Mobile");
+    expect(plainName("CISCO SYSTEMS IN PAYROLL PPD ID: 9111111101")).toBe("Cisco Systems payroll");
+    expect(plainName("DIRECT DEPOSIT CISCO SYSTEMPAYROLL (Cash)")).toBe("Cisco Systems payroll");
     expect(cardWhy("statement")).toBe("statement due");
   });
 });
@@ -55,6 +55,6 @@ describe("cash forecast names and logos (owner, 10-03: some of the bank icons ar
       .toEqual({ label: "Fidelity interest", logo: { url: "https://x/fid.webp", name: "Fidelity", whole: true } });
     expect(forecastLabel(ev({ name: "Mortgage paid (on the Rental page): DIRECT DEBIT US BANK HOME MMTG PYMT (Cash)", accountId: "fid", activityType: "WITHDRAWAL" }), merchants, accounts))
       .toEqual({ label: "US Bank", logo: { url: "/u.png", name: "US Bank", whole: false } });
-    expect(forecastLabel(ev({ name: "DEBIT CARD PURCHASE TMOBILE*AUTO PAY" }), merchants, accounts)).toEqual({ label: "Tmobile", logo: null });
+    expect(forecastLabel(ev({ name: "DEBIT CARD PURCHASE TMOBILE*AUTO PAY" }), merchants, accounts)).toEqual({ label: "T-Mobile", logo: null });
   });
 });

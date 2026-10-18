@@ -44,6 +44,7 @@ import { ReturnBadge } from "./return-badge";
 import { AssetChip } from "@/features/asset-charges/components/asset-chip";
 import { AmazonOrderLine } from "./amazon-order";
 import { useAmazonLinks } from "../lib/amazon";
+import { cleanPayee } from "../lib/payee-name";
 import { CategoryMark } from "./category-chips";
 import { useShownAmount } from "@/lib/display-currency";
 
@@ -182,7 +183,7 @@ function TransactionRowImpl({
           {/* money-hub patch: the owner's merchant logo (lib/merchants.ts). */}
           {merchant ? <MerchantLogo url={merchant.logoUrl} name={merchant.name} whole={merchant.source === "bank"} /> : null}
           {renamed != null || a.notes != null ? (
-            <TruncatedText text={renamed ?? a.notes ?? ""} className={cn("text-sm", (bankLine || amazon) && "max-w-[50%] shrink-0")} />
+            <TruncatedText text={renamed ?? cleanPayee(a.notes)} className={cn("text-sm", (bankLine || amazon) && "max-w-[50%] shrink-0")} />
           ) : (
             <span className="text-muted-foreground text-sm italic">—</span>
           )}

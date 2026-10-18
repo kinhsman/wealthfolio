@@ -36,6 +36,7 @@ import {
   type CountsAsTarget,
 } from "../lib/counts-as";
 import { rulePatternFrom } from "../lib/rule-offer";
+import { cleanPayee } from "../lib/payee-name";
 import { KeywordChips, withTyped } from "./keyword-chips";
 
 const CHOICES: { value: CountsAsChoice; label: string; out: string; in: string }[] = [
@@ -109,7 +110,7 @@ function CountsAsDialog({ target, onClose }: { target: CountsAsTarget; onClose: 
         <DialogHeader>
           <DialogTitle>Counts as</DialogTitle>
           <DialogDescription className="flex items-center gap-2">
-            <span className="min-w-0 truncate">{a.notes}</span>
+            <span className="min-w-0 truncate">{cleanPayee(a.notes)}</span>
             <span className="shrink-0 tabular-nums">
               {out ? "-" : "+"}
               <PrivacyAmount value={Math.abs(a.netAmount)} currency={a.currency} />
@@ -279,7 +280,7 @@ function CountsAsRuleDialog({ offer, onClose }: { offer: CountsAsRuleOffer; onCl
               {items.map((it) => (
                 <label key={it.id} className="flex cursor-pointer items-center gap-3 px-3 py-2.5">
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm">{it.notes}</span>
+                    <span className="block truncate text-sm">{cleanPayee(it.notes)}</span>
                     <span className="text-muted-foreground block truncate text-xs">
                       {[day(it.date), accountName.get(it.accountId), `now ${COUNTS_AS_LABEL[it.now as CountsAsChoice] ?? it.now}`]
                         .filter(Boolean)
