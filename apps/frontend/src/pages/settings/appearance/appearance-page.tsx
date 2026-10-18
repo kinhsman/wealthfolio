@@ -2,6 +2,7 @@ import { Separator } from "@wealthfolio/ui/components/ui/separator";
 import { useTranslation } from "react-i18next";
 import { SettingsHeader } from "../settings-header";
 import { AppearanceForm } from "./appearance-form";
+import { LogoKeyCard } from "./logo-key-card";
 
 export default function SettingsAppearancePage() {
   const { t } = useTranslation();
@@ -13,6 +14,8 @@ export default function SettingsAppearancePage() {
       />
       <Separator />
       <AppearanceForm />
+      <Separator />
+      <LogoKeyCard />
     </div>
   );
 }

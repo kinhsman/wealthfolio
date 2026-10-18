@@ -24,6 +24,8 @@ import {
   type BookingMatch,
   type DayRow,
 } from "../lib/trips";
+import { airlineLogoUrl, airlineOf } from "../lib/airlines";
+import { useLogoKey } from "../lib/logo-key";
 import { Card, KindIcon, Pill } from "./parts";
 
 function statusOf(
@@ -117,7 +119,15 @@ function Detail({
   );
 }
 
+/** A flight row's airline logo address (null: no key, not a flight, or an airline not listed). */
+function airlineLogo(row: DayRow, key: string | null): string | null {
+  if (row.kind !== "flight") return null;
+  const code = airlineOf(row.sub, row.booking.title, row.label);
+  return code ? airlineLogoUrl(code, key) : null;
+}
+
 function Row({
+  logoKey,
   row,
   match,
   money,
@@ -127,6 +137,7 @@ function Row({
   onEdit,
   onRemove,
 }: {
+  logoKey: string | null;
   row: DayRow;
   match: BookingMatch;
   money: ReturnType<typeof useMoney>;
@@ -151,7 +162,10 @@ function Row({
             phone ? "min-h-[44px] py-1" : "min-h-[48px] py-1.5",
           )}
         >
-          <KindIcon kind={row.kind} />
+          <KindIcon
+            kind={row.kind}
+            logo={airlineLogo(row, logoKey)}
+          />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="truncate text-[13.5px]">{row.label}</span>
             {when ? (
@@ -241,7 +255,8 @@ export function BookingsCard({
   const [openKey, setOpenKey] = useState<string | null>(null);
   const days = byDay(dayRows(bookings));
   const undated = bookings.filter((b) => !b.start);
-  const rowProps = { match, money, phone, onEdit, onRemove };
+  const logoKey = useLogoKey();
+  const rowProps = { logoKey, match, money, phone, onEdit, onRemove };
   return (
     <Card className="flex flex-col gap-1.5" bleed>
       <div className="flex items-start justify-between gap-2 px-[18px] pt-3.5 max-md:px-3 max-md:pt-2.5">

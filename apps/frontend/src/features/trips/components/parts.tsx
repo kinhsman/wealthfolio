@@ -1,7 +1,7 @@
 // money-hub patch: Trips, the small pieces its cards share. The card, the box and the window sizes are
 // Maintenance's (one look across the Meadow pages); this adds the kind icons and their colours.
 import { Compass, Utensils } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 import { Icons } from "@wealthfolio/ui";
@@ -27,7 +27,37 @@ export const KIND_COLOR: Record<Kind, string> = {
   other: "var(--m-cat-other, #c9bfae)",
 };
 
-export function KindIcon({ kind, className }: { kind: Kind; className?: string }) {
+export function KindIcon({
+  kind,
+  className,
+  logo: logoUrl,
+}: {
+  kind: Kind;
+  className?: string;
+  /** A flight's airline logo address: it takes the plane's place (the plane stays if the logo does not load). */
+  logo?: string | null;
+}) {
+  const [logoFailed, setLogoFailed] = useState(false);
+  const logo = kind === "flight" && logoUrl && !logoFailed ? logoUrl : null;
+  if (logo)
+    return (
+      <span
+        className={cn(
+          "flex size-[30px] shrink-0 items-center justify-center overflow-hidden rounded-full border border-[var(--m-line,var(--border))] bg-white max-md:size-7",
+          className,
+        )}
+      >
+        <img
+          src={logo}
+          alt=""
+          width={30}
+          height={30}
+          loading="lazy"
+          className="size-full object-contain"
+          onError={() => setLogoFailed(true)}
+        />
+      </span>
+    );
   const cls = "size-4";
   const glyph: ReactNode =
     kind === "flight" ? (

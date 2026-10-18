@@ -121,6 +121,23 @@ const bookings: Booking[] = [
   },
   {
     ...base,
+    id: "b9",
+    kind: "flight",
+    title: "EVA Air flight to Da Nang",
+    sub: "Round trip via Taipei",
+    start: `${start}T23:30`,
+    end: `${end}T09:45`,
+    legs: [
+      { title: "ORD to TPE", sub: "EVA Air BR 55", start: `${start}T23:30`, end: `${end}T05:00` },
+      { title: "TPE to DAD", sub: "EVA Air BR 383", start: `${end}T09:45`, end: `${end}T11:55` },
+    ],
+    confirmation: "24T6LP",
+    party: 1,
+    total: null,
+    paid: "later",
+  },
+  {
+    ...base,
     id: "b2",
     kind: "stay",
     title: "Hotel in Dallas",
@@ -304,6 +321,7 @@ window.fetch = async (input, init) => {
       read: reads[key] ?? { booking: false, why: "Not a booking." },
     });
   }
+  if (url.includes("/api/money-hub/logo-key")) return json({ key: "pk_FHt7GAy8SDi6PcR_DZGWmg" });
   if (url.startsWith("/api/money-hub/")) return json({});
   return realFetch(input, init);
 };

@@ -35,6 +35,7 @@ export default defineConfig({
         "owly-trip": path.resolve(__dirname, "preview/owly-trip.html"),
         trips: path.resolve(__dirname, "preview/trips.html"),
         alerts: path.resolve(__dirname, "preview/alerts.html"),
+        logos: path.resolve(__dirname, "preview/logos.html"),
       },
     },
   },
