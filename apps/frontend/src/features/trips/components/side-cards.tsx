@@ -4,12 +4,16 @@ import { Link } from "react-router-dom";
 
 import { useMoney } from "@/features/meadow-dash/parts";
 import { OwlyTripStrip } from "@/features/spending/components/owly-trip-strip";
+import { MerchantLogo } from "@/features/spending/components/merchant-logo";
+import { useMerchants } from "@/features/spending/lib/merchants";
 import { tripOfEvent, type OwlyTripsAnswer } from "@/features/spending/lib/owly-trips";
 import type { SpendingEvent } from "@/features/spending/types/event";
 import { Icons, Skeleton } from "@wealthfolio/ui";
 
+import { bookingLogo, merchantLogoFor } from "../lib/booking-logo";
+import { useLogoKey } from "../lib/logo-key";
 import { shortDay, type Booking, type BookingMatch, type TripCharge } from "../lib/trips";
-import { Card, Pill } from "./parts";
+import { Card, KindIcon, Pill } from "./parts";
 
 function Title({
   icon,
@@ -45,6 +49,8 @@ export function ChargesCard({
   bookings: Booking[];
 }) {
   const money = useMoney("USD");
+  const logoKey = useLogoKey();
+  const { data: merchants } = useMerchants();
   const claimed = new Map<string, Booking>();
   for (const [bookingId, c] of match.byBooking) {
     const b = bookings.find((x) => x.id === bookingId);
@@ -59,11 +65,29 @@ export function ChargesCard({
         <ul className="flex flex-col">
           {charges.map((c) => {
             const b = claimed.get(c.id);
+            // The logo of the booking that claims the charge (a Hilton merchant shows on "Tru by Hilton"), else the
+            // owner's merchant named in the bank's own words, else a plain card mark.
+            const own = b ? null : merchantLogoFor([c.label], merchants);
             return (
               <li
                 key={c.id}
-                className="grid min-h-[40px] grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 border-b border-[var(--m-line-soft)] py-1 last:border-b-0"
+                className="grid min-h-[44px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-[var(--m-line-soft)] py-1 last:border-b-0"
               >
+                {b ? (
+                  (() => {
+                    const l = bookingLogo(b, [], merchants, logoKey);
+                    return <KindIcon kind={b.kind} merchantLogo={l.own} logo={l.airline} />;
+                  })()
+                ) : own ? (
+                  <MerchantLogo url={own} name="" className="size-[30px] max-md:size-7" />
+                ) : (
+                  <span
+                    aria-hidden
+                    className="flex size-[30px] items-center justify-center rounded-full bg-[var(--m-tile)] text-[var(--m-muted)] max-md:size-7"
+                  >
+                    <Icons.CreditCard className="size-4" />
+                  </span>
+                )}
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate text-[13px]">{c.label}</span>
                   <span className="truncate text-[12px] text-[var(--m-muted)]">

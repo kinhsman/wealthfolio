@@ -6,6 +6,7 @@ import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Icons } from "@wealthfolio/ui";
 
+import { MerchantLogo } from "@/features/spending/components/merchant-logo";
 import type { Kind } from "../lib/trips";
 
 export {
@@ -31,13 +32,24 @@ export function KindIcon({
   kind,
   className,
   logo: logoUrl,
+  merchantLogo,
 }: {
   kind: Kind;
   className?: string;
   /** A flight's airline logo address: it takes the plane's place (the plane stays if the logo does not load). */
   logo?: string | null;
+  /** One of the owner's merchants' logos (already fitted round): it takes the icon's place, before an airline's. */
+  merchantLogo?: string | null;
 }) {
   const [logoFailed, setLogoFailed] = useState(false);
+  if (merchantLogo)
+    return (
+      <MerchantLogo
+        url={merchantLogo}
+        name=""
+        className={cn("size-[30px] max-md:size-7", className)}
+      />
+    );
   const logo = kind === "flight" && logoUrl && !logoFailed ? logoUrl : null;
   if (logo)
     return (

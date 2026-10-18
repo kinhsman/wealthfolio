@@ -140,7 +140,7 @@ const bookings: Booking[] = [
     ...base,
     id: "b2",
     kind: "stay",
-    title: "Hotel in Dallas",
+    title: "Tru by Hilton Plano Hwy 75",
     sub: "2 nights, king room",
     start,
     end,
@@ -322,6 +322,16 @@ window.fetch = async (input, init) => {
     });
   }
   if (url.includes("/api/money-hub/logo-key")) return json({ key: "pk_FHt7GAy8SDi6PcR_DZGWmg" });
+  if (url.includes("/api/money-hub/merchants"))
+    return json([
+      {
+        id: "h",
+        name: "Hilton",
+        pattern: "hilton",
+        patterns: ["hilton"],
+        logoUrl: "https://img.logo.dev/hilton.com?token=pk_FHt7GAy8SDi6PcR_DZGWmg&size=128&format=png",
+      },
+    ]);
   if (url.startsWith("/api/money-hub/")) return json({});
   return realFetch(input, init);
 };
