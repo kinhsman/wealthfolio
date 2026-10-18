@@ -864,11 +864,13 @@ export function BudgetLineChartCard({
           <span data-m-num="side" className="text-foreground text-right text-[15px] font-medium tabular-nums">
             <PrivacyAmount value={sums.room - sums.spentOthers} currency={currency} />
           </span>
+          {/* money-hub patch (owner, 10-17): the two figures read as one; say which is today and which is
+              the month's end. */}
           <span className="text-muted-foreground/80 min-w-0 truncate text-xs tabular-nums">
-            at your usual <PrivacyAmount value={forecastParts.everydayDaily} currency={currency} /> a day
+            if you keep your usual <PrivacyAmount value={forecastParts.everydayDaily} currency={currency} /> a day
           </span>
           <span className="text-muted-foreground/80 whitespace-nowrap text-right text-xs">
-            {sums.fixed > 0 ? "left to spend" : "left of budget"}
+            {sums.fixed > 0 ? "left today" : "of budget left today"}
           </span>
         </div>
         {perDay === null ? null : (

@@ -4,7 +4,8 @@
 // this whole strip opens. The numbers are the page's own: lib/subscriptions.ts totals, and paid and left to
 // pay from lib/bill-calendar.ts, counted the way the Monthly budget card counts them. Paid and left to pay
 // follow the Spending page's time range, and a past range (Last month) has no left to pay, so that tile is hidden (owner, 10-04: "changing the time on top doesnt move the subscription
-// and bills widget numbers"); a month and a year are what repeats, so they do not move with it.
+// and bills widget numbers"); a month and a year are what repeats, so they do not move with it. "Usual month"
+// (owner, 10-17): "A month" beside Paid and Left to pay read as their sum.
 import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -101,7 +102,7 @@ export function SubscriptionsStrip({
               <Stat label={`Paid, ${m.paidCount} of ${m.count}`}>
                 <PrivacyAmount value={m.paidTotal} currency={currency} />
               </Stat>
-              <Stat label="A month">
+              <Stat label="Usual month">
                 <PrivacyAmount value={data.totals.monthly} currency={currency} />
               </Stat>
               <Stat label="A year">
@@ -164,7 +165,7 @@ export function SubscriptionsStrip({
           <Stat label={`Paid, ${m.paidCount} of ${m.count}`}>
             <PrivacyAmount value={m.paidTotal} currency={currency} />
           </Stat>
-          <Stat label="A month">
+          <Stat label="Usual month">
             <PrivacyAmount value={data.totals.monthly} currency={currency} />
           </Stat>
           <div className="min-w-0 max-md:hidden">

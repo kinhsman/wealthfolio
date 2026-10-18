@@ -22,6 +22,9 @@ const UNIT: Record<Granularity, { one: string; many: string }> = {
   month: { one: "month", many: "months" },
 };
 
+/** A bar this many times a middle one, and over the average line, stands out even when nothing is cut. */
+const STANDOUT_TIMES = 4;
+
 /** A round step for a scale of three lines: 1, 2, 2.5 or 5 times a power of ten. */
 function niceStep(raw: number): number {
   if (raw <= 0) return 1;
@@ -91,7 +94,16 @@ export function SpendingByPeriodCard({
     const step = niceStep((outliers ? Math.max(usual, avgValue) * 1.15 : max) / 3);
     const top = step * 3;
     const tall = past.filter((b) => b.value > top).sort((a, b) => b.value - a.value);
-    return { top, step, tall, max };
+    // money-hub patch (owner, 10-17: "No day stands out" beside a $3,138 day): a few bill days lift the
+    // 85th percentile, so no bar gets cut. What stands out is measured against a middle day instead.
+    const middle = sorted[Math.floor((sorted.length - 1) / 2)];
+    const standouts =
+      sorted.length >= 4
+        ? past
+            .filter((b) => b.value > middle * STANDOUT_TIMES && b.value > avgValue)
+            .sort((a, b) => b.value - a.value)
+        : [];
+    return { top, step, tall, max, middle, standouts };
   }, [barData, avgValue]);
 
   const todayKey = useMemo(() => {
@@ -124,8 +136,19 @@ export function SpendingByPeriodCard({
 
   const verdict = (() => {
     if (!chart) return null;
-    const { tall, top } = chart;
+    const { tall, top, middle, standouts } = chart;
     if (tall.length === 0) {
+      if (standouts.length > 0 && standouts.length <= 3) {
+        const names = standouts.map((b) => `${nameOf(b)} (${money(b.value)})`);
+        const list =
+          names.length === 1
+            ? names[0]
+            : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+        return `${list} ${standouts.length === 1 ? "stands" : "stand"} out. A usual ${unit.one} is about ${money(middle)}.`;
+      }
+      if (standouts.length > 3) {
+        return `${standouts.length} ${unit.many} stand out, the biggest ${nameOf(standouts[0])} at ${money(standouts[0].value)}. A usual ${unit.one} is about ${money(middle)}.`;
+      }
       const biggest = barData.reduce((a, b) => (b.value > a.value ? b : a), barData[0]);
       return `No ${unit.one} stands out. The biggest was ${nameOf(biggest)} at ${money(biggest.value)}.`;
     }

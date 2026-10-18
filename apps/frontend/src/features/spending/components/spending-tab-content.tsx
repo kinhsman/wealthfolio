@@ -1828,11 +1828,14 @@ export function CategoryRankedBar({
 
   const { categoryGroup, hasAnyGroup, uncategorizedAmount, top, restAmount, barSegments } = derived;
 
-  const StackedBar = (
+  // money-hub patch (owner, 10-17): with budget groups the bar is cut by group, in the group's colour,
+  // so each piece matches the row under it; without groups, by the top categories.
+  const stackedBar = (segments: CategoryRow[], grouped = false) => (
     <div className="flex h-3.5 w-full gap-[3px]">
-      {barSegments.map((s) => {
+      {segments.map((s) => {
         const share = (s.amount / total) * 100;
-        const color = s.id === "__other__" ? "var(--m-cat-other)" : (s.color ?? themeColor);
+        const color =
+          s.id === "__other__" && !grouped ? "var(--m-cat-other)" : (s.color ?? themeColor);
         return (
           <div
             key={s.id}
@@ -1925,7 +1928,10 @@ export function CategoryRankedBar({
 
     return (
       <div>
-        {StackedBar}
+        {stackedBar(
+          orderedBuckets.map((b) => ({ id: b.id, name: b.name, color: b.color, icon: null, amount: b.total })),
+          true,
+        )}
         <div className="mt-3 space-y-1.5 max-md:mt-2">
           {orderedBuckets.slice(0, 4).map(renderBucket)}
           {orderedBuckets.length > 4 ? (
@@ -1968,7 +1974,7 @@ export function CategoryRankedBar({
   const uncategorizedShare = total > 0 ? (uncategorizedAmount / total) * 100 : 0;
   return (
     <div className="flex flex-col gap-3">
-      {StackedBar}
+      {stackedBar(barSegments)}
 
       <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr))]">
         {top.slice(0, 4).map(renderRow)}
