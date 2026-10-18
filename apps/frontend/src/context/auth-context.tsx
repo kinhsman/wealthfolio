@@ -65,6 +65,31 @@ function clearSsoRedirectGuard() {
   }
 }
 
+/**
+ * Money hub: away from home, money.sanglam.cc sits behind Cloudflare's login
+ * page, so the visitor has already shown their Google account there. The
+ * money-hub service reads Cloudflare's pass and signs that same person in
+ * (lib/ownerLogin.js); at home there is no pass and the sign-in page shows.
+ * Skipped right after Sign out (the guard above is armed then), or signing
+ * out would only bounce straight back in.
+ */
+async function signInThroughCloudflare(): Promise<boolean> {
+  try {
+    if (window.sessionStorage.getItem(SSO_REDIRECT_GUARD_STORAGE_KEY) !== null) return false;
+  } catch {
+    // sessionStorage unavailable: try anyway
+  }
+  try {
+    const res = await fetch("/api/money-hub/auth/cloudflare", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -114,6 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
             if (meRes.ok && !cancelled) {
               clearSsoRedirectGuard();
+              setCookieSession(true);
+            } else if (!cancelled && (await signInThroughCloudflare()) && !cancelled) {
               setCookieSession(true);
             }
           } catch {

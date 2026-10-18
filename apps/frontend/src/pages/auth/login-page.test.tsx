@@ -1,9 +1,7 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { SSO_REDIRECT_GUARD_STORAGE_KEY } from "@/context/auth-context";
-import { LoginPage } from "./login-page";
+import { GOOGLE_SIGN_IN_URL, LoginPage } from "./login-page";
 
 const useAuthMock = vi.hoisted(() => vi.fn());
 
@@ -12,13 +10,11 @@ vi.mock("@/context/auth-context", async (importOriginal) => {
   return { ...actual, useAuth: useAuthMock };
 });
 
-const SSO_LOGIN_URL = "/api/v1/auth/oidc/login";
-
-function ssoOnlyAuth(overrides: object = {}) {
+function auth(overrides: object = {}) {
   return {
     requiresAuth: true,
-    requiresPassword: false,
-    oidcEnabled: true,
+    requiresPassword: true,
+    oidcEnabled: false,
     isAuthenticated: false,
     statusLoading: false,
     loginLoading: false,
@@ -30,58 +26,24 @@ function ssoOnlyAuth(overrides: object = {}) {
   };
 }
 
-describe("LoginPage automatic SSO redirect", () => {
-  const replaceMock = vi.fn();
-
-  beforeEach(() => {
-    window.sessionStorage.clear();
-    useAuthMock.mockReturnValue(ssoOnlyAuth());
-    vi.stubGlobal("location", { href: "http://localhost/", replace: replaceMock });
-  });
-
-  afterEach(() => {
-    replaceMock.mockReset();
-    vi.unstubAllGlobals();
-    window.sessionStorage.clear();
-  });
-
-  it("arms the guard and redirects once when SSO is the only method", () => {
+describe("LoginPage (Google only)", () => {
+  it("offers Continue with Google and no password box, even though the server still has a password", () => {
+    useAuthMock.mockReturnValue(auth());
     render(<LoginPage />);
 
-    expect(replaceMock).toHaveBeenCalledTimes(1);
-    expect(replaceMock).toHaveBeenCalledWith(SSO_LOGIN_URL);
-    expect(window.sessionStorage.getItem(SSO_REDIRECT_GUARD_STORAGE_KEY)).toBe("1");
+    const google = screen.getByRole("link", { name: "Continue with Google" });
+    expect(google).toHaveAttribute("href", GOOGLE_SIGN_IN_URL);
+    expect(GOOGLE_SIGN_IN_URL).toBe("/api/money-hub/auth/google");
+    expect(screen.queryByTestId("login-password-input")).not.toBeInTheDocument();
+    expect(document.querySelector('input[type="password"]')).toBeNull();
   });
 
-  it("offers the manual button instead of restarting SSO after a callback that failed to establish a session", () => {
-    // An armed guard is exactly what a failed round-trip leaves behind: the
-    // automatic redirect set it, the callback returned, but `/auth/me` never
-    // confirmed a session, so nothing cleared it.
-    window.sessionStorage.setItem(SSO_REDIRECT_GUARD_STORAGE_KEY, "1");
-
+  it("shows why the last Google sign-in did not work", () => {
+    useAuthMock.mockReturnValue(
+      auth({ loginError: "Your account is not allowed to access this instance." }),
+    );
     render(<LoginPage />);
 
-    expect(replaceMock).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Sign in with SSO" })).toBeInTheDocument();
-  });
-
-  it("lets the manual SSO button navigate while the guard is armed", async () => {
-    window.sessionStorage.setItem(SSO_REDIRECT_GUARD_STORAGE_KEY, "1");
-    const user = userEvent.setup();
-
-    render(<LoginPage />);
-    await user.click(screen.getByRole("button", { name: "Sign in with SSO" }));
-
-    expect(window.location.href).toBe(SSO_LOGIN_URL);
-    expect(window.sessionStorage.getItem(SSO_REDIRECT_GUARD_STORAGE_KEY)).toBe("1");
-  });
-
-  it("does not redirect while a login error is displayed", () => {
-    useAuthMock.mockReturnValue(ssoOnlyAuth({ loginError: "SSO sign-in failed." }));
-
-    render(<LoginPage />);
-
-    expect(replaceMock).not.toHaveBeenCalled();
-    expect(screen.getByRole("alert")).toHaveTextContent("SSO sign-in failed.");
+    expect(screen.getByRole("alert")).toHaveTextContent("not allowed");
   });
 });

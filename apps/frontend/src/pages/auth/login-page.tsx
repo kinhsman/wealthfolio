@@ -1,71 +1,41 @@
-import { SSO_REDIRECT_GUARD_STORAGE_KEY, useAuth } from "@/context/auth-context";
-import {
-  ApplicationShell,
-  Button,
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  Input,
-} from "@wealthfolio/ui";
-import { FormEvent, useEffect, useState } from "react";
+import { useAuth } from "@/context/auth-context";
+import { ApplicationShell, Button, Card, CardContent, CardHeader, CardTitle } from "@wealthfolio/ui";
 import { useTranslation } from "react-i18next";
 
-const SSO_LOGIN_URL = "/api/v1/auth/oidc/login";
-
 /**
- * Arm the one-shot redirect guard before navigating. Returns false when the
- * guard is already armed (a previous attempt has not been confirmed by
- * `/auth/me` yet, or the user logged out) or when sessionStorage cannot hold
- * it — in both cases the automatic redirect must not fire, or a failed
- * callback would bounce through the IdP forever.
+ * Money hub: Google is the only way in (owner, 10-18: "no password login at
+ * all"). The money-hub service checks the Google account against
+ * MONEY_LOGIN_EMAILS and hands back the Wealthfolio session; a visitor who
+ * already passed Cloudflare's login page never sees this page (auth-context).
  */
-function armSsoRedirectGuard(): boolean {
-  try {
-    const storage = window.sessionStorage;
-    if (storage.getItem(SSO_REDIRECT_GUARD_STORAGE_KEY) !== null) return false;
-    storage.setItem(SSO_REDIRECT_GUARD_STORAGE_KEY, "1");
-    return storage.getItem(SSO_REDIRECT_GUARD_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
+export const GOOGLE_SIGN_IN_URL = "/api/money-hub/auth/google";
+
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 48 48" className="h-5 w-5" aria-hidden="true">
+      <path
+        fill="#EA4335"
+        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+      />
+      <path
+        fill="#4285F4"
+        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+      />
+      <path
+        fill="#34A853"
+        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+      />
+    </svg>
+  );
 }
 
 export function LoginPage() {
   const { t } = useTranslation();
-  const {
-    login,
-    loginLoading,
-    loginError,
-    clearError,
-    requiresPassword,
-    oidcEnabled,
-    statusLoading,
-  } = useAuth();
-  const [password, setPassword] = useState("");
-
-  useEffect(() => {
-    if (statusLoading || !oidcEnabled || requiresPassword) return;
-    // An explicit callback error must stay visible instead of bouncing back out.
-    if (loginError) return;
-    if (!armSsoRedirectGuard()) return;
-    // replace() keeps the transient login page out of the back-button history.
-    window.location.replace(SSO_LOGIN_URL);
-  }, [statusLoading, oidcEnabled, requiresPassword, loginError]);
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!password.trim()) {
-      return;
-    }
-    try {
-      await login(password);
-      setPassword("");
-    } catch (error) {
-      console.error("Login failed", error);
-    }
-  };
+  const { loginError } = useAuth();
 
   return (
     <ApplicationShell className="fixed inset-0 flex items-center justify-center p-6">
@@ -84,77 +54,20 @@ export function LoginPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6">
-              {requiresPassword ? (
-                <form className="space-y-8" onSubmit={handleSubmit}>
-                  <div className="space-y-2">
-                    <Input
-                      data-testid="login-password-input"
-                      id="password"
-                      type="password"
-                      value={password}
-                      autoComplete="current-password"
-                      onChange={(event) => {
-                        if (loginError) {
-                          clearError();
-                        }
-                        setPassword(event.target.value);
-                      }}
-                      disabled={loginLoading}
-                      required
-                      placeholder={t("auth:login.passwordPlaceholder")}
-                      className="h-12 rounded-full shadow-none"
-                    />
-                    {loginError ? (
-                      <p className="text-destructive text-sm" role="alert">
-                        {loginError}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <Button
-                    data-testid="login-submit-button"
-                    type="submit"
-                    className="w-full"
-                    disabled={loginLoading}
-                  >
-                    {loginLoading ? t("auth:login.signingIn") : t("auth:login.signIn")}
-                  </Button>
-                </form>
-              ) : null}
-
-              {requiresPassword && oidcEnabled ? (
-                <div className="flex items-center gap-3">
-                  <span className="bg-border h-px flex-1" />
-                  <span className="text-muted-foreground text-xs">{t("auth:login.or")}</span>
-                  <span className="bg-border h-px flex-1" />
-                </div>
-              ) : null}
-
-              {oidcEnabled ? (
-                <div className="space-y-2">
-                  <Button
-                    type="button"
-                    variant={requiresPassword ? "outline" : "default"}
-                    className="w-full"
-                    onClick={() => {
-                      // Deliberate click: navigates regardless of the guard, which
-                      // only `/auth/me` confirming a session may clear.
-                      window.location.href = SSO_LOGIN_URL;
-                    }}
-                  >
-                    {t("auth:login.signInWithSso")}
-                  </Button>
-                  {!requiresPassword && loginError ? (
-                    <p className="text-destructive text-center text-sm" role="alert">
-                      {loginError}
-                    </p>
-                  ) : null}
-                </div>
+            <div className="space-y-3">
+              <Button asChild variant="outline" className="h-12 w-full gap-3 rounded-full">
+                <a href={GOOGLE_SIGN_IN_URL} data-testid="login-google-button">
+                  <GoogleMark />
+                  Continue with Google
+                </a>
+              </Button>
+              {loginError ? (
+                <p className="text-destructive text-center text-sm" role="alert">
+                  {loginError}
+                </p>
               ) : null}
             </div>
           </CardContent>
-          <CardFooter className="text-muted-foreground flex flex-col gap-2 text-center text-xs"></CardFooter>
         </Card>
       </div>
     </ApplicationShell>
