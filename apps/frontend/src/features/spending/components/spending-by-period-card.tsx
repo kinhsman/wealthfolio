@@ -157,6 +157,16 @@ export function SpendingByPeriodCard({
   const labelEvery = granularity === "day" ? 7 : Math.max(1, Math.ceil(barData.length / 6));
   const hasFuture = barData.some((b) => b.future);
 
+  // money-hub patch (owner, 10-18): when one day is a big share of the period, say how big.
+  const periodTotal = barData.reduce((sum, b) => (b.future ? sum : sum + Math.max(0, b.value)), 0);
+  const shareNote = (biggest: PeriodBar | undefined) => {
+    if (!biggest || periodTotal <= 0) return "";
+    const share = biggest.value / periodTotal;
+    return share >= 0.25
+      ? ` That one ${unit.one} is ${Math.round(share * 100)}% of the ${granularity === "month" ? "total" : "spending"}.`
+      : "";
+  };
+
   const verdict = (() => {
     if (!chart) return null;
     const { tall, top, middle, standouts } = chart;
@@ -167,7 +177,7 @@ export function SpendingByPeriodCard({
           names.length === 1
             ? names[0]
             : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-        return `${list} ${standouts.length === 1 ? "stands" : "stand"} out. A usual ${unit.one} is about ${money(middle)}.`;
+        return `${list} ${standouts.length === 1 ? "stands" : "stand"} out. A usual ${unit.one} is about ${money(middle)}.${shareNote(standouts[0])}`;
       }
       if (standouts.length > 3) {
         return `${standouts.length} ${unit.many} stand out, the biggest ${nameOf(standouts[0])} at ${money(standouts[0].value)}. A usual ${unit.one} is about ${money(middle)}.`;
@@ -182,9 +192,9 @@ export function SpendingByPeriodCard({
         names.length === 1
           ? names[0]
           : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-      return `${lead} The tall ${tall.length === 1 ? "bar is" : "bars are"} ${list}.`;
+      return `${lead} The tall ${tall.length === 1 ? "bar is" : "bars are"} ${list}.${shareNote(tall[0])}`;
     }
-    return `${lead} ${tall.length} ${unit.many} went over, the biggest ${nameOf(tall[0])} at ${money(tall[0].value)}.`;
+    return `${lead} ${tall.length} ${unit.many} went over, the biggest ${nameOf(tall[0])} at ${money(tall[0].value)}.${shareNote(tall[0])}`;
   })();
 
   return (

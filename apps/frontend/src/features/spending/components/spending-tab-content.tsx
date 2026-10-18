@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FC } from "react";
+import { useCallback, useMemo, useState, type FC } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
@@ -1808,7 +1808,6 @@ export function CategoryRankedBar({
   groupRows = [],
   hasNoIncludedAccounts,
   activityHrefFor,
-  expandAll = false,
 }: {
   rows: CategoryRow[];
   total: number;
@@ -1831,7 +1830,8 @@ export function CategoryRankedBar({
   // money-hub patch (owner, 10-18): on a desktop the bar above the list is a donut; tapping an arc opens that
   // group's categories in the list. A phone keeps the bar.
   const isMobile = useIsMobileViewport();
-  const [focusId, setFocusId] = useState<string | null>(null);
+  // Which group is open: undefined = the biggest one (the default), null = none.
+  const [openId, setOpenId] = useState<string | null | undefined>(undefined);
   // Memoize derivations so we don't rebuild the Map + reduce + slices on every
   // parent re-render — this card lives inside a chart-heavy page.
   const derived = useMemo(() => {
@@ -1897,7 +1897,11 @@ export function CategoryRankedBar({
   );
 
   const DONUT_FALLBACK = ["#4cc38a", "#e8b04a", "#3b82f6", "#c084fc", "#2dd4bf", "#fb923c", "#f2705e"];
-  const donut = (segments: CategoryRow[], grouped = false) => (
+  const donut = (
+    segments: CategoryRow[],
+    grouped = false,
+    opts: { activeId?: string | null; centerLabel?: string; centerValue?: string } = {},
+  ) => (
     <WhereDonut
       segments={segments.map((s, i) => ({
         id: s.id,
@@ -1910,8 +1914,11 @@ export function CategoryRankedBar({
       }))}
       total={total}
       currency={currency}
-      activeId={grouped ? focusId : null}
-      onSelect={grouped ? (id) => setFocusId((cur) => (cur === id ? null : id)) : undefined}
+      activeId={opts.activeId ?? null}
+      onSelect={grouped ? (id) => setOpenId(opts.activeId === id ? null : id) : undefined}
+      size={isMobile ? 112 : 148}
+      centerLabel={opts.centerLabel}
+      centerValue={opts.centerValue}
     />
   );
 
@@ -1974,37 +1981,66 @@ export function CategoryRankedBar({
     // from the backend (mockup convention), and the synthetic "Other" bucket
     // naturally lands last because it's only created on demand.
     const orderedBuckets = Array.from(buckets.values()).filter((b) => b.total > 0);
-    // money-hub patch: on a phone the first four show and the rest fold (approved phone design, 10-02).
-    const renderBucket = (bucket: (typeof orderedBuckets)[number]) => (
-      <GroupedCategoryBlock
-        key={bucket.id}
-        bucket={bucket}
-        total={total}
-        currency={currency}
-        themeColor={themeColor}
-        activityHrefFor={activityHrefFor}
-        defaultExpanded={expandAll}
-        focused={focusId === bucket.id}
-      />
-    );
+    // money-hub patch (owner, 10-18, the approved "Where it went" design): the donut with the groups beside
+    // it (a phone too); the open group (the biggest by default) names the middle and shows its categories
+    // under the row. Tap a group, or its arc, to open it; tap it again to close.
+    const biggestId = orderedBuckets.reduce((m, b) => (b.total > m.total ? b : m), orderedBuckets[0])?.id;
+    const activeGroupId = openId === undefined ? (biggestId ?? null) : openId;
+    const openBucket = orderedBuckets.find((b) => b.id === activeGroupId);
     const groupSegments = orderedBuckets.map((b) => ({ id: b.id, name: b.name, color: b.color, icon: null, amount: b.total }));
+    const money = (v: number) =>
+      isBalanceHidden
+        ? "••••"
+        : isMobile
+          ? formatting.formatCompactAmount(v, currency)
+          : formatting.formatRoundedAmount(v, currency);
 
     return (
-      <div className={cn(!isMobile && "flex flex-col items-center gap-4")}>
-        {isMobile ? stackedBar(groupSegments, true) : donut(groupSegments, true)}
-        <div className={cn("space-y-1.5 max-md:mt-2", isMobile ? "mt-3" : "w-full min-w-0")}>
-          {orderedBuckets.slice(0, 4).map(renderBucket)}
-          {orderedBuckets.length > 4 ? (
-            <PhoneFold
-              id="where-it-went"
-              closedLabel={`Show ${orderedBuckets.length - 4} more`}
-              openLabel="Show less"
-              className="!mt-2.5 -mb-2.5"
-            >
-              {orderedBuckets.slice(4).map(renderBucket)}
-            </PhoneFold>
-          ) : null}
+      <div>
+        <div className="flex items-center gap-3 md:gap-5">
+          {donut(groupSegments, true, {
+            activeId: openBucket?.id ?? null,
+            centerLabel: openBucket?.name ?? "spent",
+            centerValue: openBucket
+              ? numberFormatting.formatPercent(openBucket.total / total, { digits: 1 })
+              : undefined,
+          })}
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            {orderedBuckets.map((b) => {
+              const isOpen = b.id === openBucket?.id;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => setOpenId(isOpen ? null : b.id)}
+                  aria-expanded={isOpen}
+                  className="flex min-h-9 w-full items-center gap-2 rounded-xl bg-[var(--m-tile)] px-3 py-1 text-left transition-opacity hover:opacity-80"
+                >
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: b.color ?? themeColor }} />
+                  <span className="text-foreground min-w-0 flex-1 truncate text-[13px] font-medium">{b.name}</span>
+                  <Icons.ChevronDown
+                    className={cn("text-muted-foreground/70 h-3 w-3 shrink-0 transition-transform", isOpen && "rotate-180")}
+                  />
+                  <span className="text-muted-foreground text-right text-[11.5px] tabular-nums">
+                    {numberFormatting.formatPercent(b.total / total, { digits: 1 })}
+                  </span>
+                  <span className="text-foreground min-w-[44px] text-right text-[13px] font-medium tabular-nums">
+                    {money(b.total)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+        {openBucket ? (
+          <GroupCategoryList
+            bucket={openBucket}
+            total={total}
+            currency={currency}
+            themeColor={themeColor}
+            activityHrefFor={activityHrefFor}
+          />
+        ) : null}
       </div>
     );
   }
@@ -2076,14 +2112,12 @@ export function CategoryRankedBar({
   );
 }
 
-function GroupedCategoryBlock({
+function GroupCategoryList({
   bucket,
   total,
   currency,
   themeColor,
   activityHrefFor,
-  defaultExpanded = false,
-  focused = false,
 }: {
   bucket: {
     id: string;
@@ -2096,16 +2130,8 @@ function GroupedCategoryBlock({
   currency: string;
   themeColor: string;
   activityHrefFor: (id: string) => string;
-  defaultExpanded?: boolean;
-  /** money-hub patch (owner, 10-18): its donut arc was tapped, so it opens. */
-  focused?: boolean;
 }) {
   const numberFormatting = useNumberFormatting();
-  const [expanded, setExpanded] = useState(defaultExpanded);
-  useEffect(() => {
-    if (focused) setExpanded(true);
-  }, [focused]);
-  const share = total > 0 ? (bucket.total / total) * 100 : 0;
   const accent = bucket.color ?? themeColor;
   // Sort categories by spend descending, but always pin the uncategorized
   // bucket to the end — it's a "to-do" row, not a normal category.
@@ -2120,63 +2146,33 @@ function GroupedCategoryBlock({
   );
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
-        className="flex min-h-11 w-full items-center gap-2.5 rounded-xl bg-[var(--m-tile)] px-3 py-1 transition-opacity hover:opacity-80"
-      >
-        <Icons.ChevronRight
-          className={cn(
-            "text-muted-foreground/70 h-3 w-3 shrink-0 transition-transform",
-            expanded && "rotate-90",
-          )}
-        />
-        <span className="block h-6 w-2 shrink-0 rounded-[3px]" style={{ backgroundColor: accent }} />
-        <span className="text-foreground min-w-0 flex-1 truncate text-left text-[13px]">
-          {bucket.name}
-        </span>
-        <span className="text-muted-foreground w-[52px] text-right text-xs tabular-nums">
-          {numberFormatting.formatPercent(share / 100, { digits: 1 })}
-        </span>
-        <span className="text-foreground w-[92px] text-right text-[13px] font-medium tabular-nums">
-          <PrivacyAmount value={bucket.total} currency={currency} />
-        </span>
-      </button>
-      {expanded && (
-        <div className="mt-1 space-y-0.5 pl-8 pr-3">
-          {sortedCats.map((cat) => {
-            const catShare = total > 0 ? (cat.amount / total) * 100 : 0;
-            const isUncategorized = cat.id === "__uncategorized__";
-            const to = activityHrefFor(cat.id);
-            const dotColor = cat.color ?? accent;
-            return (
-              <Link
-                key={cat.id}
-                to={to}
-                className="hover:bg-muted/40 flex items-center gap-2.5 rounded-md px-1 py-1 transition-colors"
-              >
-                {isUncategorized ? (
-                  <Icons.AlertCircle className="h-3 w-3 shrink-0 text-[var(--m-warn)]" />
-                ) : (
-                  // money-hub patch: the category's icon in its colour, not a dot (owner, 10-02: "where is the icons").
-                  <CategoryMark icon={cat.icon} color={dotColor} />
-                )}
-                <span className="text-foreground min-w-0 flex-1 truncate text-[12.5px]">
-                  {cat.name}
-                </span>
-                <span className="text-muted-foreground w-[52px] text-right text-xs tabular-nums">
-                  {numberFormatting.formatPercent(catShare / 100, { digits: 1 })}
-                </span>
-                <span className="text-foreground w-[92px] text-right text-[12.5px] tabular-nums">
-                  <PrivacyAmount value={cat.amount} currency={currency} />
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      )}
+    <div className="mt-2 space-y-0.5 px-1">
+      {sortedCats.map((cat) => {
+        const catShare = total > 0 ? (cat.amount / total) * 100 : 0;
+        const isUncategorized = cat.id === "__uncategorized__";
+        const dotColor = cat.color ?? accent;
+        return (
+          <Link
+            key={cat.id}
+            to={activityHrefFor(cat.id)}
+            className="hover:bg-muted/40 flex items-center gap-2.5 rounded-md px-1 py-1 transition-colors"
+          >
+            {isUncategorized ? (
+              <Icons.AlertCircle className="h-3 w-3 shrink-0 text-[var(--m-warn)]" />
+            ) : (
+              // money-hub patch: the category's icon in its colour, not a dot (owner, 10-02: "where is the icons").
+              <CategoryMark icon={cat.icon} color={dotColor} />
+            )}
+            <span className="text-foreground min-w-0 flex-1 truncate text-[12.5px]">{cat.name}</span>
+            <span className="text-muted-foreground w-[52px] text-right text-xs tabular-nums">
+              {numberFormatting.formatPercent(catShare / 100, { digits: 1 })}
+            </span>
+            <span className="text-foreground w-[92px] text-right text-[12.5px] tabular-nums">
+              <PrivacyAmount value={cat.amount} currency={currency} />
+            </span>
+          </Link>
+        );
+      })}
     </div>
   );
 }

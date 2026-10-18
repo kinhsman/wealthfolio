@@ -8,8 +8,6 @@ export interface DonutSegment {
   amount: number;
 }
 
-const SIZE = 168;
-const STROKE = 22;
 const GAP = 2.5;
 
 /**
@@ -23,6 +21,8 @@ export function WhereDonut({
   activeId,
   onSelect,
   centerLabel = "spent",
+  centerValue,
+  size = 168,
 }: {
   segments: DonutSegment[];
   total: number;
@@ -30,9 +30,14 @@ export function WhereDonut({
   activeId?: string | null;
   onSelect?: (id: string) => void;
   centerLabel?: string;
+  /** Replaces the total in the middle (the open group's share). */
+  centerValue?: string;
+  size?: number;
 }) {
+  const SIZE = size;
+  const STROKE = Math.round(size * 0.13);
   const numberFormatting = useNumberFormatting();
-  const r = (SIZE - STROKE) / 2;
+  const r = (SIZE - STROKE - 4) / 2; // room for the open arc, which is drawn 4px thicker
   const c = 2 * Math.PI * r;
   const sum = segments.reduce((s, x) => s + x.amount, 0);
   let offset = 0;
@@ -68,10 +73,10 @@ export function WhereDonut({
           : null}
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="text-foreground text-[17px] font-medium tabular-nums">
-          <PrivacyAmount value={total} currency={currency} />
+        <span className={cn("text-foreground font-medium tabular-nums", size < 130 ? "text-[14px]" : "text-[17px]")}>
+          {centerValue ?? <PrivacyAmount value={total} currency={currency} />}
         </span>
-        <span className="text-muted-foreground text-[11.5px]">{centerLabel}</span>
+        <span className="text-muted-foreground max-w-[80%] truncate text-[11.5px]">{centerLabel}</span>
       </div>
     </div>
   );
