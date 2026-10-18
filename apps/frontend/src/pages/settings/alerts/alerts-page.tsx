@@ -34,8 +34,10 @@ import {
   CARD_ALERT_LABELS,
   DUE_STEPS,
   LOAN_ALERT_LABELS,
+  CHECKIN_STEPS,
   RECEIPT_ALERT_LABELS,
   RENEW_STEPS,
+  TRIP_ALERT_LABELS,
   UPKEEP_ALERT_LABELS,
   UPKEEP_STEPS,
   CONNECTION_ALERT_LABELS,
@@ -50,6 +52,7 @@ import {
   type LoanAlertKind,
   type UpkeepAlertKind,
   type ReceiptAlertKind,
+  type TripAlertKind,
   type ConnectionAlertKind,
   type MoneyAlertGroup,
   type RecapAlertKind,
@@ -904,6 +907,37 @@ export default function AlertsSettingsPage() {
                         ))}
                       </select>
                       <span className="text-muted-foreground">before a job is due</span>
+                    </label>
+                  }
+                />
+              ) : null}
+              {more.trips ? (
+                <GroupAlerts<TripAlertKind>
+                  icon={<Icons.Plane className="text-muted-foreground size-4 shrink-0" />}
+                  title="Trips"
+                  to="/trips"
+                  text="Time to check in for a flight, with its confirmation code"
+                  on={more.trips.alerts.on !== false}
+                  kinds={more.trips.alerts}
+                  labels={TRIP_ALERT_LABELS}
+                  busyKey="trips"
+                  busy={busy}
+                  onSwitch={(patch) => setMore("trips", patch)}
+                  onTest={(k) => testMore("trips", k)}
+                  extra={
+                    <label className="flex flex-wrap items-center gap-2">
+                      <span className="text-muted-foreground">Remind</span>
+                      <select
+                        value={more.trips.hoursBefore}
+                        disabled={!!busy}
+                        onChange={(e) => setMore("trips", { hoursBefore: Number(e.target.value) })}
+                        className="h-8 rounded-md border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+                      >
+                        {[...new Set([...CHECKIN_STEPS, more.trips.hoursBefore])].sort((a, b) => a - b).map((h) => (
+                          <option key={h} value={h}>{`${h} hours`}</option>
+                        ))}
+                      </select>
+                      <span className="text-muted-foreground">before a flight leaves</span>
                     </label>
                   }
                 />

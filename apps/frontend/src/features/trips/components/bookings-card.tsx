@@ -58,6 +58,7 @@ function Detail({
     ...(b.party ? [{ k: "Party", v: String(b.party) }] : []),
     ...(b.place ? [{ k: "Place", v: b.place }] : []),
     ...(b.total !== null ? [{ k: "Total", v: money.cents(b.total) }] : []),
+    ...(b.kind === "flight" && b.checkinHours ? [{ k: "Check-in reminder", v: `${b.checkinHours} hours before` }] : []),
     ...(b.freeCancelUntil ? [{ k: "Free cancel until", v: shortDay(b.freeCancelUntil) }] : []),
     ...b.facts,
   ];

@@ -15,6 +15,7 @@ import {
 } from "@wealthfolio/ui";
 
 import {
+  CHECKIN_CHOICES,
   KIND_LABEL,
   shortDay,
   type Booking,
@@ -61,6 +62,7 @@ function Form({
   const [paid, setPaid] = useState<Paid>(booking?.paid ?? "unknown");
   const [activityId, setActivityId] = useState(booking?.activityId ?? "");
   const [note, setNote] = useState(booking?.note ?? "");
+  const [checkin, setCheckin] = useState(booking?.checkinHours ? String(booking.checkinHours) : "");
   const [busy, setBusy] = useState(false);
   const bad = !title.trim() || (s.day && e.day && e.day < s.day);
 
@@ -78,6 +80,7 @@ function Form({
       party: party ? Number(party) : null,
       total: total.trim() ? Number(total) : null,
       paid,
+      checkinHours: kind === "flight" && checkin ? Number(checkin) : null,
       activityId: activityId || null,
       note: note.trim(),
     });
@@ -222,6 +225,20 @@ function Form({
           </select>
         </Field>
       </div>
+      {kind === "flight" ? (
+        <Field label="Check-in reminder">
+          <select
+            className={fieldClass}
+            value={checkin}
+            onChange={(x) => setCheckin(x.target.value)}
+          >
+            <option value="">Same as Settings, Alerts</option>
+            {CHECKIN_CHOICES.map((h) => (
+              <option key={h} value={h}>{`${h} hours before it leaves`}</option>
+            ))}
+          </select>
+        </Field>
+      ) : null}
       <Field label="Note">
         <input
           className={fieldClass}

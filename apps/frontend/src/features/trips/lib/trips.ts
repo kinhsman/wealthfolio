@@ -59,6 +59,8 @@ export interface Booking {
   total: number | null;
   currency: string;
   paid: Paid;
+  /** A flight only: hours before it leaves that its check-in reminder comes; null = the setting on Settings, Alerts. */
+  checkinHours: number | null;
   freeCancelUntil: string | null;
   facts: Fact[];
   activityId: string | null;
@@ -72,6 +74,9 @@ export interface Booking {
 export type BookingInput = Partial<
   Omit<Booking, "id" | "source" | "createdAt" | "updatedAt" | "eventId">
 > & { eventId?: string; source?: { mailboxId: string; msgId: string } | null };
+
+/** Hours before takeoff a flight's own check-in reminder can be set to (airlines differ). */
+export const CHECKIN_CHOICES = [12, 24, 36, 48, 72, 96];
 
 export interface TripsStatus {
   mailboxes: { id: string; email: string }[];

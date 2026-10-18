@@ -11,6 +11,7 @@ export type CardAlertKind = "dueSoon" | "overdue";
 export type LoanAlertKind = "renewSoon" | "renewToday";
 export type UpkeepAlertKind = "soon" | "overdue" | "miles";
 export type ReceiptAlertKind = "filed";
+export type TripAlertKind = "checkin";
 
 type Switches<K extends string> = { on: boolean } & Record<K, boolean>;
 
@@ -27,11 +28,13 @@ export interface MoneyAlertsView {
   upkeep?: { alerts: Switches<UpkeepAlertKind>; daysBefore: number };
   /** Optional: a service from before the receipt alert sends none. */
   receipts?: { alerts: Switches<ReceiptAlertKind> };
+  /** Optional: a service from before the flight check-in reminder sends none. */
+  trips?: { alerts: Switches<TripAlertKind>; hoursBefore: number };
   went?: { discord: boolean; ntfy: boolean };
   sample?: string;
 }
 
-export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap" | "cards" | "loans" | "upkeep" | "receipts";
+export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap" | "cards" | "loans" | "upkeep" | "receipts" | "trips";
 
 const BASE = "/api/money-hub/money-alerts";
 export const MONEY_ALERTS_KEY = ["money-hub", "money-alerts"] as const;
@@ -139,3 +142,11 @@ export const UPKEEP_ALERT_LABELS: Record<UpkeepAlertKind, { title: string; text:
 
 /** How many days before a job is due the reminder comes, for the picker. */
 export const UPKEEP_STEPS = [3, 7, 10, 14, 21, 30];
+
+// Owner, 10-17: "checking reminders for flights from trips ... 24-48 hrs before departure time" (the Trips page, Flight bookings).
+export const TRIP_ALERT_LABELS: Record<TripAlertKind, { title: string; text: string }> = {
+  checkin: { title: "Flight check-in", text: "A flight on Trips leaving within the hours above, or its own hours set on the flight, with its confirmation code. Once per flight." },
+};
+
+/** How many hours before a flight leaves the check-in reminder comes, for the picker (airlines open check-in 24 to 48 hours ahead). */
+export const CHECKIN_STEPS = [24, 30, 36, 42, 48];

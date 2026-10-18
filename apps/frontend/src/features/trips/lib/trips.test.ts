@@ -33,6 +33,7 @@ const base: Booking = {
   total: null,
   currency: "USD",
   paid: "unknown",
+  checkinHours: null,
   freeCancelUntil: null,
   facts: [],
   activityId: null,
