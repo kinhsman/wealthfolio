@@ -172,7 +172,7 @@ const bookings: Booking[] = [
     legs: [
       {
         title: "ORD to DFW",
-        sub: "Frontier F9 1227",
+        sub: "Frontier 1227",
         start: `${start}T06:05`,
         end: `${start}T08:40`,
       },

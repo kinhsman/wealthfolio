@@ -14,6 +14,11 @@ describe("routeOf / carrierOf", () => {
     expect(carrierOf("EVA Air BR 55")).toEqual({ carrier: "EVA Air", number: "BR55" });
     expect(carrierOf("Frontier F9 1227")).toEqual({ carrier: "Frontier", number: "F9 1227".replace(" ", "") });
     expect(carrierOf("Frontier")).toEqual({ carrier: "Frontier", number: "" });
+    // The owner's real Frontier booking names the airline and no code.
+    expect(carrierOf("Frontier 3243")).toEqual({ carrier: "Frontier", number: "F93243" });
+    expect(carrierOf("United Airlines 1234")).toEqual({ carrier: "United Airlines", number: "UA1234" });
+    expect(carrierOf("Some Air 12")).toEqual({ carrier: "Some Air 12", number: "" });
+    expect(carrierOf("Gate 12")).toEqual({ carrier: "Gate 12", number: "" });
   });
 });
 

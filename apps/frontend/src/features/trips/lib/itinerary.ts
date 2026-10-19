@@ -2,6 +2,7 @@
 // like this"). A booking's legs ("ORD to TPE", "TPE to DAD") chain into one journey when each lands where the next
 // leaves, so a connection reads as one trip with a layover instead of two unrelated rows. Pure; only types come from
 // trips.ts (trips.ts imports this file for its day rows).
+import { airlineOf } from "./airlines";
 import type { Leg } from "./trips";
 
 /** Airports by the zone their clocks keep; the times a flight prints are the airport's own. */
@@ -139,10 +140,17 @@ export function routeOf(title: string): { from: string; to: string } | null {
   return m ? { from: m[1], to: m[2] } : null;
 }
 
-/** "EVA Air BR 55" gives the carrier and the number: the last two-character code and digits are the number. */
+/**
+ * "EVA Air BR 55" gives the carrier and the number: the last two-character code and digits are the number. A line
+ * with the airline's name and no code, "Frontier 3243", takes the listed airline's code: F93243.
+ */
 export function carrierOf(sub: string): { carrier: string; number: string } {
-  const m = /^(.*?)[\s,;·-]*\b([A-Z][A-Z0-9]|[0-9][A-Z])\s?(\d{1,4})\s*$/.exec(sub.trim());
-  return m ? { carrier: m[1].trim(), number: `${m[2]}${m[3]}` } : { carrier: sub.trim(), number: "" };
+  const t = sub.trim();
+  const m = /^(.*?)[\s,;·-]*\b([A-Z][A-Z0-9]|[0-9][A-Z])\s?(\d{1,4})\s*$/.exec(t);
+  if (m) return { carrier: m[1].trim(), number: `${m[2]}${m[3]}` };
+  const named = /^(.*?)[\s,;·#-]*(\d{1,4})\s*$/.exec(t);
+  const code = named && named[1] ? airlineOf(named[1]) : null;
+  return named && code ? { carrier: named[1].trim(), number: `${code}${named[2]}` } : { carrier: t, number: "" };
 }
 
 const sane = (ms: number | null) => (ms !== null && ms > 0 && ms < 48 * 3_600_000 ? Math.round(ms / 60_000) : null);
