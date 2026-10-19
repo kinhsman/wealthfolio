@@ -27,6 +27,7 @@ import {
 import { useMerchants, type Merchant } from "@/features/spending/lib/merchants";
 
 import { bookingLogo } from "../lib/booking-logo";
+import { useFlightTrack } from "../lib/flight-track";
 import { useLogoKey } from "../lib/logo-key";
 import { JourneyHeading, JourneyTimeline } from "./flight-itinerary";
 import { Card, KindIcon, Pill } from "./parts";
@@ -149,6 +150,8 @@ function Row({
   const logos = bookingLogo(b, [row.sub, row.label], merchants, logoKey);
   const status = row.lead ? statusOf(b, match.byBooking.has(b.id), phone) : null;
   const when = [row.time, row.sub].filter(Boolean).join(", ");
+  // Asks only while a flight of this booking is about to leave or in the air (see lib/flight-track.ts).
+  const track = useFlightTrack(b).data;
   return (
     <li className={cn("rounded-xl", open && "bg-[var(--m-tile)]")}>
       <div className="flex items-center gap-1">
@@ -168,6 +171,7 @@ function Row({
               index={row.journey.index}
               count={row.journey.count}
               phone={phone}
+              track={track}
             />
           ) : (
             <span className="flex min-w-0 flex-1 flex-col">
@@ -238,7 +242,7 @@ function Row({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {open && row.journey ? <JourneyTimeline journey={row.journey.value} phone={phone} /> : null}
+      {open && row.journey ? <JourneyTimeline journey={row.journey.value} phone={phone} track={track} /> : null}
       {open && (row.lead || !row.journey) ? (
         <Detail b={b} match={match} money={money} phone={phone} />
       ) : null}

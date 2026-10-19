@@ -1,5 +1,6 @@
 // money-hub patch: the Trips page with fixture data, for a true-size picture before shipping (vite.preview.config.ts).
-// ?theme=light|dark; ?case=full (default) | empty (no bookings) | none (no trips). The Dallas figures are the owner's
+// ?theme=light|dark; ?case=full (default) | empty (no bookings) | none (no trips) | live (the EVA flight is in the air
+// now; ?phase=air (default) | quiet | gate | waiting | landed | off picks what the live panel says). The Dallas figures are the owner's
 // real ones (Frontier $115.98, Citi Travel $121.86 = 141.77 + 18.43 - 38.34, Owly 3 hand bills $715.43); flight
 // numbers, codes, times, the dinner and the place are sample. Search and read answer from here, nothing is sent.
 import React from "react";
@@ -35,10 +36,11 @@ const addDays = (n: number) => {
   return d;
 };
 const day = (n: number) => iso(addDays(n));
-// The real trip is Oct 30 to Nov 1, 2026; the picture puts it 15 days from today.
-const start = day(15);
-const mid = day(16);
-const end = day(17);
+// The real trip is Oct 30 to Nov 1, 2026; the picture puts it 15 days from today (today for case=live).
+const live = which === "live";
+const start = live ? day(0) : day(15);
+const mid = live ? day(1) : day(16);
+const end = live ? day(2) : day(17);
 
 const event = {
   id: "ev-dallas",
@@ -60,6 +62,81 @@ const lastYear = {
   createdAt: "",
   updatedAt: "",
 };
+
+// case=live: BR 55 left O'Hare six hours ago and is over the Pacific; the Taipei to Da Nang flight is still to come.
+const wall = (ms: number, zone: string) => {
+  const p = new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(new Date(ms));
+  const g = (t: string) => p.find((x) => x.type === t)!.value;
+  return `${g("year")}-${g("month")}-${g("day")}T${g("hour")}:${g("minute")}`;
+};
+const phase = params.get("phase") || "air";
+const ago = phase === "landed" ? 16.5 : phase === "gate" || phase === "waiting" ? -0.5 : 6;
+const depMs = Date.now() - ago * 3_600_000;
+const arrMs = depMs + (15 * 60 + 55) * 60_000;
+const liveLegs = [
+  { title: "ORD to TPE", sub: "EVA Air BR 55", start: wall(depMs, "America/Chicago"), end: wall(arrMs, "Asia/Taipei") },
+  {
+    title: "TPE to DAD",
+    sub: "EVA Air BR 383",
+    start: wall(arrMs + 260 * 60_000, "Asia/Taipei"),
+    end: wall(arrMs + 375 * 60_000, "Asia/Ho_Chi_Minh"),
+  },
+];
+const ORD: [number, number] = [41.978, -87.905];
+const TPE: [number, number] = [25.08, 121.233];
+// A path that goes up past Alaska, like the real one, as far as the plane is now.
+const flownPath: [number, number][] = [ORD, [47.5, -97], [54, -112], [59.5, -130], [62.3, -148], [61.5, -162], [58.8, -174]];
+const here: [number, number] = phase === "landed" ? TPE : phase === "gate" || phase === "waiting" ? ORD : flownPath.at(-1)!;
+const trackAnswer = () => ({
+  setUp: phase !== "off",
+  creditsLeft: 3800,
+  legs: [
+    {
+      index: 0,
+      title: "ORD to TPE",
+      start: liveLegs[0].start,
+      callsign: "BR 55",
+      from: "ORD",
+      to: "TPE",
+      fromPlace: ORD,
+      toPlace: TPE,
+      dep: depMs,
+      arr: arrMs,
+      phase: phase === "off" ? "air" : phase,
+      state:
+        phase === "waiting"
+          ? null
+          : {
+              icao24: "899089",
+              callsign: "EVA055",
+              lat: here[0],
+              lon: here[1],
+              altM: phase === "air" || phase === "quiet" ? 10972 : 0,
+              onGround: phase === "gate" || phase === "landed",
+              speedMs: phase === "air" || phase === "quiet" ? 262 : 0,
+              heading: 238,
+              climbMs: 0,
+              at: phase === "quiet" ? Date.now() - 48 * 60_000 : phase === "landed" ? arrMs - 9 * 60_000 : Date.now() - 20_000,
+            },
+      path: phase === "gate" || phase === "waiting" ? [] : phase === "landed" ? [...flownPath, [45, 150], [33, 132], TPE] : flownPath,
+      kmLeft: phase === "landed" ? 0 : phase === "gate" || phase === "waiting" ? 11867 : 6388,
+      kmTotal: 11867,
+      progress: 0.46,
+      eta: arrMs - 14 * 60_000,
+      map: phase === "waiting" ? null : "https://globe.adsbexchange.com/?icao=899089",
+      error: null,
+    },
+    { index: 1, title: "TPE to DAD", start: liveLegs[1].start, callsign: "BR 383", from: "TPE", to: "DAD", fromPlace: TPE, toPlace: [16.044, 108.199], dep: null, arr: null, phase: "later", state: null, path: [], map: null, error: null },
+  ],
+});
 
 const base = {
   sub: "",
@@ -128,8 +205,12 @@ const bookings: Booking[] = [
     start: `${start}T00:30`,
     end: `${start}T11:40`,
     legs: [
-      { title: "ORD to TPE", sub: "EVA Air BR 55", start: `${start}T00:30`, end: `${mid}T05:25` },
-      { title: "TPE to DAD", sub: "EVA Air BR 383", start: `${mid}T09:45`, end: `${mid}T11:40` },
+      ...(live
+        ? liveLegs
+        : [
+            { title: "ORD to TPE", sub: "EVA Air BR 55", start: `${start}T00:30`, end: `${mid}T05:25` },
+            { title: "TPE to DAD", sub: "EVA Air BR 383", start: `${mid}T09:45`, end: `${mid}T11:40` },
+          ]),
     ],
     confirmation: "24T6LP",
     party: 1,
@@ -321,6 +402,9 @@ window.fetch = async (input, init) => {
       read: reads[key] ?? { booking: false, why: "Not a booking." },
     });
   }
+  if (url.includes("/api/money-hub/trips/bookings/b9/track")) return json(trackAnswer());
+  if (url.includes("/api/money-hub/trips/bookings/") && url.endsWith("/track"))
+    return json({ setUp: true, creditsLeft: 3800, legs: [] });
   if (url.includes("/api/money-hub/logo-key")) return json({ key: "pk_FHt7GAy8SDi6PcR_DZGWmg" });
   if (url.includes("/api/money-hub/merchants"))
     return json([

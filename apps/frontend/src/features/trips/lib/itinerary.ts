@@ -74,6 +74,9 @@ const NAMES: Record<string, string> = {
 
 export const airportName = (code: string): string => NAMES[code] ?? "";
 
+/** The zone an airport's clocks keep, or null when it is not listed. */
+export const airportZone = (code: string | null | undefined): string | null => (code ? ZONE_OF.get(code) ?? null : null);
+
 /** The part of a stamp's wall clock as milliseconds (the airport's own time, no zone applied). */
 function wallMs(stamp: string): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(stamp);
@@ -81,7 +84,7 @@ function wallMs(stamp: string): number | null {
 }
 
 /** The moment a printed time is (ms), read in the airport's zone; null when the airport is not listed. */
-function momentOf(stamp: string, code: string | null): number | null {
+export function momentOf(stamp: string, code: string | null): number | null {
   const zone = code ? ZONE_OF.get(code) : undefined;
   const wall = wallMs(stamp);
   if (!zone || wall === null) return null;

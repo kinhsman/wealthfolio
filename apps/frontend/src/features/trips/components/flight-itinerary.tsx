@@ -7,8 +7,10 @@ import { Fragment, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Icons } from "@wealthfolio/ui";
 
+import { trackFor, type TrackAnswer } from "../lib/flight-track";
 import { airportName, carriersText, durationText, type FlightLeg, type Journey } from "../lib/itinerary";
 import { dayNumber, dayOf, timeOf, weekdayDay } from "../lib/trips";
+import { LiveFlight, LivePill } from "./live-flight";
 
 const shiftOf = (stamp: string, from: string) => dayNumber(stamp) - dayNumber(from);
 
@@ -39,11 +41,14 @@ export function JourneyHeading({
   index,
   count,
   phone,
+  track,
 }: {
   journey: Journey;
   index: number;
   count: number;
   phone: boolean;
+  /** The booking's live flights (lib/flight-track.ts), while one is near. */
+  track?: TrackAnswer;
 }) {
   const first = j.legs[0];
   const last = j.legs[j.legs.length - 1];
@@ -66,6 +71,7 @@ export function JourneyHeading({
           <Plus shift={shiftOf(last.arr!, j.dep)} />
         </span>
         <span className="text-[12px] text-[var(--m-muted)]">{last.to}</span>
+        {track ? <LivePill legs={j.legs.map((l) => trackFor(track, l))} phone={phone} /> : null}
       </span>
       <span className="truncate text-[12px] text-[var(--m-muted)]">
         {bits.map((b, i) => (
@@ -154,7 +160,7 @@ function Stop({
   );
 }
 
-function Flight({ leg }: { leg: FlightLeg }) {
+function Flight({ leg, track, phone }: { leg: FlightLeg; track?: TrackAnswer; phone: boolean }) {
   return (
     <>
       <div className="whitespace-nowrap py-0.5 text-right text-[11.5px] tabular-nums text-[var(--m-muted)]">
@@ -168,6 +174,7 @@ function Flight({ leg }: { leg: FlightLeg }) {
           </span>
         ) : null}
         {leg.carrier ? <span>{leg.carrier}</span> : null}
+        {track ? <LiveFlight t={trackFor(track, leg)} setUp={track.setUp} phone={phone} /> : null}
       </div>
     </>
   );
@@ -191,7 +198,15 @@ function Layover({ minutes }: { minutes: number }) {
 }
 
 /** The open row's body: every airport and flight of the journey, top to bottom. */
-export function JourneyTimeline({ journey: j, phone }: { journey: Journey; phone: boolean }) {
+export function JourneyTimeline({
+  journey: j,
+  phone,
+  track,
+}: {
+  journey: Journey;
+  phone: boolean;
+  track?: TrackAnswer;
+}) {
   const n = j.legs.length;
   const last = j.legs[n - 1];
   const arrivesLater = dayOf(last.arr!) !== dayOf(j.dep);
@@ -211,7 +226,7 @@ export function JourneyTimeline({ journey: j, phone }: { journey: Journey; phone
               rail={{ dot: i === 0 ? "start" : "mid", line: "solid", cap: i === 0 ? "top" : undefined }}
               strong={i === 0}
             />
-            <Flight leg={leg} />
+            <Flight leg={leg} track={track} phone={phone} />
             {i === n - 1 ? (
               <Stop
                 time={timeOf(leg.arr)}

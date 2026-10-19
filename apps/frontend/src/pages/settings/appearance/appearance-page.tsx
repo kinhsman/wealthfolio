@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { SettingsHeader } from "../settings-header";
 import { AppearanceForm } from "./appearance-form";
 import { LogoKeyCard } from "./logo-key-card";
+import { OpenSkyKeyCard } from "./opensky-key-card";
 
 export default function SettingsAppearancePage() {
   const { t } = useTranslation();
@@ -16,6 +17,8 @@ export default function SettingsAppearancePage() {
       <AppearanceForm />
       <Separator />
       <LogoKeyCard />
+      <Separator />
+      <OpenSkyKeyCard />
     </div>
   );
 }
