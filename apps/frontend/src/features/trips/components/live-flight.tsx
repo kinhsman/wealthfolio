@@ -2,6 +2,8 @@
 // tracker feature to money app Trips"). Says where the plane is (at the gate, in the air, out of reach over an ocean,
 // landed), how high and fast, how far to go and when it should land by its speed now, and draws the route with the
 // part flown so far. Data: lib/flight-track.ts. Shown only from 90 minutes before it leaves.
+import { useState } from "react";
+
 import { cn } from "@/lib/utils";
 import { Icons } from "@wealthfolio/ui";
 
@@ -15,6 +17,7 @@ import {
   lateText,
   miles,
   mph,
+  useFlightToday,
   type TrackLeg,
 } from "../lib/flight-track";
 
@@ -34,6 +37,11 @@ function RouteMap({ t }: { t: TrackLeg }) {
   const [bx, by] = fit(t.toPlace);
   const plane = here ? fit(here) : null;
   const landed = t.phase === "landed";
+  // Never heard but should be flying: where the schedule puts it, drawn hollow as a guess.
+  const guess =
+    !here && t.phase === "unseen" && t.progress != null
+      ? fit(planned[Math.round(t.progress * (planned.length - 1))])
+      : null;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-[84px] w-full" role="img" aria-label={`Route ${t.from} to ${t.to}`}>
       <polyline
@@ -64,8 +72,31 @@ function RouteMap({ t }: { t: TrackLeg }) {
           />
         </g>
       ) : null}
+      {guess ? (
+        <circle
+          cx={guess[0]}
+          cy={guess[1]}
+          r="5"
+          fill="var(--m-tile, #fff)"
+          stroke="var(--m-forest)"
+          strokeWidth="1.5"
+          strokeDasharray="2 2"
+        >
+          <title>About here by the schedule</title>
+        </circle>
+      ) : null}
     </svg>
   );
+}
+
+/** "Sun 11:30 PM" in an airport's own zone. */
+function weekdayClock(ms: number, zone: string | null): string {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: zone ?? undefined,
+  }).format(new Date(ms));
 }
 
 /** The panel's top line: a dot and what the plane is doing. */
@@ -79,6 +110,8 @@ function headline(t: TrackLeg): { text: string; live: boolean } {
       return { text: "In the air", live: true };
     case "quiet":
       return { text: "Out of reach", live: false };
+    case "unseen":
+      return { text: "No signal", live: false };
     case "landed":
       return { text: t.to ? `Landed in ${t.to}` : "Landed", live: false };
     default:
@@ -86,8 +119,19 @@ function headline(t: TrackLeg): { text: string; live: boolean } {
   }
 }
 
-export function LiveFlight({ t, setUp, phone }: { t: TrackLeg | null; setUp: boolean; phone: boolean }) {
-  if (!t || t.phase === "later" || t.phase === "done") return null;
+export function LiveFlight({
+  t,
+  setUp,
+  phone,
+  label,
+}: {
+  t: TrackLeg | null;
+  setUp: boolean;
+  phone: boolean;
+  /** Set for another day's run of the flight (not the booked one): said on top, and a run still to come is shown. */
+  label?: string;
+}) {
+  if (!t || t.phase === "done" || (t.phase === "later" && !label)) return null;
   if (!setUp)
     return (
       <p className="text-[11.5px] text-[var(--m-muted)]">
@@ -95,7 +139,6 @@ export function LiveFlight({ t, setUp, phone }: { t: TrackLeg | null; setUp: boo
       </p>
     );
   const s = t.state;
-  const head = headline(t);
   const toZone = airportZone(t.to);
   const facts: string[] = [];
   if (s && t.phase === "air") {
@@ -103,6 +146,19 @@ export function LiveFlight({ t, setUp, phone }: { t: TrackLeg | null; setUp: boo
     if (s.speedMs !== null) facts.push(`${mph(s.speedMs)} mph`);
   }
   const lines: string[] = [...facts];
+  const fromZone = airportZone(t.from);
+  if (label && t.dep !== null && t.phase !== "later")
+    lines.push(`left ${t.from} ${weekdayClock(t.dep, fromZone)}`);
+  if (t.phase === "later" && t.dep !== null)
+    lines.push(`leaves ${t.from} ${weekdayClock(t.dep, fromZone)}, live from 90 minutes before`);
+  if (t.phase === "unseen") {
+    if (t.arr !== null && Date.now() > t.arr) lines.push(`should have landed at ${clockIn(t.arr, toZone)}`);
+    else {
+      if (t.progress != null) lines.push(`about ${Math.round(t.progress * 100)}% of the way by the schedule`);
+      if (t.arr !== null) lines.push(`due ${clockIn(t.arr, toZone)}`);
+    }
+    lines.push("no receiver hears it right now, usual over an ocean");
+  }
   if (t.phase === "waiting")
     lines.push("It shows here once the plane turns its transponder on, usually at the gate.");
   if (t.phase === "air" || t.phase === "quiet") {
@@ -114,6 +170,7 @@ export function LiveFlight({ t, setUp, phone }: { t: TrackLeg | null; setUp: boo
     if (t.phase === "quiet" && s) lines.push(`last seen ${agoText(s.at)}, often the case over an ocean`);
   }
   if (t.phase === "landed" && s) lines.push(`at ${clockIn(s.at, toZone)} local`);
+  const head = t.phase === "later" ? { text: "Not left yet", live: false } : headline(t);
   return (
     <div className="mt-1 w-full max-w-[460px] rounded-lg border border-[var(--m-line)] bg-[var(--m-card,transparent)] px-2.5 py-1.5">
       <div className="flex items-center gap-2 text-[12px]">
@@ -142,7 +199,8 @@ export function LiveFlight({ t, setUp, phone }: { t: TrackLeg | null; setUp: boo
           </a>
         ) : null}
       </div>
-      {t.phase !== "waiting" ? <RouteMap t={t} /> : null}
+      {label ? <div className="text-[11px] font-medium text-[var(--m-ink-2)]">{label}</div> : null}
+      {t.phase !== "waiting" && t.phase !== "later" ? <RouteMap t={t} /> : null}
       {lines.length ? (
         <div className="text-[11.5px] tabular-nums text-[var(--m-muted)]">{lines.join(" · ")}</div>
       ) : null}
@@ -153,7 +211,9 @@ export function LiveFlight({ t, setUp, phone }: { t: TrackLeg | null; setUp: boo
 
 /** A small pill for the closed row: In the air / Landed, so a live flight is seen without opening it. */
 export function LivePill({ legs, phone }: { legs: (TrackLeg | null)[]; phone: boolean }) {
-  const air = legs.find((t) => t?.phase === "air" || t?.phase === "quiet" || t?.phase === "gate");
+  const air = legs.find(
+    (t) => t?.phase === "air" || t?.phase === "quiet" || t?.phase === "gate" || t?.phase === "unseen",
+  );
   const done = legs.filter(Boolean).every((t) => t!.phase === "landed");
   if (!air && !(done && legs.some(Boolean))) return null;
   const text = air ? (air.phase === "gate" ? "At gate" : "In the air") : "Landed";
@@ -165,5 +225,54 @@ export function LivePill({ legs, phone }: { legs: (TrackLeg | null)[]; phone: bo
       {air ? <Icons.Plane className="size-3" aria-hidden /> : <Icons.Check className="size-3" aria-hidden />}
       {phone ? null : text}
     </span>
+  );
+}
+
+/**
+ * "Today's BR55": the same flight number's run that matters now (owner, 2026-10-19: "add a button to show this same
+ * flight for today, not the flight i booked"). A small button under the flight; open, a live panel for that run.
+ */
+export function TodayFlight({
+  bookingId,
+  legIndex,
+  number,
+  phone,
+}: {
+  bookingId: string;
+  legIndex: number;
+  number: string;
+  phone: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const q = useFlightToday(bookingId, legIndex, open);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={cn(
+          "inline-flex h-5 items-center gap-1 rounded-md border border-dashed border-[var(--m-line)] px-1.5 text-[11px] text-[var(--m-forest)] hover:bg-[var(--m-track)]",
+          open && "border-solid bg-[var(--m-track)]",
+        )}
+      >
+        <Icons.Plane className="size-3" aria-hidden />
+        {open ? "Hide today's" : phone ? "Today's" : `Today's ${number}`}
+      </button>
+      {open ? (
+        q.isLoading ? (
+          <div className="mt-1 w-full max-w-[460px] text-[11.5px] text-[var(--m-muted)]">Looking for today&apos;s {number}...</div>
+        ) : q.error ? (
+          <div className="mt-1 w-full max-w-[460px] text-[11.5px] text-[var(--m-warn)]">{(q.error as Error).message}</div>
+        ) : q.data ? (
+          <LiveFlight
+            t={q.data.leg}
+            setUp={q.data.setUp}
+            phone={phone}
+            label={`Today's ${number}, not your booked flight`}
+          />
+        ) : null
+      ) : null}
+    </>
   );
 }

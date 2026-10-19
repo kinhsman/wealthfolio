@@ -7,10 +7,10 @@ import { Fragment, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Icons } from "@wealthfolio/ui";
 
-import { trackFor, type TrackAnswer } from "../lib/flight-track";
+import { legIndexOf, trackFor, type TrackAnswer } from "../lib/flight-track";
 import { airportName, carriersText, durationText, type FlightLeg, type Journey } from "../lib/itinerary";
-import { dayNumber, dayOf, timeOf, weekdayDay } from "../lib/trips";
-import { LiveFlight, LivePill } from "./live-flight";
+import { dayNumber, dayOf, timeOf, weekdayDay, type Booking } from "../lib/trips";
+import { LiveFlight, LivePill, TodayFlight } from "./live-flight";
 
 const shiftOf = (stamp: string, from: string) => dayNumber(stamp) - dayNumber(from);
 
@@ -160,7 +160,21 @@ function Stop({
   );
 }
 
-function Flight({ leg, track, phone }: { leg: FlightLeg; track?: TrackAnswer; phone: boolean }) {
+function Flight({
+  leg,
+  track,
+  phone,
+  booking,
+}: {
+  leg: FlightLeg;
+  track?: TrackAnswer;
+  phone: boolean;
+  booking?: Booking;
+}) {
+  const live = trackFor(track, leg);
+  // Today's run of the same flight number, when the booked one is not the one flying now.
+  const index = booking && leg.number ? legIndexOf(booking.legs, leg) : -1;
+  const showToday = index >= 0 && (!live || live.phase === "later" || live.phase === "done");
   return (
     <>
       <div className="whitespace-nowrap py-0.5 text-right text-[11.5px] tabular-nums text-[var(--m-muted)]">
@@ -174,7 +188,8 @@ function Flight({ leg, track, phone }: { leg: FlightLeg; track?: TrackAnswer; ph
           </span>
         ) : null}
         {leg.carrier ? <span>{leg.carrier}</span> : null}
-        {track ? <LiveFlight t={trackFor(track, leg)} setUp={track.setUp} phone={phone} /> : null}
+        {showToday ? <TodayFlight bookingId={booking!.id} legIndex={index} number={leg.number} phone={phone} /> : null}
+        {track ? <LiveFlight t={live} setUp={track.setUp} phone={phone} /> : null}
       </div>
     </>
   );
@@ -202,10 +217,13 @@ export function JourneyTimeline({
   journey: j,
   phone,
   track,
+  booking,
 }: {
   journey: Journey;
   phone: boolean;
   track?: TrackAnswer;
+  /** The booking, so each flight can offer today's run of its flight number. */
+  booking?: Booking;
 }) {
   const n = j.legs.length;
   const last = j.legs[n - 1];
@@ -226,7 +244,7 @@ export function JourneyTimeline({
               rail={{ dot: i === 0 ? "start" : "mid", line: "solid", cap: i === 0 ? "top" : undefined }}
               strong={i === 0}
             />
-            <Flight leg={leg} track={track} phone={phone} />
+            <Flight leg={leg} track={track} phone={phone} booking={booking} />
             {i === n - 1 ? (
               <Stop
                 time={timeOf(leg.arr)}

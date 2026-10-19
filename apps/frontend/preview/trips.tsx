@@ -1,6 +1,7 @@
 // money-hub patch: the Trips page with fixture data, for a true-size picture before shipping (vite.preview.config.ts).
 // ?theme=light|dark; ?case=full (default) | empty (no bookings) | none (no trips) | live (the EVA flight is in the air
-// now; ?phase=air (default) | quiet | gate | waiting | landed | off picks what the live panel says). The Dallas figures are the owner's
+// now; ?phase=air (default) | quiet | gate | waiting | landed | off picks what the live panel says). ?today=air
+// (default) | unseen | later: what the Today's flight button answers. The Dallas figures are the owner's
 // real ones (Frontier $115.98, Citi Travel $121.86 = 141.77 + 18.43 - 38.34, Owly 3 hand bills $715.43); flight
 // numbers, codes, times, the dinner and the place are sample. Search and read answer from here, nothing is sent.
 import React from "react";
@@ -401,6 +402,17 @@ window.fetch = async (input, init) => {
       },
       read: reads[key] ?? { booking: false, why: "Not a booking." },
     });
+  }
+  if (url.includes("/track-today")) {
+    const t = params.get("today") || "air";
+    const leg = { ...trackAnswer().legs[0], phase: t === "unseen" ? "unseen" : t === "later" ? "later" : "air" };
+    const dep = t === "later" ? Date.now() + 9 * 3_600_000 : Date.now() - 11 * 3_600_000;
+    Object.assign(leg, { dep, arr: dep + (15 * 60 + 55) * 60_000 });
+    if (t === "unseen") Object.assign(leg, { state: null, path: [], map: null, progress: 0.69, kmLeft: 3679 });
+    if (t === "later") Object.assign(leg, { state: null, path: [], map: null });
+    if (t === "air") Object.assign(leg, { path: [...flownPath, [55, 165], [45, 150]], state: { ...leg.state!, lat: 45, lon: 150 }, kmLeft: 2650 });
+    await new Promise((r) => setTimeout(r, 300));
+    return json({ setUp: true, creditsLeft: 3800, bookedStart: leg.start, leg });
   }
   if (url.includes("/api/money-hub/trips/bookings/b9/track")) return json(trackAnswer());
   if (url.includes("/api/money-hub/trips/bookings/") && url.endsWith("/track"))

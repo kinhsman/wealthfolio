@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { momentOf, routeOf } from "./itinerary";
 import type { Booking } from "./trips";
 
-export type Phase = "later" | "waiting" | "gate" | "air" | "quiet" | "landed" | "done";
+export type Phase = "later" | "waiting" | "unseen" | "gate" | "air" | "quiet" | "landed" | "done";
 
 export interface PlaneState {
   icao24: string;
@@ -104,6 +104,39 @@ export function useFlightTrack(b: Booking) {
     staleTime: 30_000,
     retry: false,
   });
+}
+
+export interface TodayAnswer {
+  setUp: boolean;
+  creditsLeft: number | null;
+  /** The booked leg's printed departure, to tell which flight of the journey it is for. */
+  bookedStart: string | null;
+  /** The same flight number's run that matters now (in the air, else the next to leave), not the booked one. */
+  leg: TrackLeg;
+}
+
+/**
+ * The same flight number's run today (owner, 2026-10-19: "show this same flight for today, not the flight i booked").
+ * Asked only while its panel is open, once a minute; the service looks it up only near its own times.
+ */
+export function useFlightToday(bookingId: string, legIndex: number, on: boolean) {
+  return useQuery({
+    queryKey: ["money-hub", "trips", "track-today", bookingId, legIndex],
+    queryFn: () =>
+      call<TodayAnswer>(
+        `/api/money-hub/trips/bookings/${encodeURIComponent(bookingId)}/track-today?leg=${legIndex}`,
+      ),
+    enabled: on,
+    refetchInterval: on ? 60_000 : false,
+    refetchIntervalInBackground: false,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+/** Which of the booking's legs a journey leg is (same airport and printed departure), or -1. */
+export function legIndexOf(legs: Booking["legs"], leg: { from: string | null; dep: string }): number {
+  return legs.findIndex((l) => l.start === leg.dep && routeOf(l.title)?.from === leg.from);
 }
 
 /** The track for one flight of the journey: the same airport and printed departure. */

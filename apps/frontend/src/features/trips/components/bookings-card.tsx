@@ -242,7 +242,7 @@ function Row({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {open && row.journey ? <JourneyTimeline journey={row.journey.value} phone={phone} track={track} /> : null}
+      {open && row.journey ? <JourneyTimeline journey={row.journey.value} phone={phone} track={track} booking={b} /> : null}
       {open && (row.lead || !row.journey) ? (
         <Detail b={b} match={match} money={money} phone={phone} />
       ) : null}
