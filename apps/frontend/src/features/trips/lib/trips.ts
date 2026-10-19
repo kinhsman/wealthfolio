@@ -9,6 +9,8 @@ import { listCashActivities } from "@/features/spending/adapters/cash-activities
 import { getVisibleSpendingAmount } from "@/features/spending/lib/constants";
 import type { SpendingEvent } from "@/features/spending/types/event";
 
+import { carriersText, journeysOf, type Journey } from "./itinerary";
+
 export type Kind = "flight" | "stay" | "food" | "tour" | "car" | "other";
 export type Paid = "now" | "later" | "unknown";
 
@@ -282,11 +284,13 @@ export interface DayRow {
   booking: Booking;
   /** The row that carries the booking's own details (the first one it makes). */
   lead: boolean;
+  /** A flight row that is a whole journey (its connections inside), drawn as an itinerary. */
+  journey?: { value: Journey; index: number; count: number };
 }
 
 /**
  * The bookings as the days they happen on. A stay is a check in and a check out, a flight with legs is one row per
- * leg, anything else is one row. A booking with no date is left out here (the page lists it apart).
+ * journey (legs that connect are one), anything else is one row. A booking with no date is left out here (the page lists it apart).
  */
 export function dayRows(bookings: Booking[]): DayRow[] {
   const rows: DayRow[] = [];
@@ -307,8 +311,18 @@ export function dayRows(bookings: Booking[]): DayRow[] {
       make("in", b.start, b.title, "Check in", true);
       make("out", b.end, b.title, "Check out", false);
     } else if (b.kind === "flight" && b.legs.length) {
-      b.legs.forEach((leg, i) => {
-        if (leg.start) make(`leg${i}`, leg.start, leg.title, leg.sub, i === 0);
+      const journeys = journeysOf(b.legs);
+      journeys.forEach((j, i) => {
+        if (!j.rich) {
+          j.legs.forEach((leg, k) => {
+            const src = b.legs.find((l) => l.start === leg.dep) ?? b.legs[0];
+            make(`j${i}.${k}`, leg.dep, src.title, src.sub, i === 0 && k === 0);
+          });
+          return;
+        }
+        const last = j.legs[j.legs.length - 1];
+        make(`j${i}`, j.dep, `${j.legs[0].from} to ${last.to}`, b.legs.find((l) => l.start === j.dep)?.sub ?? carriersText(j), i === 0);
+        rows[rows.length - 1].journey = { value: j, index: i, count: journeys.length };
       });
     } else {
       make("one", b.start, b.title, b.sub, true);

@@ -28,6 +28,7 @@ import { useMerchants, type Merchant } from "@/features/spending/lib/merchants";
 
 import { bookingLogo } from "../lib/booking-logo";
 import { useLogoKey } from "../lib/logo-key";
+import { JourneyHeading, JourneyTimeline } from "./flight-itinerary";
 import { Card, KindIcon, Pill } from "./parts";
 
 function statusOf(
@@ -161,13 +162,26 @@ function Row({
           )}
         >
           <KindIcon kind={row.kind} merchantLogo={logos.own} logo={logos.airline} />
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-[13.5px]">{row.label}</span>
-            {when ? (
-              <span className="truncate text-[12px] text-[var(--m-muted)]">{when}</span>
-            ) : null}
-          </span>
-          {status ? (
+          {row.journey ? (
+            <JourneyHeading
+              journey={row.journey.value}
+              index={row.journey.index}
+              count={row.journey.count}
+              phone={phone}
+            />
+          ) : (
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-[13.5px]">{row.label}</span>
+              {when ? (
+                <span className="truncate text-[12px] text-[var(--m-muted)]">{when}</span>
+              ) : null}
+            </span>
+          )}
+          {status && row.journey && phone ? (
+            status.tone === "good" ? (
+              <Icons.Check className="size-4 shrink-0 text-[var(--m-good-ink,var(--success))]" aria-label={status.text} />
+            ) : null
+          ) : status ? (
             status.tone === "quiet" ? (
               <span className="shrink-0 whitespace-nowrap text-[12px] text-[var(--m-muted)]">
                 {status.text}
@@ -224,7 +238,10 @@ function Row({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      {open ? <Detail b={b} match={match} money={money} phone={phone} /> : null}
+      {open && row.journey ? <JourneyTimeline journey={row.journey.value} phone={phone} /> : null}
+      {open && (row.lead || !row.journey) ? (
+        <Detail b={b} match={match} money={money} phone={phone} />
+      ) : null}
     </li>
   );
 }
