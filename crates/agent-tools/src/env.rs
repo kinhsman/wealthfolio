@@ -50,6 +50,18 @@ pub struct EntryExtras {
 pub trait EntryLookup: Send + Sync {
     /// Activities whose note, bank text or bill name contains `text` (any case).
     async fn search(&self, text: &str) -> Result<Vec<EntryExtras>, String>;
+
+    /// The owner's people and important days from the money-hub Calendar (relationship, gender, age,
+    /// likes, gift budget, gift ideas, gifts given, upcoming birthdays, anniversaries, memorial days and
+    /// gift holidays), as the service sends them. `person` narrows to names containing it, `days` is how
+    /// far ahead to list days. A service without the Calendar answers an error.
+    async fn important_dates(
+        &self,
+        _person: Option<&str>,
+        _days: Option<u32>,
+    ) -> Result<serde_json::Value, String> {
+        Err("The Calendar is not connected.".to_string())
+    }
 }
 
 /// Data-service surface available to agent tools.

@@ -334,6 +334,21 @@ pub(super) async fn spawn_chat_stream<E: AiEnvironment + 'static>(
                 }
             }
 
+            // money-hub: the owner's people and important days (the Calendar), read from the
+            // money-hub service; offered with the transaction tools when that service is connected.
+            if (is_allowed("search_activities")
+                || is_allowed(crate::money_hub::IMPORTANT_DATES_TOOL))
+                && agent_env.entry_lookup().is_some()
+            {
+                allowed_tools.push(
+                    crate::tools::RigAgentTool::new(
+                        Arc::new(crate::money_hub::GetImportantDates),
+                        agent_env.clone(),
+                    )
+                    .into_dynamic(),
+                );
+            }
+
             // record_activity, record_activities, propose_transaction_categories,
             // create_categorization_rule, and prepare_asset_classification now
             // come from the shared agent-tools catalog above (via RigAgentTool).

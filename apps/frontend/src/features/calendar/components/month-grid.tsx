@@ -209,7 +209,7 @@ function DayCell({
       aria-pressed={picked}
       onClick={() => onPick(iso)}
       className={cn(
-        "relative flex h-[116px] min-w-0 flex-col overflow-hidden gap-1 rounded-[12px] px-1.5 pb-1.5 pt-1.5 text-left transition-shadow",
+        "relative flex h-[116px] min-w-0 flex-col gap-1 overflow-hidden rounded-[12px] px-1.5 pb-1.5 pt-1.5 text-left transition-shadow",
         ring,
       )}
       style={{ background }}

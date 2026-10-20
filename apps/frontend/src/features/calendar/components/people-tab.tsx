@@ -92,7 +92,7 @@ function PersonCard({
         <div className="min-w-0">
           <h3 className="truncate text-[15px] font-medium">{p.name}</h3>
           <p className="truncate text-[12px] text-[var(--m-muted)]">
-            {[p.relation, p.budget ? null : null].filter(Boolean).join(" · ") || " "}
+            {[p.relation, p.likes ? `likes ${p.likes}` : null].filter(Boolean).join(" · ") || " "}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
