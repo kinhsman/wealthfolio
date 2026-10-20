@@ -81,6 +81,16 @@ function buildStaticNavigation(t: TFunction): NavigationProps {
         label: "Subscriptions and bills: what repeats, what is due and when",
       },
       {
+        // money-hub patch: Calendar (features/calendar), every day with what the app knows of it, plus people's
+        // birthdays, anniversaries, giỗ and the US and Vietnam holidays, with gift plans (owner, 10-20). After
+        // Subscriptions & Bills, before Trips.
+        icon: <Icons.CalendarDots className="size-6" />,
+        title: "Calendar",
+        href: "/calendar",
+        keywords: ["calendar", "birthday", "birthdays", "anniversary", "holiday", "holidays", "gift", "gifts", "lunar", "tet", "gio", "dates", "events"],
+        label: "Calendar: every day with its bills, trips and plans, plus birthdays, holidays and gifts",
+      },
+      {
         // money-hub patch: Trips (features/trips), the bookings of a Travel event and the search of the linked Gmail
         // for them (owner, 10-15). After Subscriptions & Bills, before Maintenance; the 84px rail shows "Trips".
         icon: <Icons.Plane className="size-6" />,

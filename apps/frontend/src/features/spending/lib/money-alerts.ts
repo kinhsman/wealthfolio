@@ -12,6 +12,7 @@ export type LoanAlertKind = "renewSoon" | "renewToday";
 export type UpkeepAlertKind = "soon" | "overdue" | "miles";
 export type ReceiptAlertKind = "filed";
 export type TripAlertKind = "checkin";
+export type DateAlertKind = "soon" | "today";
 
 type Switches<K extends string> = { on: boolean } & Record<K, boolean>;
 
@@ -30,11 +31,13 @@ export interface MoneyAlertsView {
   receipts?: { alerts: Switches<ReceiptAlertKind> };
   /** Optional: a service from before the flight check-in reminder sends none. */
   trips?: { alerts: Switches<TripAlertKind>; hoursBefore: number };
+  /** Optional: a service from before the Calendar sends none. `daysBefore` is the Calendar's default heads-up. */
+  dates?: { alerts: Switches<DateAlertKind>; daysBefore: number };
   went?: { discord: boolean; ntfy: boolean };
   sample?: string;
 }
 
-export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap" | "cards" | "loans" | "upkeep" | "receipts" | "trips";
+export type MoneyAlertGroup = "big" | "budget" | "connections" | "recap" | "cards" | "loans" | "upkeep" | "receipts" | "trips" | "dates";
 
 const BASE = "/api/money-hub/money-alerts";
 export const MONEY_ALERTS_KEY = ["money-hub", "money-alerts"] as const;
@@ -150,3 +153,12 @@ export const TRIP_ALERT_LABELS: Record<TripAlertKind, { title: string; text: str
 
 /** How many hours before a flight leaves the check-in reminder comes, for the picker (airlines open check-in 24 to 48 hours ahead). */
 export const CHECKIN_STEPS = [24, 30, 36, 42, 48];
+
+// Owner, 10-20: "track important birthdays, holidays, so i can plan buying gift" (the Calendar page, features/calendar).
+export const DATE_ALERT_LABELS: Record<DateAlertKind, { title: string; text: string }> = {
+  soon: { title: "Coming up", text: "A birthday, anniversary or giỗ, and a holiday you plan a gift for, the days above before it (a date can have its own). With the gift budget, your ideas and last year's gift." },
+  today: { title: "On the day", text: "The morning of a person's day, so you remember to call." },
+};
+
+/** How many days before a date the heads-up comes, for the picker. */
+export const DATE_STEPS = [3, 7, 10, 14, 21, 30];

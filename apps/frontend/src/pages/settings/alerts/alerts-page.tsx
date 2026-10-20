@@ -38,6 +38,8 @@ import {
   RECEIPT_ALERT_LABELS,
   RENEW_STEPS,
   TRIP_ALERT_LABELS,
+  DATE_ALERT_LABELS,
+  DATE_STEPS,
   UPKEEP_ALERT_LABELS,
   UPKEEP_STEPS,
   CONNECTION_ALERT_LABELS,
@@ -53,6 +55,7 @@ import {
   type UpkeepAlertKind,
   type ReceiptAlertKind,
   type TripAlertKind,
+  type DateAlertKind,
   type ConnectionAlertKind,
   type MoneyAlertGroup,
   type RecapAlertKind,
@@ -938,6 +941,37 @@ export default function AlertsSettingsPage() {
                         ))}
                       </select>
                       <span className="text-muted-foreground">before a flight leaves</span>
+                    </label>
+                  }
+                />
+              ) : null}
+              {more.dates ? (
+                <GroupAlerts<DateAlertKind>
+                  icon={<Icons.Gift className="text-muted-foreground size-4 shrink-0" />}
+                  title="Calendar"
+                  to="/calendar"
+                  text="Birthdays, anniversaries, giỗ and gift holidays coming up, with what to buy"
+                  on={more.dates.alerts.on !== false}
+                  kinds={more.dates.alerts}
+                  labels={DATE_ALERT_LABELS}
+                  busyKey="dates"
+                  busy={busy}
+                  onSwitch={(patch) => setMore("dates", patch)}
+                  onTest={(k) => testMore("dates", k)}
+                  extra={
+                    <label className="flex flex-wrap items-center gap-2">
+                      <span className="text-muted-foreground">Remind</span>
+                      <select
+                        value={more.dates.daysBefore}
+                        disabled={!!busy}
+                        onChange={(e) => setMore("dates", { daysBefore: Number(e.target.value) })}
+                        className="h-8 rounded-md border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-50"
+                      >
+                        {[...new Set([...DATE_STEPS, more.dates.daysBefore])].sort((a, b) => a - b).map((d) => (
+                          <option key={d} value={d}>{d === 1 ? "1 day" : `${d} days`}</option>
+                        ))}
+                      </select>
+                      <span className="text-muted-foreground">before a date</span>
                     </label>
                   }
                 />
