@@ -33,6 +33,7 @@ import {
   type ChargeChoice,
   type DateInput,
   type DateKind,
+  type Gender,
   type DatesView,
   type Gift,
   type GiftInput,
@@ -240,6 +241,8 @@ function PersonForm({
   const had = person ? view.dates.filter((d) => d.personId === person.id) : [];
   const [name, setName] = useState(person?.name ?? "");
   const [relation, setRelation] = useState(person?.relation ?? "");
+  const [gender, setGender] = useState<Gender | "">(person?.gender ?? "");
+  const [likes, setLikes] = useState(person?.likes ?? "");
   const [budget, setBudget] = useState(person?.budget != null ? String(person.budget) : "");
   const [note, setNote] = useState(person?.note ?? "");
   const [rows, setRows] = useState<DateDraft[]>(
@@ -258,6 +261,8 @@ function PersonForm({
     const info: PersonInput = {
       name: name.trim(),
       relation: relation.trim(),
+      gender,
+      likes: likes.trim(),
       budget: budget === "" ? null : budget,
       note,
     };
@@ -287,7 +292,7 @@ function PersonForm({
           {person ? `Change ${person.name}` : "Add a person"}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          Their name, their days and a gift budget.
+          Their name, their days, what they like and a gift budget.
         </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-2 gap-x-2.5 gap-y-2">
@@ -312,6 +317,18 @@ function PersonForm({
             className={fieldClass}
           />
         </Field>
+        <Field label="Gender (optional)">
+          <select
+            value={gender}
+            onChange={(e) => setGender(e.target.value as Gender | "")}
+            className={fieldClass}
+          >
+            <option value="">Not said</option>
+            <option value="female">Female</option>
+            <option value="male">Male</option>
+            <option value="other">Other</option>
+          </select>
+        </Field>
         <Field label="Gift budget (optional)">
           <input
             type="text"
@@ -322,13 +339,23 @@ function PersonForm({
             className={fieldClass}
           />
         </Field>
-        <Field label="Note (optional)">
+        <Field label="Likes (optional)" className="col-span-2">
+          <input
+            type="text"
+            value={likes}
+            maxLength={300}
+            onChange={(e) => setLikes(e.target.value)}
+            placeholder="Jasmine tea, gardening, size M, Apple…"
+            className={fieldClass}
+          />
+        </Field>
+        <Field label="Note (optional)" className="col-span-2">
           <input
             type="text"
             value={note}
             maxLength={500}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="Sizes, likes…"
+            placeholder="Anything else worth knowing"
             className={fieldClass}
           />
         </Field>

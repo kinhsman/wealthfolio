@@ -8,6 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 export type DateKind = "birthday" | "anniversary" | "memorial" | "other";
+export type Gender = "female" | "male" | "other";
 
 export interface Idea {
   id: string;
@@ -39,6 +40,10 @@ export interface Person {
   id: string;
   name: string;
   relation: string;
+  /** "female", "male", "other", or "" when not said (the Assistant plans gifts with it). */
+  gender: Gender | "";
+  /** What they like: interests, sizes, favourite brands. */
+  likes: string;
   budget: number | null;
   note: string;
   ideas: Idea[];
@@ -128,6 +133,8 @@ export interface DateInput {
 export interface PersonInput {
   name: string;
   relation?: string;
+  gender?: Gender | "";
+  likes?: string;
   budget?: number | string | null;
   note?: string;
   dates?: DateInput[];

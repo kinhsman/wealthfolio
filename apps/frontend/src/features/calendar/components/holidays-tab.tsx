@@ -124,18 +124,20 @@ function HolidayRow({
       <span className="flex justify-end">
         {h.gift && h.on ? (
           <span className="relative w-full">
-          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[13px] text-[var(--m-muted)]">$</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={budget}
-            onChange={(e) => setBudget(e.target.value.replace(/[^\d.]/g, ""))}
-            onBlur={save}
-            onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-            placeholder=""
-            aria-label={`Budget for ${h.name}`}
-            className="h-8 w-full rounded-md border border-[var(--m-line)] bg-[var(--m-surface)] pl-5 pr-2 text-right text-[16px] tabular-nums placeholder:text-[var(--m-muted)] focus:outline-none sm:text-[13px]"
-          />
+            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[13px] text-[var(--m-muted)]">
+              $
+            </span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value.replace(/[^\d.]/g, ""))}
+              onBlur={save}
+              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+              placeholder=""
+              aria-label={`Budget for ${h.name}`}
+              className="h-8 w-full rounded-md border border-[var(--m-line)] bg-[var(--m-surface)] pl-5 pr-2 text-right text-[16px] tabular-nums placeholder:text-[var(--m-muted)] focus:outline-none sm:text-[13px]"
+            />
           </span>
         ) : null}
       </span>
