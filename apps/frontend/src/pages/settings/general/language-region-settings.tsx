@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import { LanguageSelector } from "@/components/language-selector";
 import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { useSettingsContext } from "@/lib/settings-provider";
-import { createFormatter, resolveFormattingLocale } from "@wealthfolio/ui";
+import { createFormatter, dateFnsLocaleFor, resolveFormattingLocale } from "@wealthfolio/ui";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@wealthfolio/ui/components/ui/card";
 import {
   Select,
@@ -14,6 +15,7 @@ import {
   SelectValue,
 } from "@wealthfolio/ui/components/ui/select";
 import { Separator } from "@wealthfolio/ui/components/ui/separator";
+import { useSetWeekStart, useWeekStart, type WeekStart } from "@/lib/week-start";
 import { TimezoneInput } from "./timezone-input";
 import {
   detectBrowserTimezone,
@@ -47,6 +49,12 @@ export function LanguageRegionSettings() {
   const language = settings?.language || DEFAULT_LOCALE;
   const timezone = resolveInitialTimezone(settings?.timezone);
   const formattingRegion = settings?.formattingRegion || "system";
+
+  // money-hub patch: the first day of the week, apart from the region (lib/week-start.ts).
+  const weekStart = useWeekStart();
+  const setWeekStart = useSetWeekStart();
+  const regionWeekDay =
+    dateFnsLocaleFor(resolveFormattingLocale(formattingRegion)).options?.weekStartsOn === 1 ? "Monday" : "Sunday";
 
   const browserTimezone = useMemo(() => detectBrowserTimezone(), []);
   const timezones = useMemo(() => {
@@ -131,6 +139,34 @@ export function LanguageRegionSettings() {
           >
             {preview}
           </p>
+        </section>
+
+        <Separator />
+
+        {/* money-hub patch: owner, 10-20: "how to make the week start with monday?" */}
+        <section className="space-y-3">
+          <div>
+            <h3 className="text-sm font-medium">Week starts on</h3>
+            <p className="text-muted-foreground text-sm">
+              The first day of the week on the Calendar, the bill calendar and every date picker.
+            </p>
+          </div>
+          <Select
+            value={weekStart === null ? "region" : String(weekStart)}
+            onValueChange={(value) => {
+              const next: WeekStart = value === "1" ? 1 : value === "0" ? 0 : null;
+              setWeekStart(next).catch((e: Error) => toast.error(e.message));
+            }}
+          >
+            <SelectTrigger className="w-full max-w-[360px]" data-testid="week-start-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">Monday</SelectItem>
+              <SelectItem value="0">Sunday</SelectItem>
+              <SelectItem value="region">{`Like the region (${regionWeekDay})`}</SelectItem>
+            </SelectContent>
+          </Select>
         </section>
 
         <Separator />

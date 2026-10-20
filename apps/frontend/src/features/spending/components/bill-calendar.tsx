@@ -5,7 +5,7 @@
 // The arrows walk back to what was paid and ahead to where each bill's rhythm lands (lib/bill-calendar.ts).
 import { useMemo, useState } from "react";
 
-import { Icons, Popover, PopoverContent, PopoverTrigger, PrivacyAmount } from "@wealthfolio/ui";
+import { Icons, Popover, PopoverContent, PopoverTrigger, PrivacyAmount, useDateFnsLocale } from "@wealthfolio/ui";
 
 import { cn } from "@/lib/utils";
 
@@ -49,6 +49,10 @@ export function BillMonthPanel({
   const today = ymd(new Date());
   const m = useMemo(() => billMonth(items, today, offset), [items, today, offset]);
   const byKey = useMemo(() => new Map(items.map((s) => [s.key, s])), [items]);
+  // money-hub patch: the week starts where the owner set it (Settings, General, Week starts on).
+  const weekStart = useDateFnsLocale().options?.weekStartsOn ?? 0;
+  const week = [...WEEK.slice(weekStart), ...WEEK.slice(0, weekStart)];
+  const lead = (m.firstWeekday - weekStart + 7) % 7;
   const whole = Math.max(0, m.paidTotal) + m.leftTotal;
   const pct = whole > 0 ? Math.min(100, (Math.max(0, m.paidTotal) / whole) * 100) : 0;
 
@@ -115,12 +119,12 @@ export function BillMonthPanel({
       >
       <div>
         <div className="text-muted-foreground grid grid-cols-7 pb-1 text-center text-[10.5px]">
-          {WEEK.map((d, i) => (
+          {week.map((d, i) => (
             <span key={i}>{d}</span>
           ))}
         </div>
         <div className="grid grid-cols-7 gap-1">
-          {Array.from({ length: m.firstWeekday }, (_, i) => (
+          {Array.from({ length: lead }, (_, i) => (
             <span key={`pad-${i}`} />
           ))}
           {Array.from({ length: m.days }, (_, i) => {

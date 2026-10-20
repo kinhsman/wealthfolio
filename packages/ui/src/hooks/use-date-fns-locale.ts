@@ -14,6 +14,8 @@ import {
   zhTW,
   type Locale,
 } from "date-fns/locale";
+import { useMemo } from "react";
+
 import { useLocalizationSettings } from "../components/formatting-provider";
 
 const DATE_FNS_LOCALES: Record<string, Locale> = {
@@ -128,6 +130,10 @@ export function dateFnsLocaleFor(locale: string | undefined): Locale {
 }
 
 export function useDateFnsLocale(): Locale {
-  const { locale } = useLocalizationSettings();
-  return dateFnsLocaleFor(locale);
+  const { locale, weekStartsOn } = useLocalizationSettings();
+  // money-hub patch: the owner's own first day of the week (Settings, General) wins over the region's.
+  return useMemo(() => {
+    const base = dateFnsLocaleFor(locale);
+    return weekStartsOn == null ? base : { ...base, options: { ...base.options, weekStartsOn } };
+  }, [locale, weekStartsOn]);
 }

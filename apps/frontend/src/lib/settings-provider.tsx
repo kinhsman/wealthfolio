@@ -13,6 +13,7 @@ import { DEFAULT_LOCALE } from "@/i18n/locales";
 import { Settings, SettingsContextType } from "@/lib/types";
 import { FormattingProvider, resolveFormattingLocale } from "@wealthfolio/ui";
 import { useAppCurrencySetting } from "@/lib/app-currency";
+import { useWeekStart } from "@/lib/week-start";
 
 interface ExtendedSettingsContextType extends SettingsContextType {
   updateSettings: (
@@ -133,6 +134,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const formattingTimezone = settings?.timezone || undefined;
   // money-hub patch: the sidebar's USD / VND switch, applied to every amount (lib/app-currency.ts).
   const displayCurrency = useAppCurrencySetting(settings?.baseCurrency);
+  // money-hub patch: the owner's first day of the week, for every calendar (lib/week-start.ts).
+  const weekStartsOn = useWeekStart();
 
   useEffect(() => {
     setAddonLocalizationSnapshot({
@@ -180,6 +183,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         uiLocale={uiLocale}
         timezone={formattingTimezone}
         displayCurrency={displayCurrency}
+        weekStartsOn={weekStartsOn}
       >
         {children}
       </FormattingProvider>

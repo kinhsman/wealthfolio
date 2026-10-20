@@ -14,6 +14,8 @@ export interface LocalizationSettings {
   locale: string;
   uiLocale: string;
   timezone?: string;
+  /** money-hub patch: the owner's first day of the week (0 Sunday, 1 Monday); unset = the region's own. */
+  weekStartsOn?: 0 | 1;
 }
 
 const DEFAULT_LOCALIZATION_SETTINGS: LocalizationSettings = { locale: "en-US", uiLocale: "en" };
@@ -217,11 +219,14 @@ export function FormattingProvider({
   uiLocale = "en",
   timezone,
   displayCurrency,
+  weekStartsOn,
   children,
 }: {
   locale: string;
   uiLocale?: string;
   timezone?: string;
+  /** The first day of the week every calendar shows (money-hub); omitted, the region's own. */
+  weekStartsOn?: 0 | 1 | null;
   /** Show every amount in this currency (money-hub); omitted, each shows in its own. */
   displayCurrency?: DisplayCurrencySetting | null;
   children: React.ReactNode;
@@ -229,8 +234,8 @@ export function FormattingProvider({
   const resolvedLocale = resolveFormattingLocale(locale);
   const interfaceLocale = resolveInterfaceLocale(uiLocale, resolvedLocale);
   const settings = React.useMemo(
-    () => ({ locale: resolvedLocale, uiLocale, timezone }),
-    [resolvedLocale, uiLocale, timezone],
+    () => ({ locale: resolvedLocale, uiLocale, timezone, ...(weekStartsOn != null ? { weekStartsOn } : {}) }),
+    [resolvedLocale, uiLocale, timezone, weekStartsOn],
   );
   return (
     <I18nProvider locale={interfaceLocale}>

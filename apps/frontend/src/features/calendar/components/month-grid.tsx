@@ -2,7 +2,7 @@
 // to that day"). On a computer each day lists its first items by name in their colours, with the lunar day in the
 // corner (a Vietnamese calendar's habit) and a trip drawn as a band across its days; on a phone a day shows one dot
 // per kind of item. A tap picks the day; the day's whole list is beside or under the month (day-panel.tsx).
-import { Icons } from "@wealthfolio/ui";
+import { Icons, useDateFnsLocale } from "@wealthfolio/ui";
 
 import { cn } from "@/lib/utils";
 
@@ -93,15 +93,19 @@ export function MonthGrid({
 }) {
   const m = monthOf(today, offset);
   const cells = Array.from({ length: m.days }, (_, i) => `${m.start.slice(0, 8)}${pad(i + 1)}`);
+  // The week starts where the owner set it (Settings, General, Week starts on), else as the region does.
+  const weekStart = useDateFnsLocale().options?.weekStartsOn ?? 0;
+  const week = [...WEEK.slice(weekStart), ...WEEK.slice(0, weekStart)];
+  const lead = (m.firstWeekday - weekStart + 7) % 7;
   return (
     <div>
       <div className="grid grid-cols-7 pb-1 text-center text-[11px] text-[var(--m-muted)]">
-        {WEEK.map((d) => (
+        {week.map((d) => (
           <span key={d}>{phone ? d.charAt(0) : d}</span>
         ))}
       </div>
       <div className={cn("grid grid-cols-7", phone ? "gap-1" : "gap-1.5")}>
-        {Array.from({ length: m.firstWeekday }, (_, i) => (
+        {Array.from({ length: lead }, (_, i) => (
           <span key={`pad-${i}`} />
         ))}
         {cells.map((iso, i) => (
@@ -109,7 +113,7 @@ export function MonthGrid({
             key={iso}
             iso={iso}
             day={i + 1}
-            weekday={(m.firstWeekday + i) % 7}
+            column={(lead + i) % 7}
             today={today}
             items={days.get(iso) ?? []}
             spans={spans.filter((s) => s.start <= iso && s.end >= iso)}
@@ -135,7 +139,7 @@ function lunarLabel(iso: string): { text: string; strong: boolean } {
 function DayCell({
   iso,
   day,
-  weekday,
+  column,
   today,
   items,
   spans,
@@ -145,7 +149,7 @@ function DayCell({
 }: {
   iso: string;
   day: number;
-  weekday: number;
+  column: number;
   today: string;
   items: CalItem[];
   spans: CalSpan[];
@@ -188,7 +192,7 @@ function DayCell({
             <Dot key={l} layer={l} />
           ))}
         </span>
-        {spans.length ? <SpanBar iso={iso} span={spans[0]} weekday={weekday} phone /> : null}
+        {spans.length ? <SpanBar iso={iso} span={spans[0]} column={column} phone /> : null}
       </button>
     );
   }
@@ -222,7 +226,7 @@ function DayCell({
           {lunar.text}
         </span>
       </span>
-      {spans.length ? <SpanBar iso={iso} span={spans[0]} weekday={weekday} /> : null}
+      {spans.length ? <SpanBar iso={iso} span={spans[0]} column={column} /> : null}
       <span className="flex min-w-0 flex-col gap-[3px]">
         {shown.map((it) => (
           <Chip key={it.id} item={it} />
@@ -288,16 +292,16 @@ function Chip({ item }: { item: CalItem }) {
 function SpanBar({
   iso,
   span,
-  weekday,
+  column,
   phone = false,
 }: {
   iso: string;
   span: CalSpan;
-  weekday: number;
+  column: number;
   phone?: boolean;
 }) {
-  const first = iso === span.start || weekday === 0;
-  const last = iso === span.end || weekday === 6;
+  const first = iso === span.start || column === 0;
+  const last = iso === span.end || column === 6;
   const color = LAYER.trips.color;
   return (
     <span
