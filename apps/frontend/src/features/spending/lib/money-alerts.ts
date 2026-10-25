@@ -157,7 +157,7 @@ export const CHECKIN_STEPS = [24, 30, 36, 42, 48];
 // Owner, 10-20: "track important birthdays, holidays, so i can plan buying gift" (the Calendar page, features/calendar).
 export const DATE_ALERT_LABELS: Record<DateAlertKind, { title: string; text: string }> = {
   soon: { title: "Coming up", text: "A birthday, anniversary or giỗ, and a holiday you plan a gift for, the days above before it (a date can have its own). With the gift budget, your ideas and last year's gift." },
-  today: { title: "On the day", text: "The morning of a person's day, so you remember to call." },
+  today: { title: "On the day", text: "The morning of a person's day or a gift holiday on Vietnam time, so you remember to call or get the gift. It comes the evening before in Chicago." },
 };
 
 /** How many days before a date the heads-up comes, for the picker. */
