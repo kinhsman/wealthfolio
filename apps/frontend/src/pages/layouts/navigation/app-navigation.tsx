@@ -81,6 +81,16 @@ function buildStaticNavigation(t: TFunction): NavigationProps {
         label: "Subscriptions and bills: what repeats, what is due and when",
       },
       {
+        // money-hub patch: Returns (features/spending/pages/spending-returns-page.tsx), what was sent back and the
+        // refund on its way. It had no door of its own: the dashboard card shows only while a return waits (owner,
+        // 10-30: "there is no returns button on dashboard"). After Subscriptions & Bills, before Calendar.
+        icon: <Icons.Undo className="size-6" />,
+        title: "Returns",
+        href: "/spending/returns",
+        keywords: ["returns", "return", "refund", "refunds", "sent back", "amazon", "drop off", "label"],
+        label: "Returns: what you sent back and the refund on its way",
+      },
+      {
         // money-hub patch: Calendar (features/calendar), every day with what the app knows of it, plus people's
         // birthdays, anniversaries, giỗ and the US and Vietnam holidays, with gift plans (owner, 10-20). After
         // Subscriptions & Bills, before Trips.

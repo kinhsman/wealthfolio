@@ -20,10 +20,12 @@ import {
   returnLine,
   returnStatus,
   returnsApi,
+  shortDay,
   trackReturnStore,
   useReturnEmails,
   useReturns,
   useSetReturns,
+  type NoticedReturn,
   type ReturnItem,
   type ReturnsView,
 } from "../lib/returns";
@@ -55,7 +57,8 @@ export default function SpendingReturnsPage() {
   const act: Act = async (label, fn, done) => {
     setBusy(label);
     try {
-      set(await fn());
+      const view = await fn();
+      set({ ...view, noticed: view.noticed ?? data?.noticed });
       if (done) toast.success(done);
     } catch (e) {
       toast.error(errorText(e));
@@ -109,7 +112,15 @@ export default function SpendingReturnsPage() {
               <Tile label="Came back" value={<PrivacyAmount value={data.totals.back} currency={currency} />} sub="last 90 days" />
             </div>
 
-            {data.items.length === 0 ? (
+            {data.noticed?.length ? (
+              <Section title="Seen in your email" blurb="Amazon took the return; it is added once its charge shows on your card.">
+                {data.noticed.map((n) => (
+                  <NoticedRow key={n.key} n={n} currency={currency} logoUrl={data.items.find((x) => x.name === "Amazon")?.logoUrl ?? null} />
+                ))}
+              </Section>
+            ) : null}
+
+            {data.items.length === 0 && !data.noticed?.length ? (
               <div className="border-border/40 bg-card/70 rounded-xl border p-6 text-center backdrop-blur-xl">
                 <p className="text-sm">Nothing sent back yet.</p>
                 <p className="text-muted-foreground mt-1 text-xs">
@@ -189,6 +200,32 @@ function Section({ title, blurb, aside, children }: { title: string; blurb?: str
         {aside ? <span className="text-muted-foreground text-xs tabular-nums">{aside}</span> : null}
       </div>
       <div className="border-border/40 bg-card/70 divide-y rounded-xl border backdrop-blur-xl">{children}</div>
+    </div>
+  );
+}
+
+function NoticedRow({ n, currency, logoUrl }: { n: NoticedReturn; currency: string; logoUrl: string | null }) {
+  return (
+    <div className="flex items-center gap-3 px-3 py-2.5 md:px-4">
+      <StreamLogo s={{ name: "Amazon", logoUrl, useBank: false, accountId: "" }} className="h-9 w-9 text-sm" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">
+          {n.item}
+          {n.qty > 1 ? ` (${n.qty})` : ""}
+        </div>
+        <div className="text-muted-foreground truncate text-xs">
+          Asked {shortDay(n.requested)}
+          {n.dropOffBy ? <span className="hidden sm:inline">{` · drop off by ${shortDay(n.dropOffBy)}`}</span> : null} · no charge yet
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="text-sm font-semibold tabular-nums">
+          <PrivacyAmount value={n.refund} currency={currency} />
+        </div>
+        <a href={n.url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline">
+          Open order
+        </a>
+      </div>
     </div>
   );
 }

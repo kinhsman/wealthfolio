@@ -112,6 +112,20 @@ export interface ReturnsView {
   alerts: Record<ReturnAlertKind, boolean> & { on?: boolean };
   last: { at: string; scanned: number; open: number } | null;
   currency: string;
+  /** Amazon returns seen in the email whose charge is not on the card yet (they file themselves once it is). */
+  noticed?: NoticedReturn[];
+}
+
+/** A return Amazon confirmed that waits for its charge before it can be tracked. */
+export interface NoticedReturn {
+  key: string;
+  orderId: string;
+  item: string;
+  qty: number;
+  refund: number;
+  requested: string;
+  dropOffBy: string | null;
+  url: string;
 }
 
 /** A purchase a return can be started from. */
