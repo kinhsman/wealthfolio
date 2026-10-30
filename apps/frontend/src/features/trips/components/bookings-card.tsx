@@ -30,6 +30,7 @@ import { bookingLogo } from "../lib/booking-logo";
 import { useFlightTrack } from "../lib/flight-track";
 import { useLogoKey } from "../lib/logo-key";
 import { JourneyHeading, JourneyTimeline } from "./flight-itinerary";
+import { PassesPanel } from "./passes-panel";
 import { Card, KindIcon, Pill } from "./parts";
 
 function statusOf(
@@ -82,6 +83,7 @@ function Detail({
           ))}
         </dl>
       ) : null}
+      {b.kind === "flight" ? <PassesPanel b={b} /> : null}
       {b.note ? <p className="text-[12.5px] text-[var(--m-ink-2)]">{b.note}</p> : null}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[var(--m-muted)]">
         {charge ? (

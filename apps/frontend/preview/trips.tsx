@@ -179,6 +179,15 @@ const bookings: Booking[] = [
       { title: "DFW to ORD", sub: "Frontier F9 1228", start: `${end}T19:40`, end: `${end}T22:25` },
     ],
     confirmation: "HX7QPL",
+    // ?passes=1: two boarding passes on the Frontier flight (one uploaded PDF, one fetched from Drive).
+    ...(params.get("passes")
+      ? {
+          passes: [
+            { id: "p1", name: "Frontier boarding pass ORD-DFW.pdf", mime: "application/pdf", size: 96_400, from: "upload" as const, addedAt: "" },
+            { id: "p2", name: "IMG_4021.jpg", mime: "image/jpeg", size: 1_840_000, from: "drive" as const, addedAt: "" },
+          ],
+        }
+      : {}),
     checkinHours: 48,
     party: 1,
     total: 115.98,

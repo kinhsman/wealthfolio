@@ -45,6 +45,16 @@ export interface Source {
   link: string | null;
 }
 
+/** A boarding pass kept on a flight: a PDF or a picture, uploaded or fetched from Google Drive. */
+export interface Pass {
+  id: string;
+  name: string;
+  mime: string;
+  size: number;
+  from: "upload" | "drive";
+  addedAt: string;
+}
+
 export interface Booking {
   id: string;
   eventId: string;
@@ -68,6 +78,8 @@ export interface Booking {
   activityId: string | null;
   note: string;
   source: Source | null;
+  /** Boarding passes (a flight); left out until one is added. */
+  passes?: Pass[];
   createdAt: string;
   updatedAt: string;
 }
@@ -183,7 +195,29 @@ export const tripsApi = {
     call<EmailPeek>("POST", "/peek", { mailboxId, msgId }),
   read: (mailboxId: string, msgId: string, again = false) =>
     call<ReadAnswer>("POST", "/read", { mailboxId, msgId, again }),
+  /** A PDF or picture of a boarding pass, kept as it is. */
+  addPass: async (id: string, file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch(`${BASE}/bookings/${seg(id)}/passes`, {
+      method: "POST",
+      credentials: "include",
+      body,
+    });
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) throw new Error(data.error || `The money app helper said ${res.status}`);
+    return data as { pass: Pass; booking: Booking };
+  },
+  /** A Drive file the picker handed over (`fileId`, `name`) or a pasted Drive link. */
+  addPassFromDrive: (id: string, input: { fileId?: string; link?: string; name?: string }) =>
+    call<{ pass: Pass; booking: Booking }>("POST", `/bookings/${seg(id)}/passes/drive`, input),
+  removePass: (id: string, passId: string) =>
+    call<{ removed: string }>("DELETE", `/bookings/${seg(id)}/passes/${seg(passId)}`),
 };
+
+/** Where a boarding pass can be opened (inline) or saved (`download`). */
+export const passUrl = (bookingId: string, passId: string, download = false) =>
+  `${BASE}/bookings/${seg(bookingId)}/passes/${seg(passId)}/file${download ? "?download=1" : ""}`;
 
 export const BOOKINGS_KEY = ["money-hub", "trips", "bookings"] as const;
 export const STATUS_KEY = ["money-hub", "trips", "status"] as const;
