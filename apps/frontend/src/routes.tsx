@@ -62,6 +62,7 @@ import SpendingDrillPage from "./features/spending/pages/spending-drill-page";
 import TaxesPage from "./features/taxes/pages/taxes-page";
 import UpkeepPage from "./features/upkeep/pages/upkeep-page";
 import TripsPage from "./features/trips/pages/trips-page";
+import TripPassPage from "./features/trips/pages/trip-pass-page";
 import CalendarPage from "./features/calendar/pages/calendar-page";
 import CashPage from "./features/spending/pages/cash-page";
 import SpendingSettingsPage from "./pages/settings/spending/spending-settings-page";
@@ -159,6 +160,8 @@ export function AppRoutes() {
           <Route path="maintenance" element={<UpkeepPage />} />
           <Route path="upkeep" element={<Navigate to="/maintenance" replace />} />
           <Route path="trips" element={<TripsPage />} />
+          {/* money-hub patch: the boarding pass alert opens the flight's pass picture */}
+          <Route path="trips/pass/:bookingId" element={<TripPassPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="cash" element={<CashPage />} />
           {/* money-hub: the Rentals page moved to /rentals; old links keep the rental and tab */}

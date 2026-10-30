@@ -11,7 +11,7 @@ export type CardAlertKind = "dueSoon" | "overdue";
 export type LoanAlertKind = "renewSoon" | "renewToday";
 export type UpkeepAlertKind = "soon" | "overdue" | "miles";
 export type ReceiptAlertKind = "filed";
-export type TripAlertKind = "checkin" | "change";
+export type TripAlertKind = "checkin" | "change" | "pass";
 export type DateAlertKind = "soon" | "today";
 
 type Switches<K extends string> = { on: boolean } & Record<K, boolean>;
@@ -149,6 +149,7 @@ export const UPKEEP_STEPS = [3, 7, 10, 14, 21, 30];
 // Owner, 10-17: "checking reminders for flights from trips ... 24-48 hrs before departure time" (the Trips page, Flight bookings).
 export const TRIP_ALERT_LABELS: Record<TripAlertKind, { title: string; text: string }> = {
   checkin: { title: "Flight check-in", text: "A flight on Trips leaving within the hours above, or its own hours set on the flight, with its confirmation code. Once per flight." },
+  pass: { title: "Boarding pass", text: "3 hours before a flight that has a boarding pass kept on Trips leaves. Tap it to open the picture of the pass. Once per flight." },
   change: { title: "Flight delayed or changed", text: "The airline's email says a flight on Trips is delayed, moved or cancelled: the flight's time is updated and you are told the new time. Looked for every 10 minutes in the last 3 days before a flight, every 3 hours before that." },
 };
 
