@@ -95,6 +95,8 @@ export interface ReturnItem {
   /** Days from the return to the last of the money. */
   tookDays: number | null;
   createdAt: string;
+  /** Paid with points: no card charge, so no refund shows on a card; the store's "refund issued" ends it. */
+  noCard?: boolean;
   /** Paid in another currency than the base one (dong from ACB or MB): its amounts and refunds are in
    *  it; `inBase` is one unit's worth in dollars now (the totals count it so). */
   currency?: string;
@@ -178,6 +180,8 @@ const which = (row: Pick<RefundRow, "id" | "accountId" | "date">) => ({ activity
 export const returnsApi = {
   get: () => call<ReturnsView>("GET", ""),
   rescan: () => call<ReturnsView>("POST", "/rescan"),
+  /** Track an Amazon return paid with points (it has no card charge to hang on). */
+  trackNoticed: (key: string) => call<ReturnsView>("POST", "/noticed/track", { key }),
   create: (purchase: PurchaseOption, terms: ReturnTerms) => call<ReturnsView>("POST", "", { ...which(purchase), ...terms }),
   update: (id: string, terms: Partial<ReturnTerms>) => call<ReturnsView>("PUT", one(id), terms),
   /** Settled without (all of) the money: store credit, an exchange. Or open it again. */
@@ -290,7 +294,7 @@ export function offerHint(c: Pick<RefundOffer, "exact" | "store">): string {
 }
 
 /** Where a return stands, in one line. */
-export function returnLine(x: Pick<ReturnItem, "status" | "returnedOn" | "dueOn" | "dueInDays" | "tookDays" | "closedAt" | "refunds">): string {
+export function returnLine(x: Pick<ReturnItem, "noCard" | "status" | "returnedOn" | "dueOn" | "dueInDays" | "tookDays" | "closedAt" | "refunds">): string {
   const sent = `Sent back ${shortDay(x.returnedOn)}`;
   if (x.status === "back") {
     const last = [...x.refunds].sort((a, b) => a.date.localeCompare(b.date)).pop();
@@ -298,6 +302,7 @@ export function returnLine(x: Pick<ReturnItem, "status" | "returnedOn" | "dueOn"
     return last ? `${sent} · back ${shortDay(last.date)}${took}` : sent;
   }
   if (x.status === "settled") return `${sent} · settled ${x.closedAt ? shortDay(x.closedAt) : ""}`.trim();
+  if (x.noCard) return `${sent} · paid with points`;
   if (x.dueInDays < 0) return `${sent} · expected ${shortDay(x.dueOn)}, ${days(-x.dueInDays)} ago`;
   if (x.dueInDays === 0) return `${sent} · expected today`;
   return `${sent} · expected by ${shortDay(x.dueOn)}, in ${days(x.dueInDays)}`;

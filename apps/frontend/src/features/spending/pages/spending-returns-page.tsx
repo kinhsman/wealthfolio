@@ -115,7 +115,7 @@ export default function SpendingReturnsPage() {
             {data.noticed?.length ? (
               <Section title="Seen in your email" blurb="Amazon took the return; it is added once its card charge shows. Paid with points: nothing to match.">
                 {data.noticed.map((n) => (
-                  <NoticedRow key={n.key} n={n} currency={currency} logoUrl={data.items.find((x) => x.name === "Amazon")?.logoUrl ?? null} />
+                  <NoticedRow key={n.key} n={n} currency={currency} logoUrl={data.items.find((x) => x.name === "Amazon")?.logoUrl ?? null} busy={busy} act={act} />
                 ))}
               </Section>
             ) : null}
@@ -204,7 +204,7 @@ function Section({ title, blurb, aside, children }: { title: string; blurb?: str
   );
 }
 
-function NoticedRow({ n, currency, logoUrl }: { n: NoticedReturn; currency: string; logoUrl: string | null }) {
+function NoticedRow({ n, currency, logoUrl, busy, act }: { n: NoticedReturn; currency: string; logoUrl: string | null; busy: string | null; act: Act }) {
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 md:px-4">
       <StreamLogo s={{ name: "Amazon", logoUrl, useBank: false, accountId: "" }} className="h-9 w-9 text-sm" />
@@ -227,6 +227,17 @@ function NoticedRow({ n, currency, logoUrl }: { n: NoticedReturn; currency: stri
           Open order
         </a>
       </div>
+      {n.points ? (
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0"
+          disabled={busy != null}
+          onClick={() => act(`track-${n.key}`, () => returnsApi.trackNoticed(n.key), "Tracking this return")}
+        >
+          {busy === `track-${n.key}` ? "Adding…" : "Track it"}
+        </Button>
+      ) : null}
     </div>
   );
 }
