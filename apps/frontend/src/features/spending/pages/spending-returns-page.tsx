@@ -113,7 +113,7 @@ export default function SpendingReturnsPage() {
             </div>
 
             {data.noticed?.length ? (
-              <Section title="Seen in your email" blurb="Amazon took the return; it is added once its charge shows on your card.">
+              <Section title="Seen in your email" blurb="Amazon took the return; it is added once its card charge shows. Paid with points: nothing to match.">
                 {data.noticed.map((n) => (
                   <NoticedRow key={n.key} n={n} currency={currency} logoUrl={data.items.find((x) => x.name === "Amazon")?.logoUrl ?? null} />
                 ))}
@@ -215,7 +215,8 @@ function NoticedRow({ n, currency, logoUrl }: { n: NoticedReturn; currency: stri
         </div>
         <div className="text-muted-foreground truncate text-xs">
           Asked {shortDay(n.requested)}
-          {n.dropOffBy ? <span className="hidden sm:inline">{` · drop off by ${shortDay(n.dropOffBy)}`}</span> : null} · no charge yet
+          {n.dropOffBy ? <span className="hidden sm:inline">{` · drop off by ${shortDay(n.dropOffBy)}`}</span> : null}
+          {n.points ? " · paid with points" : " · no charge yet"}
         </div>
       </div>
       <div className="text-right">

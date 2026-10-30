@@ -125,6 +125,8 @@ export interface NoticedReturn {
   refund: number;
   requested: string;
   dropOffBy: string | null;
+  /** Paid with rewards points or a gift balance: no card charge will ever show. */
+  points?: boolean;
   url: string;
 }
 
