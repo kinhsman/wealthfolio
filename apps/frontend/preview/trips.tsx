@@ -188,6 +188,14 @@ const bookings: Booking[] = [
           ],
         }
       : {}),
+    // ?delay=1: Frontier 3243 moved 29 minutes by the airline's email (the real one of 10-30).
+    ...(params.get("delay")
+      ? {
+          changes: [
+            { id: "m1:c1", at: "", emailDate: `${day(0)}T20:44:00.000Z`, kind: "delay" as const, leg: "ORD to DFW", sub: "Frontier 1227", was: `${start}T05:36`, now: `${start}T06:05`, minutes: 29, applied: true, arrival: `${start}T08:40`, arrivalEstimated: true, summary: "Delayed 29 minutes, now leaves 6:05 AM", from: "Frontier Airlines", link: "https://mail.google.com/" },
+          ],
+        }
+      : {}),
     checkinHours: 48,
     party: 1,
     total: 115.98,

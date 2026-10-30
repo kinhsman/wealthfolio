@@ -19,6 +19,8 @@ import {
   dayRows,
   shortDay,
   timeOf,
+  changeForRow,
+  changeShort,
   weekdayDay,
   type Booking,
   type BookingMatch,
@@ -27,6 +29,7 @@ import {
 import { useMerchants, type Merchant } from "@/features/spending/lib/merchants";
 
 import { bookingLogo } from "../lib/booking-logo";
+import { clockOf } from "../lib/change-text";
 import { useFlightTrack } from "../lib/flight-track";
 import { useLogoKey } from "../lib/logo-key";
 import { JourneyHeading, JourneyTimeline } from "./flight-itinerary";
@@ -82,6 +85,28 @@ function Detail({
             </div>
           ))}
         </dl>
+      ) : null}
+      {b.changes?.length ? (
+        <div className="flex flex-col gap-1 rounded-xl bg-[var(--m-tile)] px-2.5 py-2">
+          <div className="text-[11px] text-[var(--m-muted)]">What the airline changed</div>
+          <ul className="flex flex-col gap-1">
+            {[...b.changes].reverse().map((c) => (
+              <li key={c.id} className="text-[12.5px]">
+                <span className={cn(c.kind === "cancelled" || c.applied ? "text-[var(--m-warn,var(--warning))]" : "")}>{changeShort(c)}</span>
+                {c.leg ? `, ${c.sub ? `${c.sub} ` : ""}${c.leg}` : ""}
+                {c.applied && c.now ? `: now ${clockOf(c.now)}${c.was ? `, was ${clockOf(c.was)}` : ""}` : ""}
+                <span className="text-[var(--m-muted)]">
+                  {c.from ? `, from ${c.from}` : ""}, {shortDay(c.emailDate.slice(0, 10))}
+                </span>
+                {c.link ? (
+                  <a href={c.link} target="_blank" rel="noreferrer" className="ml-1.5 text-[var(--m-forest)] underline-offset-4 hover:underline">
+                    Open in Gmail
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
       {b.kind === "flight" ? <PassesPanel b={b} /> : null}
       {b.note ? <p className="text-[12.5px] text-[var(--m-ink-2)]">{b.note}</p> : null}
@@ -154,6 +179,8 @@ function Row({
   const when = [row.time, row.sub].filter(Boolean).join(", ");
   // Asks only while a flight of this booking is about to leave or in the air (see lib/flight-track.ts).
   const track = useFlightTrack(b).data;
+  // What the airline said about this row's flights (a delay, a new time, a cancellation), while it still matters.
+  const change = row.journey ? changeForRow(b, row.journey.value.legs.map((l) => l.dep)) : null;
   return (
     <li className={cn("rounded-xl", open && "bg-[var(--m-tile)]")}>
       <div className="flex items-center gap-1">
@@ -244,6 +271,20 @@ function Row({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      {change ? (
+        <div
+          className={cn(
+            "flex items-center gap-1.5 pb-1.5 pr-2.5 text-[12px] text-[var(--m-warn,var(--warning))]",
+            phone ? "pl-[46px]" : "pl-[50px]",
+          )}
+        >
+          <Icons.Clock className="size-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0">
+            {changeShort(change)}
+            {change.applied && change.now ? `, now leaves ${clockOf(change.now)}` : ""}
+          </span>
+        </div>
+      ) : null}
       {open && row.journey ? <JourneyTimeline journey={row.journey.value} phone={phone} track={track} booking={b} /> : null}
       {open && (row.lead || !row.journey) ? (
         <Detail b={b} match={match} money={money} phone={phone} />

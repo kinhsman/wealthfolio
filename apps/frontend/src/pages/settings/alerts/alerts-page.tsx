@@ -919,7 +919,7 @@ export default function AlertsSettingsPage() {
                   icon={<Icons.Plane className="text-muted-foreground size-4 shrink-0" />}
                   title="Trips"
                   to="/trips"
-                  text="Time to check in for a flight, with its confirmation code"
+                  text="Time to check in for a flight, and when the airline delays, moves or cancels one"
                   on={more.trips.alerts.on !== false}
                   kinds={more.trips.alerts}
                   labels={TRIP_ALERT_LABELS}

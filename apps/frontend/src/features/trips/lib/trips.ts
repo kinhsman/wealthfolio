@@ -35,6 +35,28 @@ export interface Leg {
   end: string | null;
 }
 
+/** One thing an airline's email changed on a flight (the money-hub service reads them, lib/flightChanges.js). */
+export interface FlightChange {
+  id: string;
+  /** When the app saw it, and when the airline wrote. */
+  at: string;
+  emailDate: string;
+  kind: "delay" | "time" | "cancelled" | "gate" | "other";
+  /** "ORD to DFW", "Frontier 3243". */
+  leg: string | null;
+  sub: string | null;
+  /** Departures as the airport's clock printed them; `applied` is whether the booking moved to `now`. */
+  was: string | null;
+  now: string | null;
+  minutes: number | null;
+  applied: boolean;
+  arrival?: string | null;
+  arrivalEstimated?: boolean;
+  summary: string;
+  from: string | null;
+  link: string | null;
+}
+
 export interface Source {
   mailboxId: string;
   mailbox: string;
@@ -80,6 +102,8 @@ export interface Booking {
   source: Source | null;
   /** Boarding passes (a flight); left out until one is added. */
   passes?: Pass[];
+  /** What the airline changed (delays, new times, cancellations), oldest first; left out until one comes. */
+  changes?: FlightChange[];
   createdAt: string;
   updatedAt: string;
 }
@@ -554,4 +578,34 @@ export function inputFromRead(read: EmailRead): BookingInput {
     freeCancelUntil: read.freeCancelUntil ?? null,
     facts: read.facts,
   };
+}
+
+/** "29 minutes", "1 hour 5 minutes". */
+export function spanText(minutes: number): string {
+  const m = Math.abs(Math.round(minutes));
+  const h = Math.floor(m / 60);
+  const r = m % 60;
+  return [h ? `${h} hour${h === 1 ? "" : "s"}` : "", r || !h ? `${r} minute${r === 1 ? "" : "s"}` : ""].filter(Boolean).join(" ");
+}
+
+/** A short word for a change: "Delayed 29 min", "Leaves 20 min earlier", "Cancelled", "Gate change", "Changed". */
+export function changeShort(c: FlightChange): string {
+  if (c.kind === "cancelled") return "Cancelled";
+  if (c.kind === "gate") return "Gate change";
+  if (c.applied && c.minutes) {
+    const short = spanText(c.minutes).replace(/ minutes?/, " min").replace(/ hours?/, " h");
+    return c.minutes > 0 ? `Delayed ${short}` : `Leaves ${short} earlier`;
+  }
+  return "Changed";
+}
+
+/** The newest change that belongs to a row of flights (`deps`: the departures of its legs) and is still worth showing: the flight has not left, or left under 12 hours ago. */
+export function changeForRow(b: Booking, deps: string[], nowMs: number = Date.now()): FlightChange | null {
+  const list = (b.changes ?? []).filter((c) => {
+    const at = c.applied ? c.now : (c.now ?? c.was);
+    if (!at || !deps.includes(at)) return false;
+    const t = Date.parse(`${at}:00`);
+    return Number.isNaN(t) || t > nowMs - 12 * 3600_000;
+  });
+  return list.length ? list[list.length - 1] : null;
 }
