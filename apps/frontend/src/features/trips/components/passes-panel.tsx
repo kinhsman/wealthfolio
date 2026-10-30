@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { Icons } from "@wealthfolio/ui";
 
 import { pickPassFromDrive, pickerSupported } from "../lib/drive-pick";
+import { DRIVE_READ_KEY, driveReadApi, linkDriveRead, useDriveRead } from "../lib/drive-read";
 import { BOOKINGS_KEY, passUrl, tripsApi, type Booking, type Pass } from "../lib/trips";
 
 const size = (bytes: number) =>
@@ -66,6 +67,8 @@ export function PassesPanel({ b }: { b: Booking }) {
   const [busy, setBusy] = useState<null | "upload" | "drive" | "remove">(null);
   const [pasting, setPasting] = useState(false);
   const [link, setLink] = useState("");
+  const read = useDriveRead();
+  const [linking, setLinking] = useState(false);
   const passes = b.passes ?? [];
 
   const run = async (kind: "upload" | "drive" | "remove", job: () => Promise<unknown>, done: string) => {
@@ -106,6 +109,28 @@ export function PassesPanel({ b }: { b: Booking }) {
     if (ok) {
       setLink("");
       setPasting(false);
+    }
+  };
+
+  const allowReading = async () => {
+    setLinking(true);
+    try {
+      const s = await linkDriveRead(read.data?.linkedAt ?? null);
+      qc.setQueryData(DRIVE_READ_KEY, s);
+      toast.success("The app can now read your Drive, read only");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const stopReading = async () => {
+    try {
+      qc.setQueryData(DRIVE_READ_KEY, await driveReadApi.unlink());
+      toast.success("Drive reading turned off");
+    } catch (e) {
+      toast.error((e as Error).message);
     }
   };
 
@@ -180,10 +205,25 @@ export function PassesPanel({ b }: { b: Booking }) {
               Fetch
             </button>
           </div>
-          <p className="text-[11.5px] text-[var(--m-muted)]">
-            Works when the money app was shown the file (Choose from Google Drive) or its sharing is Anyone with the
-            link.
-          </p>
+          {read.data?.linked ? (
+            <p className="text-[11.5px] text-[var(--m-muted)]">
+              Reading Drive as {read.data.email}, read only, for boarding passes.{" "}
+              <button type="button" onClick={() => void stopReading()} className="underline underline-offset-4">
+                Turn off
+              </button>
+            </p>
+          ) : (
+            <div className="flex flex-col items-start gap-1">
+              <p className="text-[11.5px] text-[var(--m-muted)]">
+                A private file needs the app to read your Drive (read only, used only for the links you paste here).
+                Or set the file to Anyone with the link.
+              </p>
+              <button type="button" className={chip} disabled={linking} onClick={() => void allowReading()}>
+                {linking ? <Icons.Spinner className="size-3.5 animate-spin" aria-hidden /> : <Icons.Cloud className="size-3.5" aria-hidden />}
+                Allow reading my Drive
+              </button>
+            </div>
+          )}
         </form>
       ) : null}
     </div>
